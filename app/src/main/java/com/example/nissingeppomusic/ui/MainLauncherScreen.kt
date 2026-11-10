@@ -1,0 +1,1161 @@
+package com.example.nissingeppomusic.ui
+
+import android.graphics.Bitmap
+import android.graphics.ImageDecoder
+import android.net.Uri
+import android.os.Build
+import android.provider.MediaStore
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import android.view.HapticFeedbackConstants
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
+import com.example.nissingeppomusic.data.AppInfo
+import com.example.nissingeppomusic.data.AppRepository
+import com.example.nissingeppomusic.ui.components.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.io.File
+import java.io.FileOutputStream
+import kotlin.math.*
+
+@Composable
+fun MainLauncherScreen() {
+    val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    val haptic = LocalHapticFeedback.current
+    val view = LocalView.current
+
+    val insets = WindowInsets.systemBars.asPaddingValues()
+    val topPaddingDp = insets.calculateTopPadding()
+    val bottomPaddingDp = insets.calculateBottomPadding()
+
+    val screenWidthDp = configuration.screenWidthDp.toFloat()
+    val screenHeightDp = configuration.screenHeightDp.toFloat()
+
+    val coroutineScope = rememberCoroutineScope()
+    val repo = remember { AppRepository(context) }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    // ページ管理 (0: 設定, 1: ホーム, 2: アプリ一覧, 3: フォルダ)
+    var currentLauncherPage by remember { mutableIntStateOf(1) }
+
+    var accentHex by remember { mutableStateOf(repo.prefManager.getAccentColorHex()) }
+    val accentColor = remember(accentHex) { parseHexColor(accentHex) }
+
+    var showWelcomeTutorial by remember { mutableStateOf(false) }
+    var showIndexTutorial by remember { mutableStateOf(false) }
+    var showHideTutorial by remember { mutableStateOf(false) }
+
+    // ページが切り替わるたびにアクセントカラー等を自動再読込
+    LaunchedEffect(currentLauncherPage) {
+        accentHex = repo.prefManager.getAccentColorHex()
+        if (currentLauncherPage == 1) {
+            if (!repo.prefManager.isFirstWelcomeTutorialShown()) {
+                showWelcomeTutorial = true
+            }
+        } else if (currentLauncherPage == 2) {
+            if (!repo.prefManager.isFirstIndexTutorialShown()) {
+                showIndexTutorial = true
+            } else if (!repo.prefManager.isFirstHideTutorialShown()) {
+                showHideTutorial = true
+            }
+        }
+    }
+
+    var searchQuery by remember { mutableStateOf("") }
+    var isSearchActive by remember { mutableStateOf(false) }
+
+    // ページ切り替え時の一時的引っ込みアニメーション用状態
+    var isTransitioning by remember { mutableStateOf(false) }
+
+    var customBackgroundPath by remember { mutableStateOf(repo.prefManager.getCustomBackgroundPath()) }
+    var backgroundUpdateKey by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                val bitmap = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, uri))
+                } else {
+                    @Suppress("DEPRECATION")
+                    MediaStore.Images.Media.getBitmap(context.contentResolver, uri)
+                }
+                val destFile = File(context.filesDir, "custom_bg.png")
+                FileOutputStream(destFile).use { out ->
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                }
+                val path = destFile.absolutePath
+                repo.prefManager.setCustomBackgroundPath(path)
+                customBackgroundPath = path
+            } catch (_: Exception) {}
+        }
+    }
+
+    var selectedAppForOption by remember { mutableStateOf<AppInfo?>(null) }
+
+    var allApps by remember { mutableStateOf<List<AppInfo>>(emptyList()) }
+    var favoriteApps by remember { mutableStateOf<List<AppInfo>>(emptyList()) }
+    var showSettingsScreen by remember { mutableStateOf(false) }
+
+    // --- フォルダ管理状態 (Page 2 用) ---
+    var foldersMap by remember { mutableStateOf(repo.prefManager.getFoldersMap()) }
+    var showFolderAppSelectDialog by remember { mutableStateOf(false) }
+    var showDeleteFolderDialog by remember { mutableStateOf(false) }
+
+    var isEditingFolder by remember { mutableStateOf(false) }
+    var editingFolderNameInput by remember { mutableStateOf("") }
+    var editingSelectedPackages by remember { mutableStateOf<Set<String>>(emptySet()) }
+
+    var isHideMode by remember { mutableStateOf(false) }
+    var showPasscodeDialog by remember { mutableStateOf(false) }
+    var isReadyToOpenHiddenList by remember { mutableStateOf(false) }
+
+    var newFolderNameInput by remember { mutableStateOf("") }
+
+    val folderList = remember(foldersMap) {
+        foldersMap.map { (id, pair) -> Pair(id, pair.first) }
+    }
+
+    // Page 2 左ディスク (フォルダ選択ダイヤル) の回転角度
+    val folderWheelRotationAnim = remember { Animatable(0f) }
+    val folderWheelRotation = folderWheelRotationAnim.value
+    var isHoldingFolderWheel by remember { mutableStateOf(false) }
+    val folderStepAngle = 24f
+
+    val createNewFolderStr = "新規作成"
+    val folderItemsWithNew = remember(folderList, createNewFolderStr) {
+        folderList + Pair("NEW_FOLDER", createNewFolderStr)
+    }
+
+    val selectedFolderItemIndex = remember(folderWheelRotation, folderItemsWithNew.size) {
+        if (folderItemsWithNew.isEmpty()) -1
+        else {
+            val rawIdx = (-folderWheelRotation / folderStepAngle).roundToInt()
+            ((rawIdx % folderItemsWithNew.size) + folderItemsWithNew.size) % folderItemsWithNew.size
+        }
+    }
+
+    val selectedFolderPair = remember(selectedFolderItemIndex, folderItemsWithNew) {
+        if (selectedFolderItemIndex in folderItemsWithNew.indices) folderItemsWithNew[selectedFolderItemIndex] else null
+    }
+
+    val defaultFolderName = "フォルダ"
+    val selectedFolderId = selectedFolderPair?.first
+    val selectedFolderName = selectedFolderPair?.second ?: defaultFolderName
+
+    fun refreshApps() {
+        coroutineScope.launch {
+            val installed = repo.getInstalledApps()
+            allApps = installed
+            favoriteApps = installed.filter { it.isFavorite && !it.isHidden }
+            foldersMap = repo.prefManager.getFoldersMap()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        refreshApps()
+    }
+
+    // --- 左右の円の固定絶対座標配置 ---
+    val disc1RadiusDp = 165f
+    val disc1CenterX = -80f
+    val disc1CenterY = screenHeightDp * 0.50f
+
+    val disc2RadiusDp = 165f
+    val disc2CenterX = screenWidthDp + 80f
+    val disc2CenterY = screenHeightDp * 0.50f
+
+    // --- 左側（索引ダイヤル）の状態管理 ---
+    val leftRotationAnim = remember { Animatable(0f) }
+    val leftRotation = leftRotationAnim.value
+    var isHoldingLeft by remember { mutableStateOf(false) }
+    var isHoldingRight by remember { mutableStateOf(false) }
+    val stepAngle = 360f / INDEX_ITEMS.size
+
+    val animatedDisc1CenterX by animateFloatAsState(
+        targetValue = when {
+            isTransitioning || isHoldingRight -> -disc1RadiusDp
+            isReadyToOpenHiddenList -> disc1CenterX + 110f // 右へ大きくオフセットしてスイッチが入ったことを視覚化
+            else -> disc1CenterX
+        },
+        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+        label = "Disc1CenterX"
+    )
+
+    val animatedDisc2CenterX by animateFloatAsState(
+        targetValue = when {
+            isTransitioning || isHoldingLeft || isHoldingFolderWheel -> screenWidthDp + disc2RadiusDp
+            else -> disc2CenterX
+        },
+        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+        label = "Disc2CenterX"
+    )
+
+    val selectedIndex = remember(leftRotation, INDEX_ITEMS.size) {
+        if (INDEX_ITEMS.isEmpty()) -1
+        else {
+            val rawIdx = (-leftRotation / stepAngle).roundToInt()
+            ((rawIdx % INDEX_ITEMS.size) + INDEX_ITEMS.size) % INDEX_ITEMS.size
+        }
+    }
+    val selectedIndexChar = remember(selectedIndex) {
+        if (selectedIndex in INDEX_ITEMS.indices) INDEX_ITEMS[selectedIndex] else null
+    }
+
+    var lastHapticIndex by remember { mutableIntStateOf(-1) }
+    LaunchedEffect(selectedIndex) {
+        if ((selectedIndex != -1) && (selectedIndex != lastHapticIndex) && (lastHapticIndex != -1)) {
+            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+        }
+        lastHapticIndex = selectedIndex
+    }
+
+    val onAppClick: (String) -> Unit = { packageName ->
+        coroutineScope.launch {
+            val intent = context.packageManager.getLaunchIntentForPackage(packageName)
+            if (intent != null) {
+                context.startActivity(intent)
+            }
+        }
+    }
+
+    fun changePageWithTransition(targetPage: Int) {
+        if (currentLauncherPage == targetPage || isTransitioning) return
+        coroutineScope.launch {
+            isHoldingLeft = false
+            isHoldingRight = false
+            isHoldingFolderWheel = false
+            isTransitioning = true
+            delay(220)
+            currentLauncherPage = targetPage
+            isSearchActive = false
+            searchQuery = ""
+            keyboardController?.hide()
+            delay(60)
+            isTransitioning = false
+        }
+    }
+
+    val transitionAlpha by animateFloatAsState(
+        targetValue = if (isTransitioning) 0.0f else 1.0f,
+        animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
+        label = "TransitionAlpha"
+    )
+
+    val appDiscIconSize = repo.prefManager.getAppDiscIconSizeDp()
+    val appDiscTextSize = repo.prefManager.getAppDiscTextSizeSp()
+    val appDiscLetterSpacing = repo.prefManager.getAppDiscLetterSpacingSp()
+    val appDiscStepAngle = repo.prefManager.getAppDiscStepAngle()
+
+    var fontChoice by remember { mutableStateOf(repo.prefManager.getFontChoice()) }
+    var customFontPath by remember { mutableStateOf(repo.prefManager.getCustomFontPath()) }
+    var useCustomFont by remember { mutableStateOf(repo.prefManager.isUseCustomFont()) }
+
+    val currentFontFamily = remember(fontChoice, customFontPath, useCustomFont) {
+        parseFontFamily(fontChoice, if (useCustomFont) customFontPath else null)
+    }
+
+    CompositionLocalProvider(
+        LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = currentFontFamily),
+        LocalLauncherFontFamily provides currentFontFamily
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            WallpaperBackground(
+                customPath = customBackgroundPath,
+                updateKey = backgroundUpdateKey,
+                isHome = (currentLauncherPage == 1)
+            )
+
+            // --- メインコンテンツ描画 (0: 設定, 1: ホーム, 2: アプリ一覧, 3: フォルダ) ---
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { alpha = transitionAlpha }
+            ) {
+                when (currentLauncherPage) {
+                    0 -> {
+                        // --- 0: 設定画面 ---
+                        SettingsScreen(
+                            repo = repo,
+                            onBack = {
+                                changePageWithTransition(1)
+                            },
+                            onChanged = {
+                                accentHex = repo.prefManager.getAccentColorHex()
+                                customBackgroundPath = repo.prefManager.getCustomBackgroundPath()
+                                backgroundUpdateKey = System.currentTimeMillis()
+                                customFontPath = repo.prefManager.getCustomFontPath()
+                                useCustomFont = repo.prefManager.isUseCustomFont()
+                                fontChoice = repo.prefManager.getFontChoice()
+                            }
+                        )
+                    }
+                1 -> {
+                    // --- 1: ホーム画面 ---
+                    ClockWidget(
+                        modifier = Modifier
+                            .padding(start = 28.dp, top = topPaddingDp + 48.dp)
+                            .zIndex(10f)
+                    )
+
+                    RotatableAppDisc(
+                        modifier = Modifier.fillMaxSize(),
+                        apps = favoriteApps,
+                        discCenterXDp = animatedDisc2CenterX,
+                        discCenterYDp = disc2CenterY,
+                        discRadiusDp = disc2RadiusDp,
+                        textSizeSp = appDiscTextSize,
+                        iconSizeDp = appDiscIconSize,
+                        letterSpacingSp = appDiscLetterSpacing,
+                        stepAngle = appDiscStepAngle,
+                        selectedIndexChar = null,
+                        isRightDisc = true,
+                        showIndices = false,
+                        isLoopable = false, // ホームお気に入りはループしない
+                        accentColor = accentColor,
+                        onAppClick = { onAppClick(it.packageName) },
+                        onLongClick = { selectedAppForOption = it },
+                        onHoldingChanged = { isHoldingRight = it }
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .zIndex(50f)
+                    ) {
+                        MusicVinylWidget(
+                            modifier = Modifier.fillMaxSize(),
+                            discCenterXDp = animatedDisc1CenterX,
+                            discCenterYDp = disc1CenterY,
+                            discRadiusDp = disc1RadiusDp,
+                            accentColor = accentColor
+                        )
+                    }
+                }
+                2 -> {
+                    // --- 2: アプリ一覧画面 ---
+                    RotatableIndexWheel(
+                        modifier = Modifier.fillMaxSize(),
+                        discCenterXDp = animatedDisc1CenterX,
+                        discCenterYDp = disc1CenterY,
+                        discRadiusDp = disc1RadiusDp,
+                        currentRotation = leftRotation,
+                        isHolding = isHoldingLeft,
+                        stepAngle = stepAngle,
+                        accentColor = accentColor,
+                        centerIcon = {
+                            if (isReadyToOpenHiddenList) {
+                                Text(
+                                    text = "非表示\nリストへ",
+                                    color = accentColor,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center
+                                )
+                            } else {
+                                WhiteSearchIcon(size = 24.dp)
+                            }
+                        }
+                    )
+
+                    val displayedApps = remember(searchQuery, allApps, isHideMode) {
+                        if (isHideMode) {
+                            allApps.filter { it.isHidden }
+                        } else if (searchQuery.isNotBlank()) {
+                            allApps.filter {
+                                (it.label.contains(searchQuery, ignoreCase = true) ||
+                                        it.customYomi.contains(searchQuery, ignoreCase = true) ||
+                                        it.initialJapanese.contains(searchQuery, ignoreCase = true) ||
+                                        it.searchAliases.any { alias -> alias.contains(searchQuery, ignoreCase = true) }) && !it.isHidden
+                            }
+                        } else {
+                            allApps.filter { !it.isHidden }
+                        }
+                    }
+
+                    RotatableAppDisc(
+                        modifier = Modifier.fillMaxSize(),
+                        apps = displayedApps,
+                        discCenterXDp = animatedDisc2CenterX,
+                        discCenterYDp = disc2CenterY,
+                        discRadiusDp = disc2RadiusDp,
+                        textSizeSp = appDiscTextSize,
+                        iconSizeDp = appDiscIconSize,
+                        letterSpacingSp = appDiscLetterSpacing,
+                        stepAngle = appDiscStepAngle,
+                        selectedIndexChar = selectedIndexChar,
+                        isRightDisc = true,
+                        showIndices = true,
+                        isLoopable = (!isHideMode && searchQuery.isBlank()), // 通常アプリ一覧(検索なし)のみ循環ループ、検索時や非表示リスト表示時はループなし
+                        accentColor = accentColor,
+                        onAppClick = { onAppClick(it.packageName) },
+                        onLongClick = { selectedAppForOption = it },
+                        onHoldingChanged = { isHoldingRight = it }
+                    )
+                }
+                3 -> {
+                    // --- 3: フォルダ画面 ---
+                    if (isEditingFolder) {
+                        RotatableIndexWheel(
+                            modifier = Modifier.fillMaxSize(),
+                            discCenterXDp = animatedDisc1CenterX,
+                            discCenterYDp = disc1CenterY,
+                            discRadiusDp = disc1RadiusDp,
+                            currentRotation = leftRotation,
+                            isHolding = isHoldingLeft,
+                            stepAngle = stepAngle,
+                            accentColor = accentColor,
+                            centerIcon = { WhiteSearchIcon(size = 24.dp) }
+                        )
+                    } else {
+                        // 左側: フォルダ選択ダイヤル
+                        RotatableFolderWheel(
+                            folders = folderList,
+                            modifier = Modifier.fillMaxSize(),
+                            discCenterXDp = animatedDisc1CenterX,
+                            discCenterYDp = disc1CenterY,
+                            discRadiusDp = disc1RadiusDp,
+                            currentRotation = folderWheelRotation,
+                            isHolding = isHoldingFolderWheel,
+                            stepAngle = folderStepAngle,
+                            textSizeSp = appDiscTextSize,
+                            letterSpacingSp = appDiscLetterSpacing,
+                            accentColor = accentColor,
+                            onNewFolderClick = {
+                                val idx = folderItemsWithNew.indexOfFirst { it.first == "NEW_FOLDER" }
+                                if (idx != -1) {
+                                    coroutineScope.launch {
+                                        folderWheelRotationAnim.animateTo(-idx * folderStepAngle, animationSpec = tween(200))
+                                    }
+                                }
+                                newFolderNameInput = ""
+                            },
+                            onRenameFolderClick = { id, _ ->
+                                val idx = folderItemsWithNew.indexOfFirst { it.first == id }
+                                if (idx != -1) {
+                                    coroutineScope.launch {
+                                        folderWheelRotationAnim.animateTo(-idx * folderStepAngle, animationSpec = tween(200))
+                                    }
+                                }
+                            }
+                        )
+                    }
+
+                    // 右側: 通常時はフォルダ内アプリ、編集時は全アプリ（チェック付き）
+                    val folderPackages = remember(selectedFolderId, foldersMap) {
+                        if (selectedFolderId != null && selectedFolderId != "NEW_FOLDER") {
+                            foldersMap[selectedFolderId]?.second ?: emptyList()
+                        } else {
+                            emptyList()
+                        }
+                    }
+
+                    val discApps = if (isEditingFolder) {
+                        allApps
+                    } else {
+                        allApps.filter { folderPackages.contains(it.packageName) }
+                    }
+
+                    RotatableAppDisc(
+                        modifier = Modifier.fillMaxSize(),
+                        apps = discApps,
+                        discCenterXDp = animatedDisc2CenterX,
+                        discCenterYDp = disc2CenterY,
+                        discRadiusDp = disc2RadiusDp,
+                        textSizeSp = appDiscTextSize,
+                        iconSizeDp = appDiscIconSize,
+                        letterSpacingSp = appDiscLetterSpacing,
+                        stepAngle = appDiscStepAngle,
+                        selectedIndexChar = if (isEditingFolder) selectedIndexChar else null,
+                        isRightDisc = true,
+                        showIndices = isEditingFolder,
+                        isLoopable = false, // フォルダ内アプリはループしない
+                        selectedPackages = if (isEditingFolder) editingSelectedPackages else null,
+                        accentColor = accentColor,
+                        onAppClick = { app ->
+                            if (isEditingFolder) {
+                                val updated = editingSelectedPackages.toMutableSet()
+                                if (updated.contains(app.packageName)) {
+                                    updated.remove(app.packageName)
+                                } else {
+                                    updated.add(app.packageName)
+                                }
+                                editingSelectedPackages = updated
+                            } else {
+                                onAppClick(app.packageName)
+                            }
+                        },
+                        onLongClick = { app ->
+                            if (!isEditingFolder) {
+                                selectedAppForOption = app
+                            }
+                        },
+                        onHoldingChanged = { isHoldingRight = it }
+                    )
+                }
+            }
+        }
+
+        // --- 画面下部 メカニカルページダイヤル (設定, ホーム, 一覧, フォルダ) ---
+        BottomPageDial(
+            currentPage = currentLauncherPage,
+            onPageSelected = { targetPage ->
+                changePageWithTransition(targetPage)
+            },
+            accentColor = accentColor,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = bottomPaddingDp + 4.dp)
+                .zIndex(250f)
+        )
+
+        // --- タッチ操作パネル (左半分: アプリ一覧(2) & フォルダ(3)) ---
+        if (!isTransitioning && (currentLauncherPage == 2 || currentLauncherPage == 3)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = topPaddingDp + 60.dp, bottom = bottomPaddingDp + 60.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .weight(1f)
+                        .pointerInput(currentLauncherPage, isEditingFolder) {
+                            awaitPointerEventScope {
+                                try {
+                                    while (true) {
+                                        val down = awaitFirstDown(requireUnconsumed = false)
+                                        val isIndexWheel = (currentLauncherPage == 2 || (currentLauncherPage == 3 && isEditingFolder))
+                                        if (isIndexWheel) {
+                                            isHoldingLeft = true
+                                        } else {
+                                            isHoldingFolderWheel = true
+                                        }
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+
+                                        var lastY = down.position.y
+                                        var accumulatedDy = 0f
+                                        var currentStepCount = if (isIndexWheel) {
+                                            (-leftRotationAnim.value / stepAngle).roundToInt()
+                                        } else {
+                                            (-folderWheelRotationAnim.value / folderStepAngle).roundToInt().coerceIn(0, folderItemsWithNew.size - 1)
+                                        }
+                                        val stepThreshold = 40f // スワイプの感度調整
+
+                                        drag(down.id) { change ->
+                                            change.consume()
+                                            val pos = change.position
+                                            if (currentLauncherPage == 2 && !isEditingFolder) {
+                                                val shouldOpen = pos.x >= size.width * 0.78f
+                                                if (shouldOpen != isReadyToOpenHiddenList) {
+                                                    isReadyToOpenHiddenList = shouldOpen
+                                                    if (shouldOpen) {
+                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    }
+                                                }
+                                            }
+
+                                            val rawDeltaY = change.position.y - lastY
+                                            val deltaY = rawDeltaY * (if (repo.prefManager.isReverseScroll()) -1f else 1f)
+                                            lastY = change.position.y
+                                            accumulatedDy += deltaY
+
+                                            while (accumulatedDy >= stepThreshold) {
+                                                accumulatedDy -= stepThreshold
+                                                currentStepCount++
+                                                if (isIndexWheel) {
+                                                    val targetRotation = -currentStepCount * stepAngle
+                                                    coroutineScope.launch {
+                                                        leftRotationAnim.animateTo(
+                                                            targetValue = targetRotation,
+                                                            animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)
+                                                        )
+                                                    }
+                                                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                                } else {
+                                                    if (folderItemsWithNew.isNotEmpty()) {
+                                                        val minFolderRotation = -((folderItemsWithNew.size - 1) * folderStepAngle).coerceAtLeast(0f)
+                                                        val maxFolderRotation = 0f
+                                                        val clampedStep = currentStepCount.coerceIn(0, folderItemsWithNew.size - 1)
+                                                        currentStepCount = clampedStep
+                                                        val targetRotation = (-clampedStep * folderStepAngle).coerceIn(minFolderRotation, maxFolderRotation)
+                                                        coroutineScope.launch {
+                                                            folderWheelRotationAnim.animateTo(
+                                                                targetValue = targetRotation,
+                                                                animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)
+                                                            )
+                                                        }
+                                                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                                    }
+                                                }
+                                            }
+
+                                            while (accumulatedDy <= -stepThreshold) {
+                                                accumulatedDy += stepThreshold
+                                                currentStepCount--
+                                                if (isIndexWheel) {
+                                                    val targetRotation = -currentStepCount * stepAngle
+                                                    coroutineScope.launch {
+                                                        leftRotationAnim.animateTo(
+                                                            targetValue = targetRotation,
+                                                            animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)
+                                                        )
+                                                    }
+                                                    view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                                } else {
+                                                    if (folderItemsWithNew.isNotEmpty()) {
+                                                        val minFolderRotation = -((folderItemsWithNew.size - 1) * folderStepAngle).coerceAtLeast(0f)
+                                                        val maxFolderRotation = 0f
+                                                        val clampedStep = currentStepCount.coerceIn(0, folderItemsWithNew.size - 1)
+                                                        currentStepCount = clampedStep
+                                                        val targetRotation = (-clampedStep * folderStepAngle).coerceIn(minFolderRotation, maxFolderRotation)
+                                                        coroutineScope.launch {
+                                                            folderWheelRotationAnim.animateTo(
+                                                                targetValue = targetRotation,
+                                                                animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)
+                                                            )
+                                                        }
+                                                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        // 指を離した瞬間
+                                        if (currentLauncherPage == 2 && !isEditingFolder) {
+                                            if (isReadyToOpenHiddenList) {
+                                                if (repo.prefManager.isUsePasscodeForHidden()) {
+                                                    showPasscodeDialog = true
+                                                } else {
+                                                    isHideMode = true
+                                                }
+                                            }
+                                            isReadyToOpenHiddenList = false
+                                        }
+
+                                        if (currentLauncherPage == 3 && folderItemsWithNew.isNotEmpty()) {
+                                            if (selectedFolderId == "NEW_FOLDER") {
+                                                newFolderNameInput = ""
+                                            }
+                                        }
+
+                                        isHoldingLeft = false
+                                        isHoldingFolderWheel = false
+                                    }
+                                } finally {
+                                    isHoldingLeft = false
+                                    isHoldingFolderWheel = false
+                                }
+                            }
+                        }
+                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .weight(1f)
+                )
+            }
+        }
+
+        // --- 画面上部 検索ボックス / 非表示リストを閉じるボタン ---
+        if (currentLauncherPage == 2) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = topPaddingDp + 48.dp)
+                    .zIndex(150f),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                if (isHideMode) {
+                    Row(
+                        modifier = Modifier
+                            .width(320.dp)
+                            .height(48.dp)
+                            .background(Color(0x99101728), RoundedCornerShape(16.dp))
+                            .clickable { isHideMode = false }
+                            .padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "非表示リストを閉じる ✕",
+                            color = Color(0xFFFF5252),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .width(320.dp)
+                            .height(48.dp)
+                            .background(Color(0x99101728), RoundedCornerShape(16.dp))
+                            .padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        BasicTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            singleLine = true,
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                textAlign = TextAlign.Center
+                            ),
+                            cursorBrush = SolidColor(Color(0xFF88C0FF)),
+                            modifier = Modifier.weight(1f)
+                        ) { innerTextField ->
+                            Box(contentAlignment = Alignment.Center) {
+                                if (searchQuery.isEmpty()) {
+                                    Text(
+                                        text = "アプリを検索…",
+                                        color = Color.Gray.copy(alpha = 0.7f),
+                                        fontSize = 14.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        }
+
+                        if (searchQuery.isNotEmpty()) {
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "✕",
+                                color = Color.White.copy(alpha = 0.9f),
+                                fontSize = 15.sp,
+                                modifier = Modifier
+                                    .clickable { searchQuery = "" }
+                                    .padding(4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- 画面上部 フォルダ名＆編集バー / 新規作成バー (フォルダ画面(3)用、半透明ダークグラス) ---
+        if (currentLauncherPage == 3) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = topPaddingDp + 48.dp)
+                    .zIndex(150f),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                if (selectedFolderId == "NEW_FOLDER") {
+                    Row(
+                        modifier = Modifier
+                            .width(320.dp)
+                            .height(48.dp)
+                            .background(Color(0x99101728), RoundedCornerShape(16.dp))
+                            .padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        BasicTextField(
+                            value = newFolderNameInput,
+                            onValueChange = { newFolderNameInput = it },
+                            singleLine = true,
+                            textStyle = androidx.compose.ui.text.TextStyle(
+                                color = Color.White,
+                                fontSize = 15.sp,
+                                textAlign = TextAlign.Center
+                            ),
+                            cursorBrush = SolidColor(Color(0xFF88C0FF)),
+                            modifier = Modifier.weight(1f)
+                        ) { innerTextField ->
+                            Box(contentAlignment = Alignment.Center) {
+                                if (newFolderNameInput.isEmpty()) {
+                                    Text(
+                                        text = "新規フォルダ名を入力...",
+                                        color = Color.Gray.copy(alpha = 0.7f),
+                                        fontSize = 14.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        val defaultNewFolderName = "新規フォルダ"
+                        TextButton(
+                            onClick = {
+                                val name = newFolderNameInput.ifBlank { defaultNewFolderName }
+                                val newId = System.currentTimeMillis().toString()
+                                repo.prefManager.saveFolder(newId, name, emptyList())
+                                refreshApps()
+                                newFolderNameInput = ""
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                        ) {
+                            Text("作成", color = accentColor, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                } else if (selectedFolderId != null) {
+                    Row(
+                        modifier = Modifier
+                            .width(320.dp)
+                            .height(48.dp)
+                            .background(Color(0x99101728), RoundedCornerShape(16.dp)),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isEditingFolder) {
+                            // 編集モード中: 左半分 = 適用、右半分 = キャンセル
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clickable {
+                                        val name = editingFolderNameInput.ifBlank { selectedFolderName }
+                                        repo.prefManager.saveFolder(selectedFolderId, name, editingSelectedPackages.toList())
+                                        refreshApps()
+                                        isEditingFolder = false
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    WhiteCheckIcon(size = 18.dp, color = Color(0xFF4CAF50))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "適用",
+                                        color = Color(0xFF4CAF50),
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            // 中央区切り線
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(20.dp)
+                                    .background(Color.White.copy(alpha = 0.2f))
+                            )
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clickable {
+                                        isEditingFolder = false
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    WhiteCloseIcon(size = 18.dp, color = Color.Gray)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "キャンセル",
+                                        color = Color.LightGray,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        } else {
+                            // 通常時: 左半分 = 編集、右半分 = 削除
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clickable {
+                                        editingFolderNameInput = selectedFolderName
+                                        editingSelectedPackages = (foldersMap[selectedFolderId]?.second ?: emptyList()).toSet()
+                                        isEditingFolder = true
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    WhiteEditIcon(size = 18.dp, color = accentColor)
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "編集",
+                                        color = Color.White,
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            // 中央区切り線
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(20.dp)
+                                    .background(Color.White.copy(alpha = 0.2f))
+                            )
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clickable {
+                                        showDeleteFolderDialog = true
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    WhiteDeleteIcon(size = 18.dp, color = Color(0xFFFF5252))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "削除",
+                                        color = Color(0xFFFF5252),
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- 画面上部 フォルダ名編集欄 (編集モード中) ---
+        if (currentLauncherPage == 3 && isEditingFolder) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = topPaddingDp + 102.dp)
+                    .zIndex(150f),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Row(
+                    modifier = Modifier
+                        .width(320.dp)
+                        .height(44.dp)
+                        .background(Color(0x99101728), RoundedCornerShape(14.dp))
+                        .padding(horizontal = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    BasicTextField(
+                        value = editingFolderNameInput,
+                        onValueChange = { editingFolderNameInput = it },
+                        singleLine = true,
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            color = Color.White,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            fontFamily = LocalLauncherFontFamily.current
+                        ),
+                        cursorBrush = SolidColor(accentColor),
+                        modifier = Modifier.weight(1f)
+                    ) { innerTextField ->
+                        Box(contentAlignment = Alignment.Center) {
+                            if (editingFolderNameInput.isEmpty()) {
+                                Text(
+                                    text = "フォルダ名を入力...",
+                                    color = Color.Gray.copy(alpha = 0.7f),
+                                    fontSize = 14.sp,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                            innerTextField()
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- システムの戻るキー対応 ---
+        BackHandler(enabled = currentLauncherPage != 1 || isSearchActive || isEditingFolder) {
+            if (isEditingFolder) {
+                isEditingFolder = false
+            } else if (isSearchActive) {
+                isSearchActive = false
+                searchQuery = ""
+                keyboardController?.hide()
+            } else if (currentLauncherPage != 1) {
+                changePageWithTransition(1)
+            }
+        }
+
+        // --- ダイアログ類 ---
+        // 0. パスコード認証ダイアログ (非表示リスト用)
+        if (showPasscodeDialog) {
+            PasscodeDialog(
+                onDismiss = { showPasscodeDialog = false },
+                onSuccess = {
+                    isHideMode = true
+                }
+            )
+        }
+
+        // 0.0 ウェルカムチュートリアル
+        if (showWelcomeTutorial) {
+            TutorialDialog(
+                title = "インストールしていただきありがとうございます",
+                message = "インストールしていただきありがとうございます！\n\nアプリをお気に入り登録するには、アプリ一覧（三本線）でアプリを長押しし、「お気に入りに追加」をタップします。",
+                onDismiss = { dontShow ->
+                    if (dontShow) {
+                        repo.prefManager.setFirstWelcomeTutorialShown(true)
+                    }
+                    showWelcomeTutorial = false
+                }
+            )
+        }
+
+        // 0.1 インデックスダイヤル解説チュートリアル
+        if (showIndexTutorial) {
+            TutorialDialog(
+                title = "インデックスダイヤルの使い方",
+                message = "左側の円（インデックスダイヤル）を上下にスワイプして回転させると、頭文字（あ・か・さ・た・な…）ごとにアプリリストを素早くジャンプ・スクロールできます。",
+                onDismiss = { dontShow ->
+                    if (dontShow) {
+                        repo.prefManager.setFirstIndexTutorialShown(true)
+                    }
+                    showIndexTutorial = false
+                    if (!repo.prefManager.isFirstHideTutorialShown()) {
+                        showHideTutorial = true
+                    }
+                }
+            )
+        }
+
+        // 0.2 非表示リスト右スワイプチュートリアル
+        if (showHideTutorial) {
+            TutorialDialog(
+                title = "非表示リストの開き方",
+                message = "左の円を長押ししたまま、画面の右端までグッとスワイプすると、パスコード認証を経て「非表示アプリリスト」を開くことができます。",
+                onDismiss = { dontShow ->
+                    if (dontShow) {
+                        repo.prefManager.setFirstHideTutorialShown(true)
+                    }
+                    showHideTutorial = false
+                }
+            )
+        }
+
+
+
+        // 3. フォルダ削除確認ダイアログ
+        if (showDeleteFolderDialog && selectedFolderId != null) {
+            AlertDialog(
+                onDismissRequest = { showDeleteFolderDialog = false },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            repo.prefManager.deleteFolder(selectedFolderId)
+                            refreshApps()
+                            showDeleteFolderDialog = false
+                        }
+                    ) {
+                        Text("削除", color = Color(0xFFFF5252), fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteFolderDialog = false }) {
+                        Text("キャンセル", color = Color.Gray)
+                    }
+                },
+                title = { Text("フォルダの削除", fontSize = 18.sp) },
+                text = {
+                    Text(
+                        text = "「$selectedFolderName」を削除してもよろしいですか？（フォルダ内のアプリ自体はアンインストールされません）",
+                        color = Color.LightGray,
+                        fontSize = 14.sp
+                    )
+                },
+                containerColor = Color(0xFF141C2E),
+                titleContentColor = Color.White
+            )
+        }
+
+        // 3. フォルダ内アプリ選択モーダル
+        if (showFolderAppSelectDialog && selectedFolderId != null) {
+            FolderAppSelectDialog(
+                folderName = selectedFolderName,
+                allApps = allApps,
+                selectedPackages = foldersMap[selectedFolderId]?.second ?: emptyList(),
+                onDismiss = { showFolderAppSelectDialog = false },
+                onSave = { updatedPackages ->
+                    repo.prefManager.saveFolder(selectedFolderId, selectedFolderName, updatedPackages)
+                    refreshApps()
+                }
+            )
+        }
+
+        // 4. アプリ長押し設定ダイアログ
+        selectedAppForOption?.let { app ->
+            AppOptionDialog(
+                app = app,
+                onDismiss = { selectedAppForOption = null },
+                onToggleFavorite = { targetApp ->
+                    repo.setFavorite(targetApp.packageName, !targetApp.isFavorite)
+                    refreshApps()
+                },
+                onSetYomi = { targetApp, yomi ->
+                    repo.setYomi(targetApp.packageName, yomi)
+                    refreshApps()
+                },
+                onAddAlias = { targetApp, alias ->
+                    repo.addSearchAlias(targetApp.packageName, alias)
+                    refreshApps()
+                },
+                onRemoveAlias = { targetApp, alias ->
+                    repo.removeSearchAlias(targetApp.packageName, alias)
+                    refreshApps()
+                },
+                onToggleHide = { targetApp ->
+                    val willHide = !targetApp.isHidden
+                    repo.setHidden(targetApp.packageName, willHide)
+                    refreshApps()
+                }
+            )
+        }
+    }
+}
+}

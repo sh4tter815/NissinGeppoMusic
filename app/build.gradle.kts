@@ -4,13 +4,13 @@ plugins {
 }
 
 android {
-    namespace = "com.example.nissingeppolauncher"
+    namespace = "com.example.nissingeppomusic"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.example.nissingeppolauncher"
+        applicationId = "com.example.nissingeppomusic"
         minSdk = 26
         targetSdk = 37
         versionCode = 1

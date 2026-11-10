@@ -22,5 +22,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "NisshinGeppoLauncher"
+rootProject.name = "NissinGeppoMusic"
 include(":app")
