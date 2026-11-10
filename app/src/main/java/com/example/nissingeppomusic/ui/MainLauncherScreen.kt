@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.example.nissingeppomusic.data.AppInfo
 import com.example.nissingeppomusic.data.AppRepository
+import com.example.nissingeppomusic.data.MusicPlayerManager
 import com.example.nissingeppomusic.ui.components.*
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -64,7 +65,42 @@ fun MainLauncherScreen() {
 
     val coroutineScope = rememberCoroutineScope()
     val repo = remember { AppRepository(context) }
+    val musicPlayerManager = remember { MusicPlayerManager(context) }
     val keyboardController = LocalSoftwareKeyboardController.current
+
+    var allApps by remember { mutableStateOf<List<AppInfo>>(emptyList()) }
+    var favoriteApps by remember { mutableStateOf<List<AppInfo>>(emptyList()) }
+    var foldersMap by remember { mutableStateOf(repo.prefManager.getFoldersMap()) }
+
+    val refreshApps: () -> Unit = {
+        coroutineScope.launch {
+            val installed = repo.getInstalledApps()
+            allApps = installed
+            favoriteApps = installed.filter { it.isFavorite && !it.isHidden }
+            foldersMap = repo.prefManager.getFoldersMap()
+        }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            refreshApps()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val permission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            android.Manifest.permission.READ_MEDIA_AUDIO
+        } else {
+            android.Manifest.permission.READ_EXTERNAL_STORAGE
+        }
+        if (context.checkSelfPermission(permission) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            refreshApps()
+        } else {
+            permissionLauncher.launch(permission)
+        }
+    }
 
     // ページ管理 (0: 設定, 1: ホーム, 2: アプリ一覧, 3: フォルダ)
     var currentLauncherPage by remember { mutableIntStateOf(1) }
@@ -125,12 +161,9 @@ fun MainLauncherScreen() {
 
     var selectedAppForOption by remember { mutableStateOf<AppInfo?>(null) }
 
-    var allApps by remember { mutableStateOf<List<AppInfo>>(emptyList()) }
-    var favoriteApps by remember { mutableStateOf<List<AppInfo>>(emptyList()) }
     var showSettingsScreen by remember { mutableStateOf(false) }
 
     // --- フォルダ管理状態 (Page 2 用) ---
-    var foldersMap by remember { mutableStateOf(repo.prefManager.getFoldersMap()) }
     var showFolderAppSelectDialog by remember { mutableStateOf(false) }
     var showDeleteFolderDialog by remember { mutableStateOf(false) }
 
@@ -175,22 +208,11 @@ fun MainLauncherScreen() {
     val selectedFolderId = selectedFolderPair?.first
     val selectedFolderName = selectedFolderPair?.second ?: defaultFolderName
 
-    fun refreshApps() {
-        coroutineScope.launch {
-            val installed = repo.getInstalledApps()
-            allApps = installed
-            favoriteApps = installed.filter { it.isFavorite && !it.isHidden }
-            foldersMap = repo.prefManager.getFoldersMap()
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        refreshApps()
-    }
-
     // --- 左右の円の固定絶対座標配置 ---
     val disc1RadiusDp = 165f
-    val disc1CenterX = -80f
+    val disc1CenterXNormal = -80f
+    val disc1CenterXHome = 15f // ホーム画面ではさらに右へ寄せてジャケットを見やすく
+    val activeDisc1CenterX = if (currentLauncherPage == 1) disc1CenterXHome else disc1CenterXNormal
     val disc1CenterY = screenHeightDp * 0.50f
 
     val disc2RadiusDp = 165f
@@ -207,8 +229,8 @@ fun MainLauncherScreen() {
     val animatedDisc1CenterX by animateFloatAsState(
         targetValue = when {
             isTransitioning || isHoldingRight -> -disc1RadiusDp
-            isReadyToOpenHiddenList -> disc1CenterX + 110f // 右へ大きくオフセットしてスイッチが入ったことを視覚化
-            else -> disc1CenterX
+            isReadyToOpenHiddenList -> activeDisc1CenterX + 110f // 右の円等が開く際のオフセット
+            else -> activeDisc1CenterX
         },
         animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing),
         label = "Disc1CenterX"
@@ -242,15 +264,6 @@ fun MainLauncherScreen() {
         lastHapticIndex = selectedIndex
     }
 
-    val onAppClick: (String) -> Unit = { packageName ->
-        coroutineScope.launch {
-            val intent = context.packageManager.getLaunchIntentForPackage(packageName)
-            if (intent != null) {
-                context.startActivity(intent)
-            }
-        }
-    }
-
     fun changePageWithTransition(targetPage: Int) {
         if (currentLauncherPage == targetPage || isTransitioning) return
         coroutineScope.launch {
@@ -265,6 +278,23 @@ fun MainLauncherScreen() {
             keyboardController?.hide()
             delay(60)
             isTransitioning = false
+        }
+    }
+
+    val onAppClick: (String) -> Unit = { songUri ->
+        coroutineScope.launch {
+            val song = allApps.find { it.packageName == songUri }
+            if (song != null) {
+                musicPlayerManager.playSong(
+                    uriString = song.packageName,
+                    title = song.label,
+                    artist = song.artist,
+                    album = song.album,
+                    albumArt = song.albumArt,
+                    filePath = song.filePath
+                )
+                changePageWithTransition(1)
+            }
         }
     }
 
@@ -297,7 +327,8 @@ fun MainLauncherScreen() {
             WallpaperBackground(
                 customPath = customBackgroundPath,
                 updateKey = backgroundUpdateKey,
-                isHome = (currentLauncherPage == 1)
+                isHome = (currentLauncherPage == 1),
+                currentAlbumArt = musicPlayerManager.currentAlbumArt
             )
 
             // --- メインコンテンツ描画 (0: 設定, 1: ホーム, 2: アプリ一覧, 3: フォルダ) ---
@@ -326,30 +357,50 @@ fun MainLauncherScreen() {
                     }
                 1 -> {
                     // --- 1: ホーム画面 ---
-                    ClockWidget(
+                    var focusedTrackPreview by remember { mutableStateOf<AppInfo?>(null) }
+                    val displayTitle = focusedTrackPreview?.label ?: musicPlayerManager.currentTitle.ifBlank { "楽曲未選択" }
+                    val displayArtist = focusedTrackPreview?.artist ?: musicPlayerManager.currentArtist.ifBlank { "アーティスト名" }
+                    val displayAlbum = focusedTrackPreview?.album ?: musicPlayerManager.currentAlbum.ifBlank { "アルバム名" }
+
+                    Column(
                         modifier = Modifier
                             .padding(start = 28.dp, top = topPaddingDp + 48.dp)
                             .zIndex(10f)
-                    )
+                    ) {
+                        Text(
+                            text = displayTitle,
+                            color = Color.White,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 2.5.sp,
+                            textAlign = TextAlign.Start
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = displayArtist,
+                            color = Color.White.copy(alpha = 0.8f),
+                            fontSize = 14.sp,
+                            letterSpacing = 1.5.sp,
+                            textAlign = TextAlign.Start
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = displayAlbum,
+                            color = Color.White.copy(alpha = 0.5f),
+                            fontSize = 12.sp,
+                            letterSpacing = 1.0.sp,
+                            textAlign = TextAlign.Start
+                        )
+                    }
 
-                    RotatableAppDisc(
+                    MusicSeekBarDisc(
                         modifier = Modifier.fillMaxSize(),
-                        apps = favoriteApps,
+                        playerManager = musicPlayerManager,
+                        focusedTrack = focusedTrackPreview,
                         discCenterXDp = animatedDisc2CenterX,
                         discCenterYDp = disc2CenterY,
                         discRadiusDp = disc2RadiusDp,
-                        textSizeSp = appDiscTextSize,
-                        iconSizeDp = appDiscIconSize,
-                        letterSpacingSp = appDiscLetterSpacing,
-                        stepAngle = appDiscStepAngle,
-                        selectedIndexChar = null,
-                        isRightDisc = true,
-                        showIndices = false,
-                        isLoopable = false, // ホームお気に入りはループしない
-                        accentColor = accentColor,
-                        onAppClick = { onAppClick(it.packageName) },
-                        onLongClick = { selectedAppForOption = it },
-                        onHoldingChanged = { isHoldingRight = it }
+                        accentColor = accentColor
                     )
 
                     Box(
@@ -359,10 +410,23 @@ fun MainLauncherScreen() {
                     ) {
                         MusicVinylWidget(
                             modifier = Modifier.fillMaxSize(),
+                            playerManager = musicPlayerManager,
+                            allApps = allApps,
                             discCenterXDp = animatedDisc1CenterX,
                             discCenterYDp = disc1CenterY,
                             discRadiusDp = disc1RadiusDp,
-                            accentColor = accentColor
+                            accentColor = accentColor,
+                            onPlayTrack = { song ->
+                                musicPlayerManager.playSong(
+                                    uriString = song.packageName,
+                                    title = song.label,
+                                    artist = song.artist,
+                                    album = song.album,
+                                    albumArt = song.albumArt,
+                                    filePath = song.filePath
+                                )
+                            },
+                            onFocusTrackChanged = { focusedTrackPreview = it }
                         )
                     }
                 }

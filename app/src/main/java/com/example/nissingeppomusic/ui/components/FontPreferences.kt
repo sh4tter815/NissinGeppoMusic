@@ -1,9 +1,12 @@
 package com.example.nissingeppomusic.ui.components
 
+import android.content.Context
+import android.graphics.Typeface
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.core.content.res.ResourcesCompat
 import com.example.nissingeppomusic.R
 import java.io.File
 
@@ -15,7 +18,7 @@ fun loadCustomFontFamily(path: String?): FontFamily? {
     return try {
         val file = File(path)
         if (file.exists()) {
-            val typeface = android.graphics.Typeface.createFromFile(file)
+            val typeface = Typeface.createFromFile(file)
             FontFamily(typeface)
         } else {
             null
@@ -37,6 +40,38 @@ fun parseFontFamily(fontChoice: String, customPath: String?): FontFamily {
             } else {
                 FontFamily.Default
             }
+        }
+    }
+}
+
+fun parseNativeTypeface(context: Context, fontChoice: String, customPath: String?): Typeface {
+    return when (fontChoice) {
+        "receipt" -> {
+            try {
+                ResourcesCompat.getFont(context, R.font.receipt_font) ?: Typeface.DEFAULT
+            } catch (_: Exception) {
+                Typeface.DEFAULT
+            }
+        }
+        "custom" -> {
+            if (!customPath.isNullOrBlank()) {
+                try {
+                    val file = File(customPath)
+                    if (file.exists()) Typeface.createFromFile(file) else Typeface.DEFAULT
+                } catch (_: Exception) {
+                    Typeface.DEFAULT
+                }
+            } else Typeface.DEFAULT
+        }
+        else -> {
+            if (!customPath.isNullOrBlank()) {
+                try {
+                    val file = File(customPath)
+                    if (file.exists()) Typeface.createFromFile(file) else Typeface.DEFAULT
+                } catch (_: Exception) {
+                    Typeface.DEFAULT
+                }
+            } else Typeface.DEFAULT
         }
     }
 }

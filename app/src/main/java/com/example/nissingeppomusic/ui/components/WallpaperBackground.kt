@@ -1,6 +1,7 @@
 package com.example.nissingeppomusic.ui.components
 
 import android.app.WallpaperManager
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -8,10 +9,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import com.example.nissingeppomusic.data.AppPreferenceManager
 import java.io.File
@@ -21,7 +24,8 @@ fun WallpaperBackground(
     modifier: Modifier = Modifier,
     customPath: String? = null,
     updateKey: Long = 0L,
-    isHome: Boolean = false
+    isHome: Boolean = false,
+    currentAlbumArt: Bitmap? = null
 ) {
     val context = LocalContext.current
     val prefManager = remember { AppPreferenceManager(context) }
@@ -45,7 +49,7 @@ fun WallpaperBackground(
                 }
                 val decodeOptions = BitmapFactory.Options().apply {
                     inSampleSize = sampleSize
-                    inPreferredConfig = android.graphics.Bitmap.Config.ARGB_8888
+                    inPreferredConfig = Bitmap.Config.ARGB_8888
                 }
                 BitmapFactory.decodeFile(customPath, decodeOptions)?.asImageBitmap()
             } else {
@@ -59,14 +63,27 @@ fun WallpaperBackground(
     }
 
     Box(modifier = modifier.fillMaxSize()) {
-        if (backgroundBitmap != null) {
+        if (currentAlbumArt != null) {
+            Image(
+                bitmap = currentAlbumArt.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .blur(radius = 64.dp)
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color(0xFF0B101D).copy(alpha = 0.55f))
+            )
+        } else if (backgroundBitmap != null) {
             Image(
                 bitmap = backgroundBitmap,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize()
             )
-            // ホーム画面は設定された不透明度（alpha）、他画面は暗め（0.8f）のオーバーレイ
             Box(
                 modifier = Modifier
                     .fillMaxSize()
