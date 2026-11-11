@@ -38,6 +38,31 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
+      # [release] push のときだけバージョンを自動で上げる
+      - name: Bump version for release
+        if: github.event_name == 'push'
+        run: |
+          python3 - <<'PY'
+          import re
+          p = "app/build.gradle.kts"
+          s = open(p).read()
+          code = int(re.search(r"versionCode = (\d+)", s).group(1))
+          name = re.search(r'versionName = "([0-9.]+)"', s).group(1)
+          parts = name.split(".")
+          parts[-1] = str(int(parts[-1]) + 1)
+          new_name = ".".join(parts)
+          s = re.sub(r"versionCode = \d+", "versionCode = %d" % (code + 1), s, count=1)
+          s = re.sub(r'versionName = "[0-9.]+"', 'versionName = "%s"' % new_name, s, count=1)
+          open(p, "w").write(s)
+          print("version: %s (code %d) -> %s (code %d)" % (name, code, new_name, code + 1))
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add app/build.gradle.kts
+          NEW_NAME=$(grep -oP 'versionName = "\K[0-9.]+' app/build.gradle.kts)
+          git commit -m "Bump version to $NEW_NAME (auto)"
+          git push origin HEAD:master
+
       # 4. デバッグ版APKをビルドする
       - name: Build Debug APK with Gradle
         run: ./gradlew assembleDebug
