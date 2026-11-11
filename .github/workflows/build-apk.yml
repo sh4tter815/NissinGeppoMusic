@@ -3,11 +3,12 @@ name: Build and Release Debug APK
 
 on:
   workflow_dispatch:
-  #push:
-    #branches: [ "main", "master" ]  # mainまたはmasterにプッシュしたときに自動で動く！
+  push:
+    branches: [ "master" ]
 
 jobs:
   build:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[release]')
     runs-on: ubuntu-latest
 
     # ★ここから追加：Releasesを書き換える権限をあたえる！
