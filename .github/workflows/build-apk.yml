@@ -1,3 +1,4 @@
+# Release workflow for NissinGeppoMusic
 name: Build and Release Debug APK
 
 on:
