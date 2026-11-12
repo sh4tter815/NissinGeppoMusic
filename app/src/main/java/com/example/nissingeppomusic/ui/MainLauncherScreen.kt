@@ -843,7 +843,7 @@ fun MainLauncherScreen() {
                             Box(contentAlignment = Alignment.Center) {
                                 if (searchQuery.isEmpty()) {
                                     Text(
-                                        text = "アプリを検索…",
+                                        text = "曲を検索…",
                                         color = Color.Gray.copy(alpha = 0.7f),
                                         fontSize = 14.sp,
                                         textAlign = TextAlign.Center
