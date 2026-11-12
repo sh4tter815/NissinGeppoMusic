@@ -73,6 +73,10 @@ class MusicRepository(private val context: Context) {
                 records = updated
                 cachedRecords = updated
             }
+            // 除外を解除した曲など、アートが未保存の曲があれば補完する
+            records.forEach {
+                if (!isExcluded(it.filePath)) loadArtBitmap(it, allowSourceDecode = true)
+            }
         }
 
         val result = buildAppInfoList(records)
@@ -84,10 +88,22 @@ class MusicRepository(private val context: Context) {
 
     private fun fullScan(): List<TrackRecord> {
         val records = queryTrackRecords(null, null)
-        // 初回だけアートを全曲分デコードしてアプリ内に保存する
-        records.forEach { loadArtBitmap(it, allowSourceDecode = true) }
+        // 初回だけアートを全曲分デコードしてアプリ内に保存する（除外フォルダ配下は除く）
+        records.forEach {
+            if (!isExcluded(it.filePath)) loadArtBitmap(it, allowSourceDecode = true, forceRetry = true)
+        }
         saveRecordsToDisk(records)
         return records
+    }
+
+    /** 指定フォルダ配下の曲かどうか（除外フォルダ判定） */
+    private fun isExcluded(filePath: String): Boolean {
+        if (filePath.isEmpty()) return false
+        val normalized = filePath.replace('\\', '/')
+        return prefManager.getExcludedFolders().any { folder ->
+            val prefix = folder.trimEnd('/')
+            prefix.isNotEmpty() && (normalized == prefix || normalized.startsWith("$prefix/"))
+        }
     }
 
     /**
@@ -114,8 +130,10 @@ class MusicRepository(private val context: Context) {
                 queryTrackRecords("${MediaStore.Audio.Media._ID} IN ($placeholders)", args)
             }
         }
-        // 追加・変更された曲のアートだけデコードして保存する
-        fetched.forEach { loadArtBitmap(it, allowSourceDecode = true) }
+        // 追加・変更された曲のアートだけデコードして保存する（除外フォルダ配下は除く）
+        fetched.forEach {
+            if (!isExcluded(it.filePath)) loadArtBitmap(it, allowSourceDecode = true, forceRetry = true)
+        }
 
         val changedSet = changedIds.toSet()
         val merged = old.filter { it.id !in removedIds && it.id !in changedSet } + fetched
@@ -220,7 +238,10 @@ class MusicRepository(private val context: Context) {
         val yomiMap = prefManager.getYomiMap()
         val aliasesMap = prefManager.getAliasesMap()
 
-        val tracks = records.map { rec ->
+        // 除外フォルダ配下の曲はライブラリに表示しない
+        val visibleRecords = records.filter { !isExcluded(it.filePath) }
+
+        val tracks = visibleRecords.map { rec ->
             val isHidden = hiddenSet.contains(rec.uriString)
             val isFavorite = favoritesSet.contains(rec.uriString)
             val customYomi = yomiMap[rec.uriString] ?: ""
@@ -319,8 +340,10 @@ class MusicRepository(private val context: Context) {
     /**
      * アート取得の順序: メモリ → アプリ内保存ファイル → （許可時のみ）MediaStore等からデコードして保存。
      * allowSourceDecode=false のときは保存済みファイルのみを使い、起動を高速に保つ。
+     * デコードに失敗した曲には「アートなし」マーカー (.none) を置き、毎回の再試行を防ぐ。
+     * forceRetry=true のときはマーカーを無視して再デコードする（スキャン・差分更新で取り直した曲用）。
      */
-    private fun loadArtBitmap(rec: TrackRecord, allowSourceDecode: Boolean): Bitmap? {
+    private fun loadArtBitmap(rec: TrackRecord, allowSourceDecode: Boolean, forceRetry: Boolean = false): Bitmap? {
         val memKey = rec.memKey()
         albumArtCache.get(memKey)?.let { return it }
 
@@ -333,9 +356,15 @@ class MusicRepository(private val context: Context) {
             }
         }
 
+        val noArtMarker = File(artDir(), "${rec.artKey()}.none")
+        if (noArtMarker.exists() && !forceRetry) return null
         if (!allowSourceDecode) return null
 
-        val decoded = decodeArtFromSource(rec.albumId, rec.filePath) ?: return null
+        val decoded = decodeArtFromSource(rec.albumId, rec.filePath)
+        if (decoded == null) {
+            try { noArtMarker.createNewFile() } catch (_: Exception) {}
+            return null
+        }
         val scaled = if (decoded.width > 300 || decoded.height > 300) {
             Bitmap.createScaledBitmap(decoded, 300, 300, true)
         } else decoded
@@ -344,6 +373,7 @@ class MusicRepository(private val context: Context) {
             FileOutputStream(file).use { out ->
                 scaled.compress(Bitmap.CompressFormat.JPEG, 85, out)
             }
+            if (noArtMarker.exists()) noArtMarker.delete()
         } catch (_: Exception) {}
 
         albumArtCache.put(memKey, scaled)
