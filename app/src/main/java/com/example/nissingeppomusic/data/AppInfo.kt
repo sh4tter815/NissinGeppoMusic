@@ -13,6 +13,7 @@ data class AppInfo(
     val artist: String = "",
     val album: String = "",
     val filePath: String = "",
+    val trackNumber: Int = 0,
     val initialJapanese: String = "＃", // 「あ」「か」「さ」など
     val initialEnglish: String = "＃",   // "A", "B", "C" など
     val customYomi: String = "",

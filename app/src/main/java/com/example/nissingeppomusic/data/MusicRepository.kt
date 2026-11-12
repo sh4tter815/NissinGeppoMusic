@@ -41,7 +41,8 @@ class MusicRepository(private val context: Context) {
         val albumId: Long,
         val filePath: String,
         val uriString: String,
-        val dateModified: Long
+        val dateModified: Long,
+        val track: Int = 0
     ) {
         /** アートの保存キー。アルバム単位を基本にし、無い曲は曲単位 */
         fun artKey(): String = if (albumId > 0) "album_$albumId" else "track_$id"
@@ -162,6 +163,7 @@ class MusicRepository(private val context: Context) {
             context.contentResolver.query(collection, projection, selection, null, null)?.use { cursor ->
                 val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
                 val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
+            val trackCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
                 while (cursor.moveToNext()) {
                     map[cursor.getLong(idCol)] = cursor.getLong(dateCol)
                 }
@@ -181,6 +183,7 @@ class MusicRepository(private val context: Context) {
             MediaStore.Audio.Media.ALBUM,
             MediaStore.Audio.Media.ALBUM_ID,
             MediaStore.Audio.Media.DATA,
+        MediaStore.Audio.Media.TRACK,
             MediaStore.Audio.Media.DATE_MODIFIED
         )
         val selection = if (extraSelection == null) {
@@ -198,7 +201,8 @@ class MusicRepository(private val context: Context) {
                 val albumCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
                 val albumIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
                 val dataCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
-                val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
+            val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
+            val trackCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
 
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idCol)
@@ -213,7 +217,8 @@ class MusicRepository(private val context: Context) {
                             albumId = cursor.getLong(albumIdCol),
                             filePath = cursor.getString(dataCol) ?: "",
                             uriString = ContentUris.withAppendedId(collection, id).toString(),
-                            dateModified = cursor.getLong(dateCol)
+                            dateModified = cursor.getLong(dateCol),
+                            track = cursor.getInt(trackCol)
                         )
                     )
                 }
@@ -266,6 +271,7 @@ class MusicRepository(private val context: Context) {
                 artist = rec.artist,
                 album = rec.album,
                 filePath = rec.filePath,
+                trackNumber = rec.track,
                 initialJapanese = japaneseInitial,
                 initialEnglish = englishInitial,
                 customYomi = customYomi,
@@ -305,10 +311,11 @@ class MusicRepository(private val context: Context) {
                     put("path", r.filePath)
                     put("uri", r.uriString)
                     put("dateModified", r.dateModified)
+                    put("track", r.track)
                 })
             }
             val root = JSONObject().apply {
-                put("version", 1)
+                put("version", 2)
                 put("tracks", arr)
             }
             cacheFile().writeText(root.toString())
@@ -320,6 +327,7 @@ class MusicRepository(private val context: Context) {
             val file = cacheFile()
             if (!file.exists()) return null
             val root = JSONObject(file.readText())
+            if (root.optInt("version") != 2) return null
             val arr = root.getJSONArray("tracks")
             val list = mutableListOf<TrackRecord>()
             for (i in 0 until arr.length()) {
@@ -333,7 +341,8 @@ class MusicRepository(private val context: Context) {
                         albumId = o.optLong("albumId"),
                         filePath = o.optString("path"),
                         uriString = o.optString("uri"),
-                        dateModified = o.optLong("dateModified")
+                        dateModified = o.optLong("dateModified"),
+                        track = o.optInt("track")
                     )
                 )
             }
