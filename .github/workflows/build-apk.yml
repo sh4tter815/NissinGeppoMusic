@@ -65,6 +65,10 @@ jobs:
 
       # 4. デバッグ版APKをビルドする
       - name: Build Debug APK with Gradle
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleDebug
 
       # 5. GitHubの「Releases」に自動でデバッグAPKをアップロードする

@@ -19,8 +19,30 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        val ksPassword = System.getenv("KEYSTORE_PASSWORD")
+        if (!ksPassword.isNullOrEmpty()) {
+            create("unified") {
+                storeFile = rootProject.file("Key.jks")
+                storePassword = ksPassword
+                keyAlias = System.getenv("KEY_ALIAS") ?: "key0"
+                keyPassword = System.getenv("KEY_PASSWORD") ?: ksPassword
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            val ksPassword = System.getenv("KEYSTORE_PASSWORD")
+            if (!ksPassword.isNullOrEmpty()) {
+                signingConfig = signingConfigs.getByName("unified")
+            }
+        }
         release {
+            val ksPassword = System.getenv("KEYSTORE_PASSWORD")
+            if (!ksPassword.isNullOrEmpty()) {
+                signingConfig = signingConfigs.getByName("unified")
+            }
             optimization {
                 enable = true
                 packageScope = setOf("androidx.**", "kotlin.**", "kotlinx.**")
