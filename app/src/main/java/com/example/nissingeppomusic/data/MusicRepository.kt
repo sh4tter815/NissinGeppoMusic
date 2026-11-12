@@ -12,6 +12,10 @@ import android.util.LruCache
 import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
 
 typealias AppRepository = MusicRepository
 
@@ -20,11 +24,28 @@ class MusicRepository(private val context: Context) {
 
     companion object {
         private var cachedTracks: List<AppInfo>? = null
+        private var cachedRecords: List<TrackRecord>? = null
         private val albumArtCache = LruCache<Long, Bitmap>(100)
 
         fun invalidateCache() {
             cachedTracks = null
         }
+    }
+
+    /** 永続化できる曲メタデータ（Bitmapは含まない） */
+    private data class TrackRecord(
+        val id: Long,
+        val title: String,
+        val artist: String,
+        val album: String,
+        val albumId: Long,
+        val filePath: String,
+        val uriString: String,
+        val dateModified: Long
+    ) {
+        /** アートの保存キー。アルバム単位を基本にし、無い曲は曲単位 */
+        fun artKey(): String = if (albumId > 0) "album_$albumId" else "track_$id"
+        fun memKey(): Long = if (albumId > 0) albumId else -id
     }
 
     suspend fun getInstalledApps(): List<AppInfo> = getMusicTracks()
@@ -34,112 +55,304 @@ class MusicRepository(private val context: Context) {
             return@withContext cachedTracks!!
         }
 
-        val tracks = mutableListOf<AppInfo>()
-        val collection = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
-        } else {
-            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+        var records = cachedRecords
+        if (records == null) {
+            val diskRecords = loadRecordsFromDisk()
+            if (diskRecords != null) {
+                // 保存済みライブラリを読み、差分だけ最新化する
+                records = applyDiff(diskRecords) ?: diskRecords
+            } else {
+                // 初回（保存データなし）はフルスキャン
+                records = fullScan()
+            }
+            cachedRecords = records
+        } else if (forceRefresh) {
+            // 設定画面の「ライブラリを更新」など: 差分更新のみ行う
+            val updated = applyDiff(records)
+            if (updated != null) {
+                records = updated
+                cachedRecords = updated
+            }
         }
 
+        val result = buildAppInfoList(records)
+        cachedTracks = result
+        result
+    }
+
+    // ---------------- スキャン / 差分更新 ----------------
+
+    private fun fullScan(): List<TrackRecord> {
+        val records = queryTrackRecords(null, null)
+        // 初回だけアートを全曲分デコードしてアプリ内に保存する
+        records.forEach { loadArtBitmap(it, allowSourceDecode = true) }
+        saveRecordsToDisk(records)
+        return records
+    }
+
+    /**
+     * MediaStoreの (ID, DATE_MODIFIED) だけを軽く問い合わせて差分を検出し、
+     * 追加・変更された曲だけを取り直す。変化がなければ null を返す。
+     */
+    private fun applyDiff(old: List<TrackRecord>): List<TrackRecord>? {
+        val current = queryIdAndDateModified() ?: return null
+        val oldById = old.associateBy { it.id }
+
+        val removedIds = oldById.keys - current.keys
+        val changedIds = current.entries
+            .filter { (id, dateModified) -> oldById[id]?.dateModified != dateModified }
+            .map { it.key }
+
+        if (removedIds.isEmpty() && changedIds.isEmpty()) return null
+
+        val fetched = if (changedIds.isEmpty()) {
+            emptyList()
+        } else {
+            changedIds.chunked(400).flatMap { chunk ->
+                val placeholders = chunk.joinToString(",") { "?" }
+                val args = chunk.map { it.toString() }.toTypedArray()
+                queryTrackRecords("${MediaStore.Audio.Media._ID} IN ($placeholders)", args)
+            }
+        }
+        // 追加・変更された曲のアートだけデコードして保存する
+        fetched.forEach { loadArtBitmap(it, allowSourceDecode = true) }
+
+        val changedSet = changedIds.toSet()
+        val merged = old.filter { it.id !in removedIds && it.id !in changedSet } + fetched
+
+        // 使われなくなったアートファイルを掃除する
+        val validKeys = merged.map { it.artKey() }.toSet()
+        try {
+            artDir().listFiles()?.forEach { file ->
+                if (file.nameWithoutExtension !in validKeys) file.delete()
+            }
+        } catch (_: Exception) {}
+
+        saveRecordsToDisk(merged)
+        return merged
+    }
+
+    private fun queryIdAndDateModified(): Map<Long, Long>? {
+        val collection = audioCollection()
+        val projection = arrayOf(
+            MediaStore.Audio.Media._ID,
+            MediaStore.Audio.Media.DATE_MODIFIED
+        )
+        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+        return try {
+            val map = mutableMapOf<Long, Long>()
+            context.contentResolver.query(collection, projection, selection, null, null)?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+                val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
+                while (cursor.moveToNext()) {
+                    map[cursor.getLong(idCol)] = cursor.getLong(dateCol)
+                }
+            }
+            map
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    private fun queryTrackRecords(extraSelection: String?, selectionArgs: Array<String>?): List<TrackRecord> {
+        val collection = audioCollection()
         val projection = arrayOf(
             MediaStore.Audio.Media._ID,
             MediaStore.Audio.Media.TITLE,
             MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.ALBUM,
-            MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.ALBUM_ID,
             MediaStore.Audio.Media.DATA,
-            MediaStore.Audio.Media.MIME_TYPE
+            MediaStore.Audio.Media.DATE_MODIFIED
         )
+        val selection = if (extraSelection == null) {
+            "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+        } else {
+            "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ($extraSelection)"
+        }
 
-        // Only music files
-        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
-        val sortOrder = "${MediaStore.Audio.Media.TITLE} ASC"
-
-        val favoritesSet = prefManager.getFavoritePackages()
-        val hiddenSet = prefManager.getHiddenPackages()
-        val yomiMap = prefManager.getYomiMap()
-        val aliasesMap = prefManager.getAliasesMap()
-
+        val records = mutableListOf<TrackRecord>()
         try {
-            context.contentResolver.query(
-                collection,
-                projection,
-                selection,
-                null,
-                sortOrder
-            )?.use { cursor ->
+            context.contentResolver.query(collection, projection, selection, selectionArgs, null)?.use { cursor ->
                 val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
                 val titleCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
                 val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
                 val albumCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
                 val albumIdCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
                 val dataCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+                val dateCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
 
                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idCol)
-                    val rawTitle = cursor.getString(titleCol) ?: "Unknown Title"
-                    val artist = cursor.getString(artistCol) ?: "Unknown Artist"
-                    val album = cursor.getString(albumCol) ?: "Unknown Album"
-                    val albumId = cursor.getLong(albumIdCol)
-                    val filePath = cursor.getString(dataCol) ?: ""
-
-                    val title = rawTitle.trim()
+                    val title = (cursor.getString(titleCol) ?: "Unknown Title").trim()
                     if (title.isBlank()) continue
-
-                    val songUri = ContentUris.withAppendedId(collection, id).toString()
-
-                    val isHidden = hiddenSet.contains(songUri)
-                    val isFavorite = favoritesSet.contains(songUri)
-                    val customYomi = yomiMap[songUri] ?: ""
-                    val searchAliases = aliasesMap[songUri] ?: emptyList()
-
-                    val targetForInitials = if (customYomi.isNotBlank()) customYomi else title
-
-                    // Load album art with memory cache & downscaling
-                    val albumArtBitmap = loadAlbumArtCached(context, albumId, filePath)
-                    val iconBitmap = albumArtBitmap?.asImageBitmap()
-
-                    val (japaneseInitial, englishInitial) = extractInitials(targetForInitials)
-
-                    tracks.add(
-                        AppInfo(
-                            label = title,
-                            packageName = songUri,
-                            icon = null,
-                            iconBitmap = iconBitmap,
-                            albumArt = albumArtBitmap,
-                            artist = artist,
-                            album = album,
-                            filePath = filePath,
-                            initialJapanese = japaneseInitial,
-                            initialEnglish = englishInitial,
-                            customYomi = customYomi,
-                            searchAliases = searchAliases,
-                            isFavorite = isFavorite,
-                            isHidden = isHidden
+                    records.add(
+                        TrackRecord(
+                            id = id,
+                            title = title,
+                            artist = cursor.getString(artistCol) ?: "Unknown Artist",
+                            album = cursor.getString(albumCol) ?: "Unknown Album",
+                            albumId = cursor.getLong(albumIdCol),
+                            filePath = cursor.getString(dataCol) ?: "",
+                            uriString = ContentUris.withAppendedId(collection, id).toString(),
+                            dateModified = cursor.getLong(dateCol)
                         )
                     )
                 }
             }
         } catch (_: Exception) {}
+        return records
+    }
 
-        val sorted = tracks.sortedBy { song ->
+    private fun audioCollection(): Uri {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            MediaStore.Audio.Media.getContentUri(MediaStore.VOLUME_EXTERNAL)
+        } else {
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+        }
+    }
+
+    // ---------------- AppInfo 構築 ----------------
+
+    private fun buildAppInfoList(records: List<TrackRecord>): List<AppInfo> {
+        val favoritesSet = prefManager.getFavoritePackages()
+        val hiddenSet = prefManager.getHiddenPackages()
+        val yomiMap = prefManager.getYomiMap()
+        val aliasesMap = prefManager.getAliasesMap()
+
+        val tracks = records.map { rec ->
+            val isHidden = hiddenSet.contains(rec.uriString)
+            val isFavorite = favoritesSet.contains(rec.uriString)
+            val customYomi = yomiMap[rec.uriString] ?: ""
+            val searchAliases = aliasesMap[rec.uriString] ?: emptyList()
+            val targetForInitials = if (customYomi.isNotBlank()) customYomi else rec.title
+
+            // 起動時はアプリ内保存済みアートだけを使う（MediaStoreから再デコードしない）
+            val albumArtBitmap = loadArtBitmap(rec, allowSourceDecode = false)
+            val (japaneseInitial, englishInitial) = extractInitials(targetForInitials)
+
+            AppInfo(
+                label = rec.title,
+                packageName = rec.uriString,
+                icon = null,
+                iconBitmap = albumArtBitmap?.asImageBitmap(),
+                albumArt = albumArtBitmap,
+                artist = rec.artist,
+                album = rec.album,
+                filePath = rec.filePath,
+                initialJapanese = japaneseInitial,
+                initialEnglish = englishInitial,
+                customYomi = customYomi,
+                searchAliases = searchAliases,
+                isFavorite = isFavorite,
+                isHidden = isHidden
+            )
+        }
+
+        return tracks.sortedBy { song ->
             val rawKey = if (song.customYomi.isNotBlank()) song.customYomi else song.label
             toHiragana(rawKey.lowercase())
         }
-        cachedTracks = sorted
-        sorted
     }
 
-    private fun loadAlbumArtCached(context: Context, albumId: Long, filePath: String): Bitmap? {
-        if (albumId > 0) {
-            val cached = albumArtCache.get(albumId)
-            if (cached != null) return cached
+    // ---------------- 永続化（メタデータ） ----------------
+
+    private fun cacheFile(): File = File(context.filesDir, "music_library_cache.json")
+
+    private fun saveRecordsToDisk(records: List<TrackRecord>) {
+        try {
+            val arr = JSONArray()
+            records.forEach { r ->
+                arr.put(JSONObject().apply {
+                    put("id", r.id)
+                    put("title", r.title)
+                    put("artist", r.artist)
+                    put("album", r.album)
+                    put("albumId", r.albumId)
+                    put("path", r.filePath)
+                    put("uri", r.uriString)
+                    put("dateModified", r.dateModified)
+                })
+            }
+            val root = JSONObject().apply {
+                put("version", 1)
+                put("tracks", arr)
+            }
+            cacheFile().writeText(root.toString())
+        } catch (_: Exception) {}
+    }
+
+    private fun loadRecordsFromDisk(): List<TrackRecord>? {
+        return try {
+            val file = cacheFile()
+            if (!file.exists()) return null
+            val root = JSONObject(file.readText())
+            val arr = root.getJSONArray("tracks")
+            val list = mutableListOf<TrackRecord>()
+            for (i in 0 until arr.length()) {
+                val o = arr.getJSONObject(i)
+                list.add(
+                    TrackRecord(
+                        id = o.getLong("id"),
+                        title = o.optString("title"),
+                        artist = o.optString("artist"),
+                        album = o.optString("album"),
+                        albumId = o.optLong("albumId"),
+                        filePath = o.optString("path"),
+                        uriString = o.optString("uri"),
+                        dateModified = o.optLong("dateModified")
+                    )
+                )
+            }
+            list
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    // ---------------- アルバムアート（アプリ内保存） ----------------
+
+    private fun artDir(): File = File(context.filesDir, "album_art").apply { mkdirs() }
+
+    private fun artFile(artKey: String): File = File(artDir(), "$artKey.jpg")
+
+    /**
+     * アート取得の順序: メモリ → アプリ内保存ファイル → （許可時のみ）MediaStore等からデコードして保存。
+     * allowSourceDecode=false のときは保存済みファイルのみを使い、起動を高速に保つ。
+     */
+    private fun loadArtBitmap(rec: TrackRecord, allowSourceDecode: Boolean): Bitmap? {
+        val memKey = rec.memKey()
+        albumArtCache.get(memKey)?.let { return it }
+
+        val file = artFile(rec.artKey())
+        if (file.exists()) {
+            val fromDisk = try { BitmapFactory.decodeFile(file.absolutePath) } catch (_: Exception) { null }
+            if (fromDisk != null) {
+                albumArtCache.put(memKey, fromDisk)
+                return fromDisk
+            }
         }
 
+        if (!allowSourceDecode) return null
+
+        val decoded = decodeArtFromSource(rec.albumId, rec.filePath) ?: return null
+        val scaled = if (decoded.width > 300 || decoded.height > 300) {
+            Bitmap.createScaledBitmap(decoded, 300, 300, true)
+        } else decoded
+
+        try {
+            FileOutputStream(file).use { out ->
+                scaled.compress(Bitmap.CompressFormat.JPEG, 85, out)
+            }
+        } catch (_: Exception) {}
+
+        albumArtCache.put(memKey, scaled)
+        return scaled
+    }
+
+    private fun decodeArtFromSource(albumId: Long, filePath: String): Bitmap? {
         val albumArtUri = ContentUris.withAppendedId(Uri.parse("content://media/external/audio/albumart"), albumId)
-        val bitmap = try {
+        return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, albumArtUri))
             } else {
@@ -159,16 +372,9 @@ class MusicRepository(private val context: Context) {
                 null
             }
         }
-
-        if (bitmap != null && albumId > 0) {
-            val scaled = if (bitmap.width > 300 || bitmap.height > 300) {
-                Bitmap.createScaledBitmap(bitmap, 300, 300, true)
-            } else bitmap
-            albumArtCache.put(albumId, scaled)
-            return scaled
-        }
-        return bitmap
     }
+
+    // ---------------- お気に入り・非表示・読み仮名など ----------------
 
     fun setFavorite(songUri: String, isFavorite: Boolean) {
         prefManager.setFavoritePackage(songUri, isFavorite)
