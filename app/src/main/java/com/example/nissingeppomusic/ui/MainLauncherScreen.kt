@@ -131,6 +131,7 @@ fun MainLauncherScreen() {
     var searchQuery by remember { mutableStateOf("") }
         var librarySortMode by remember { mutableStateOf(repo.prefManager.getLibrarySortMode()) }
         var selectedAlbumFilter by remember { mutableStateOf<String?>(null) }
+        var selectedArtistFilter by remember { mutableStateOf<String?>(null) }
     var isSearchActive by remember { mutableStateOf(false) }
 
     // ページ切り替え時の一時的引っ込みアニメーション用状態
@@ -461,7 +462,7 @@ fun MainLauncherScreen() {
                         }
                     )
 
-                                        val displayedApps = remember(searchQuery, allApps, isHideMode, librarySortMode, selectedAlbumFilter) {
+                                        val displayedApps = remember(searchQuery, allApps, isHideMode, librarySortMode, selectedAlbumFilter, selectedArtistFilter) {
                         when {
                             isHideMode -> allApps.filter { it.isHidden }
                             selectedAlbumFilter != null -> {
@@ -469,6 +470,11 @@ fun MainLauncherScreen() {
                                     .filter { it.album == selectedAlbumFilter && !it.isHidden }
                                     .sortedWith(compareBy({ if (it.trackNumber > 0) it.trackNumber else Int.MAX_VALUE }, { it.label }))
                                     .mapIndexed { index, track -> track.copy(label = "${index + 1}. ${track.label}") }
+                            }
+                            selectedArtistFilter != null -> {
+                                allApps
+                                    .filter { it.artist == selectedArtistFilter && !it.isHidden }
+                                    .sortedWith(compareBy({ it.album }, { if (it.trackNumber > 0) it.trackNumber else Int.MAX_VALUE }, { it.label }))
                             }
                             searchQuery.isNotBlank() -> {
                                 allApps.filter {
@@ -492,6 +498,18 @@ fun MainLauncherScreen() {
                                         )
                                     }
                             }
+                            librarySortMode == "artist" -> {
+                                allApps.filter { !it.isHidden }
+                                    .groupBy { it.artist }
+                                    .values
+                                    .map { artistTracks ->
+                                        val first = artistTracks.first()
+                                        first.copy(
+                                            label = first.artist,
+                                            packageName = "artist::" + first.artist
+                                        )
+                                    }
+                            }
                             else -> allApps.filter { !it.isHidden }
                         }
                     }
@@ -509,17 +527,19 @@ fun MainLauncherScreen() {
                         selectedIndexChar = selectedIndexChar,
                         isRightDisc = true,
                         showIndices = true,
-                        isLoopable = (!isHideMode && searchQuery.isBlank()), // 通常アプリ一覧(検索なし)のみ循環ループ、検索時や非表示リスト表示時はループなし
+                        isLoopable = (!isHideMode && searchQuery.isBlank() && librarySortMode == "title"), // タイトル表示(検索なし)のみ循環ループ、検索時や非表示リスト表示時、アルバム/アーティスト表示時はループなし
                         accentColor = accentColor,
                         onAppClick = { app ->
                             if (app.packageName.startsWith("album::")) {
                                 selectedAlbumFilter = app.packageName.removePrefix("album::")
+                            } else if (app.packageName.startsWith("artist::")) {
+                                selectedArtistFilter = app.packageName.removePrefix("artist::")
                             } else {
                                 onAppClick(app.packageName)
                             }
                         },
                         onLongClick = { app ->
-                            if (!app.packageName.startsWith("album::")) {
+                            if (!app.packageName.startsWith("album::") && !app.packageName.startsWith("artist::")) {
                                 selectedAppForOption = app
                             }
                         },
@@ -891,6 +911,7 @@ fun MainLauncherScreen() {
                                     if (librarySortMode != mode) {
                                         librarySortMode = mode
                                         selectedAlbumFilter = null
+                                        selectedArtistFilter = null
                                         repo.prefManager.setLibrarySortMode(mode)
                                         AppRepository.invalidateCache()
                                         refreshApps()
@@ -938,6 +959,38 @@ fun MainLauncherScreen() {
                         color = Color.White,
                         fontSize = 13.sp,
                         modifier = Modifier.clickable { selectedAlbumFilter = null }
+                    )
+                }
+            }
+        }
+
+                // --- 一覧ページ: アーティスト絞り込み中チップ ---
+        if (currentLauncherPage == 2 && selectedArtistFilter != null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = topPaddingDp + 148.dp)
+                    .zIndex(150f),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Row(
+                    modifier = Modifier
+                        .background(accentColor, RoundedCornerShape(999.dp))
+                        .padding(horizontal = 14.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "アーティスト: $selectedArtistFilter",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "✕",
+                        color = Color.White,
+                        fontSize = 13.sp,
+                        modifier = Modifier.clickable { selectedArtistFilter = null }
                     )
                 }
             }
