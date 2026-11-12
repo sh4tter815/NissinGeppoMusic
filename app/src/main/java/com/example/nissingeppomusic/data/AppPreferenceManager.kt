@@ -232,4 +232,21 @@ class AppPreferenceManager(private val context: Context) {
     // フォント選択 ("default" = デフォルト, "receipt" = レシートフォント, "custom" = カスタムファイル)
     fun getFontChoice(): String = prefs.getString("font_choice", "default") ?: "default"
     fun setFontChoice(choice: String) = prefs.edit().putString("font_choice", choice).apply()
+
+    // ライブラリの除外フォルダ（絶対パスのプレフィックス）
+    fun getExcludedFolders(): Set<String> {
+        return prefs.getStringSet("excluded_folders", emptySet()) ?: emptySet()
+    }
+
+    fun addExcludedFolder(path: String) {
+        val current = getExcludedFolders().toMutableSet()
+        current.add(path)
+        prefs.edit().putStringSet("excluded_folders", current).apply()
+    }
+
+    fun removeExcludedFolder(path: String) {
+        val current = getExcludedFolders().toMutableSet()
+        current.remove(path)
+        prefs.edit().putStringSet("excluded_folders", current).apply()
+    }
 }

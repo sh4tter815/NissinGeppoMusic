@@ -56,6 +56,20 @@ fun parseHexColor(hex: String, fallback: Color = Color(0xFFE53935)): Color {
     }
 }
 
+/** フォルダピッカーのツリーURIを実ファイルパスへ変換する（内部ストレージ / SDカード想定） */
+fun treeUriToPath(uri: Uri): String? {
+    return try {
+        val docId = android.provider.DocumentsContract.getTreeDocumentId(uri)
+        val parts = docId.split(":", limit = 2)
+        if (parts.size < 2) return null
+        val base = if (parts[0] == "primary") "/storage/emulated/0" else "/storage/${parts[0]}"
+        val relative = parts[1].trim('/')
+        if (relative.isEmpty()) base else "${base}/${relative}"
+    } catch (_: Exception) {
+        null
+    }
+}
+
 @Composable
 fun SimpleTickSlider(
     value: Float,
@@ -326,6 +340,25 @@ fun SettingsScreen(
         }
     }
 
+    var excludedFolders by remember { mutableStateOf(repo.prefManager.getExcludedFolders().sorted()) }
+
+    // 除外フォルダ選択ピッカー
+    val excludedFolderPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val path = treeUriToPath(uri)
+            if (path != null) {
+                repo.prefManager.addExcludedFolder(path)
+                excludedFolders = repo.prefManager.getExcludedFolders().sorted()
+                onLibraryUpdated()
+                Toast.makeText(context, "除外フォルダに追加しました", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(context, "フォルダの場所を特定できませんでした", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -497,6 +530,66 @@ fun SettingsScreen(
                                         }
                                         if (libraryUpdateStatus.isNotEmpty()) {
                                             Text(libraryUpdateStatus, color = Color.Gray, fontSize = 13.sp)
+                                        }
+                                    }
+                                }
+                            }
+                            item {
+                                Surface(
+                                    color = Color(0x99101728),
+                                    shape = RoundedCornerShape(20.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(20.dp),
+                                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                                    ) {
+                                        Text("除外フォルダ", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Normal)
+                                        Text("ここに入れたフォルダ配下の曲は、ライブラリに表示されません。着信音やダウンロードした一時ファイルを置くフォルダなどにどうぞ。", color = Color.Gray, fontSize = 12.sp)
+                                        if (excludedFolders.isEmpty()) {
+                                            Text("（未設定）", color = Color.Gray, fontSize = 13.sp)
+                                        } else {
+                                            excludedFolders.forEach { folderPath ->
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(folderPath, color = Color.White, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                                                    OutlinedButton(
+                                                        onClick = {
+                                                            repo.prefManager.removeExcludedFolder(folderPath)
+                                                            excludedFolders = repo.prefManager.getExcludedFolders().sorted()
+                                                            onLibraryUpdated()
+                                                        },
+                                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
+                                                    ) {
+                                                        Text("削除", fontWeight = FontWeight.Light)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                            Button(
+                                                onClick = { excludedFolderPickerLauncher.launch(null) },
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F293D)),
+                                                elevation = null
+                                            ) {
+                                                Text("フォルダを選んで追加", color = Color.White, fontWeight = FontWeight.Light)
+                                            }
+                                            val downloadPath = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS).absolutePath
+                                            if (!excludedFolders.contains(downloadPath)) {
+                                                OutlinedButton(
+                                                    onClick = {
+                                                        repo.prefManager.addExcludedFolder(downloadPath)
+                                                        excludedFolders = repo.prefManager.getExcludedFolders().sorted()
+                                                        onLibraryUpdated()
+                                                    },
+                                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                                                ) {
+                                                    Text("Downloadを追加", fontWeight = FontWeight.Light)
+                                                }
+                                            }
                                         }
                                     }
                                 }
