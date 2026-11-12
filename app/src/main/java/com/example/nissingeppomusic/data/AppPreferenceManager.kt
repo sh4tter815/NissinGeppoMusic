@@ -182,6 +182,10 @@ class AppPreferenceManager(private val context: Context) {
     fun setAppDiscLetterSpacingSp(spacing: Float) = prefs.edit().putFloat("app_disc_letter_spacing", spacing).apply()
 
     fun getAppDiscStepAngle(): Float = prefs.getFloat("app_disc_step_angle", 18.6f)
+
+    // ページ切り替え方法 ("buttons" / "dial")
+    fun getPageSwitchStyle(): String = prefs.getString("page_switch_style", "dial") ?: "dial"
+    fun setPageSwitchStyle(style: String) { prefs.edit().putString("page_switch_style", style).apply() }
     fun setAppDiscStepAngle(angle: Float) = prefs.edit().putFloat("app_disc_step_angle", angle).apply()
 
     // アクセントカラー (デフォルト: 赤 #E53935)

@@ -649,18 +649,32 @@ fun MainLauncherScreen() {
             }
         }
 
-        // --- 画面下部 メカニカルページダイヤル (設定, ホーム, 一覧, フォルダ) ---
-        BottomPageDial(
-            currentPage = currentLauncherPage,
-            onPageSelected = { targetPage ->
-                changePageWithTransition(targetPage)
-            },
-            accentColor = accentColor,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = bottomPaddingDp + 4.dp)
-                .zIndex(250f)
-        )
+                // --- 画面下部 ページ切り替え (ボタン式 / ダイヤル式を設定で切替) ---
+        if (repo.prefManager.getPageSwitchStyle() == "dial") {
+            PeekPageDial(
+                currentPage = currentLauncherPage,
+                onPageSelected = { targetPage ->
+                    changePageWithTransition(targetPage)
+                },
+                accentColor = accentColor,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = bottomPaddingDp + 4.dp)
+                    .zIndex(250f)
+            )
+        } else {
+            BottomPageDial(
+                currentPage = currentLauncherPage,
+                onPageSelected = { targetPage ->
+                    changePageWithTransition(targetPage)
+                },
+                accentColor = accentColor,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = bottomPaddingDp + 4.dp)
+                    .zIndex(250f)
+            )
+        }
 
         // --- タッチ操作パネル (左半分: アプリ一覧(2) & フォルダ(3)) ---
         if (!isTransitioning && (currentLauncherPage == 2 || currentLauncherPage == 3)) {

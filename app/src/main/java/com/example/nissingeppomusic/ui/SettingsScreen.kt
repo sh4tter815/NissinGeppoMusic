@@ -248,6 +248,7 @@ fun SettingsScreen(
     var isReverseScroll by remember { mutableStateOf(repo.prefManager.isReverseScroll()) }
     var usePasscodeForHidden by remember { mutableStateOf(repo.prefManager.isUsePasscodeForHidden()) }
     var currentFontChoice by remember { mutableStateOf(repo.prefManager.getFontChoice()) }
+        var pageSwitchStyle by remember { mutableStateOf(repo.prefManager.getPageSwitchStyle()) }
         var libraryUpdateStatus by remember { mutableStateOf("") }
         var isUpdatingLibrary by remember { mutableStateOf(false) }
         val settingsScope = rememberCoroutineScope()
@@ -596,6 +597,40 @@ fun SettingsScreen(
                             }
                         }
                         "appearance" -> {
+                            item {
+                                Surface(
+                                    color = Color(0x99101728),
+                                    shape = RoundedCornerShape(20.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(20.dp),
+                                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Text("ページ切り替えの方法", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Normal)
+                                        Text("「ダイヤル」は画面下からチラ見えする円盤を長押しして横にドラッグし、回してページを切り替えます。", color = Color.Gray, fontSize = 12.sp)
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            listOf("buttons" to "ボタン", "dial" to "ダイヤル").forEach { (style, label) ->
+                                                val isSelected = pageSwitchStyle == style
+                                                Box(
+                                                    modifier = Modifier
+                                                        .clip(RoundedCornerShape(999.dp))
+                                                        .background(if (isSelected) currentAccentColor else Color(0xFF1F293D))
+                                                        .clickable {
+                                                            pageSwitchStyle = style
+                                                            repo.prefManager.setPageSwitchStyle(style)
+                                                            onChanged()
+                                                        }
+                                                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Text(label, color = Color.White, fontSize = 13.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             item {
                                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                                     // 外観サブタブ選択
