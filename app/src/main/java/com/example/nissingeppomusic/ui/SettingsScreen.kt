@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.nissingeppomusic.data.AppRepository
+import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.roundToInt
@@ -214,7 +215,8 @@ fun FontSelectionSection(
 fun SettingsScreen(
     repo: AppRepository,
     onBack: () -> Unit = {},
-    onChanged: () -> Unit = {}
+    onChanged: () -> Unit = {},
+        onLibraryUpdated: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var accentHex by remember { mutableStateOf(repo.prefManager.getAccentColorHex()) }
@@ -232,6 +234,9 @@ fun SettingsScreen(
     var isReverseScroll by remember { mutableStateOf(repo.prefManager.isReverseScroll()) }
     var usePasscodeForHidden by remember { mutableStateOf(repo.prefManager.isUsePasscodeForHidden()) }
     var currentFontChoice by remember { mutableStateOf(repo.prefManager.getFontChoice()) }
+        var libraryUpdateStatus by remember { mutableStateOf("") }
+        var isUpdatingLibrary by remember { mutableStateOf(false) }
+        val settingsScope = rememberCoroutineScope()
 
     val switchColors = SwitchDefaults.colors(
         checkedThumbColor = currentAccentColor,
@@ -355,6 +360,7 @@ fun SettingsScreen(
                         text = when (selectedCategory) {
                             "behavior" -> "動作設定"
                             "appearance" -> "外観設定"
+                            "library" -> "ライブラリ"
                             "security" -> "セキュリティ"
                             "tutorial" -> "チュートリアル"
                             else -> "環境設定"
@@ -369,6 +375,7 @@ fun SettingsScreen(
             val categories = listOf(
                 Triple("behavior", "動作", "ダイヤルのスクロール方向や操作感の設定"),
                 Triple("appearance", "外観", "壁紙、配色、フォントなどの見た目のカスタマイズ"),
+                Triple("library", "ライブラリ", "曲データの差分更新（追加・削除された曲の反映）"),
                 Triple("security", "セキュリティ", "非表示アプリ用のパスコード(PIN)設定"),
                 Triple("tutorial", "チュートリアル", "ガイドや使い方の再表示設定")
             )
@@ -452,6 +459,44 @@ fun SettingsScreen(
                                                 },
                                                 colors = switchColors
                                             )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                                                "library" -> {
+                            item {
+                                Surface(
+                                    color = Color(0x99101728),
+                                    shape = RoundedCornerShape(20.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(20.dp),
+                                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                                    ) {
+                                        Text("曲データの更新", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Normal)
+                                        Text("端末内の曲の追加・削除・変更をチェックして、ライブラリに反映します（差分更新）。通常は起動時に自動でチェックされるため、手動更新が要るのは曲ファイルを入れ替えた直後などです。", color = Color.Gray, fontSize = 12.sp)
+                                        Button(
+                                            onClick = {
+                                                if (!isUpdatingLibrary) {
+                                                    isUpdatingLibrary = true
+                                                    libraryUpdateStatus = "更新中…"
+                                                    settingsScope.launch {
+                                                        val tracks = repo.getMusicTracks(forceRefresh = true)
+                                                        libraryUpdateStatus = "更新しました（全 ${tracks.size} 曲）"
+                                                        isUpdatingLibrary = false
+                                                        onLibraryUpdated()
+                                                    }
+                                                }
+                                            },
+                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F293D)),
+                                            elevation = null
+                                        ) {
+                                            Text("ライブラリを更新", color = Color.White, fontWeight = FontWeight.Light)
+                                        }
+                                        if (libraryUpdateStatus.isNotEmpty()) {
+                                            Text(libraryUpdateStatus, color = Color.Gray, fontSize = 13.sp)
                                         }
                                     }
                                 }

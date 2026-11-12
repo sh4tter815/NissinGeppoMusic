@@ -352,6 +352,9 @@ fun MainLauncherScreen() {
                                 customFontPath = repo.prefManager.getCustomFontPath()
                                 useCustomFont = repo.prefManager.isUseCustomFont()
                                 fontChoice = repo.prefManager.getFontChoice()
+                            },
+                            onLibraryUpdated = {
+                                refreshApps()
                             }
                         )
                     }
