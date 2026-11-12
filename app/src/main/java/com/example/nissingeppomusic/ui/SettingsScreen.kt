@@ -603,31 +603,30 @@ fun SettingsScreen(
                                     shape = RoundedCornerShape(20.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Column(
-                                        modifier = Modifier.padding(20.dp),
-                                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 20.dp, vertical = 14.dp),
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Text("ページ切り替えの方法", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Normal)
-                                        Text("「ダイヤル」は画面下からチラ見えする円盤を長押しして横にドラッグし、回してページを切り替えます。", color = Color.Gray, fontSize = 12.sp)
-                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            listOf("buttons" to "ボタン", "dial" to "ダイヤル").forEach { (style, label) ->
-                                                val isSelected = pageSwitchStyle == style
-                                                Box(
-                                                    modifier = Modifier
-                                                        .clip(RoundedCornerShape(999.dp))
-                                                        .background(if (isSelected) currentAccentColor else Color(0xFF1F293D))
-                                                        .clickable {
-                                                            pageSwitchStyle = style
-                                                            repo.prefManager.setPageSwitchStyle(style)
-                                                            onChanged()
-                                                        }
-                                                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                                                    contentAlignment = Alignment.Center
-                                                ) {
-                                                    Text(label, color = Color.White, fontSize = 13.sp, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
-                                                }
-                                            }
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text("ボタンでページ切り替え", color = Color.White, fontSize = 15.sp)
+                                            Text("オフにすると下部のダイヤルで切り替えます", color = Color.Gray, fontSize = 12.sp)
                                         }
+                                        Switch(
+                                            checked = pageSwitchStyle == "buttons",
+                                            onCheckedChange = { useButtons ->
+                                                pageSwitchStyle = if (useButtons) "buttons" else "dial"
+                                                repo.prefManager.setPageSwitchStyle(pageSwitchStyle)
+                                                onChanged()
+                                            },
+                                            colors = SwitchDefaults.colors(
+                                                checkedThumbColor = Color.White,
+                                                checkedTrackColor = currentAccentColor,
+                                                uncheckedThumbColor = Color.White,
+                                                uncheckedTrackColor = Color(0xFF3A4358)
+                                            )
+                                        )
                                     }
                                 }
                             }
