@@ -237,6 +237,7 @@ class MusicRepository(private val context: Context) {
         val hiddenSet = prefManager.getHiddenPackages()
         val yomiMap = prefManager.getYomiMap()
         val aliasesMap = prefManager.getAliasesMap()
+        val sortMode = prefManager.getLibrarySortMode()
 
         // 除外フォルダ配下の曲はライブラリに表示しない
         val visibleRecords = records.filter { !isExcluded(it.filePath) }
@@ -246,7 +247,11 @@ class MusicRepository(private val context: Context) {
             val isFavorite = favoritesSet.contains(rec.uriString)
             val customYomi = yomiMap[rec.uriString] ?: ""
             val searchAliases = aliasesMap[rec.uriString] ?: emptyList()
-            val targetForInitials = if (customYomi.isNotBlank()) customYomi else rec.title
+            val targetForInitials = when (sortMode) {
+                "artist" -> rec.artist
+                "album" -> rec.album
+                else -> if (customYomi.isNotBlank()) customYomi else rec.title
+            }
 
             // 起動時はアプリ内保存済みアートだけを使う（MediaStoreから再デコードしない）
             val albumArtBitmap = loadArtBitmap(rec, allowSourceDecode = false)
@@ -270,10 +275,17 @@ class MusicRepository(private val context: Context) {
             )
         }
 
-        return tracks.sortedBy { song ->
-            val rawKey = if (song.customYomi.isNotBlank()) song.customYomi else song.label
-            toHiragana(rawKey.lowercase())
+        fun sortKeyOf(song: AppInfo): String = when (sortMode) {
+            "artist" -> song.artist
+            "album" -> song.album
+            else -> if (song.customYomi.isNotBlank()) song.customYomi else song.label
         }
+        return tracks.sortedWith(
+            compareBy(
+                { toHiragana(sortKeyOf(it).lowercase()) },
+                { toHiragana((if (it.customYomi.isNotBlank()) it.customYomi else it.label).lowercase()) }
+            )
+        )
     }
 
     // ---------------- 永続化（メタデータ） ----------------

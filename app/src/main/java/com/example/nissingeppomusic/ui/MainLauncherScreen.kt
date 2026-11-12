@@ -129,6 +129,7 @@ fun MainLauncherScreen() {
     }
 
     var searchQuery by remember { mutableStateOf("") }
+        var librarySortMode by remember { mutableStateOf(repo.prefManager.getLibrarySortMode()) }
     var isSearchActive by remember { mutableStateOf(false) }
 
     // ページ切り替え時の一時的引っ込みアニメーション用状態
@@ -465,6 +466,8 @@ fun MainLauncherScreen() {
                         } else if (searchQuery.isNotBlank()) {
                             allApps.filter {
                                 (it.label.contains(searchQuery, ignoreCase = true) ||
+                                        it.artist.contains(searchQuery, ignoreCase = true) ||
+                                        it.album.contains(searchQuery, ignoreCase = true) ||
                                         it.customYomi.contains(searchQuery, ignoreCase = true) ||
                                         it.initialJapanese.contains(searchQuery, ignoreCase = true) ||
                                         it.searchAliases.any { alias -> alias.contains(searchQuery, ignoreCase = true) }) && !it.isHidden
@@ -830,6 +833,47 @@ fun MainLauncherScreen() {
                                 modifier = Modifier
                                     .clickable { searchQuery = "" }
                                     .padding(4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- 一覧ページ: 並び替え基準の切り替え（曲名 / アーティスト / アルバム） ---
+        if (currentLauncherPage == 2 && !isHideMode) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = topPaddingDp + 106.dp)
+                    .zIndex(150f),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("title" to "曲名", "artist" to "アーティスト", "album" to "アルバム").forEach { (mode, label) ->
+                        val isSelected = librarySortMode == mode
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    if (isSelected) accentColor else Color(0x99101728),
+                                    RoundedCornerShape(999.dp)
+                                )
+                                .clickable {
+                                    if (librarySortMode != mode) {
+                                        librarySortMode = mode
+                                        repo.prefManager.setLibrarySortMode(mode)
+                                        AppRepository.invalidateCache()
+                                        refreshApps()
+                                    }
+                                }
+                                .padding(horizontal = 14.dp, vertical = 7.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = label,
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                             )
                         }
                     }

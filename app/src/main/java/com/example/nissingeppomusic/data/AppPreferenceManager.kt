@@ -249,4 +249,8 @@ class AppPreferenceManager(private val context: Context) {
         current.remove(path)
         prefs.edit().putStringSet("excluded_folders", current).apply()
     }
+
+    // ライブラリの並び替え基準 ("title" = 曲名, "artist" = アーティスト, "album" = アルバム)
+    fun getLibrarySortMode(): String = prefs.getString("library_sort_mode", "title") ?: "title"
+    fun setLibrarySortMode(mode: String) = prefs.edit().putString("library_sort_mode", mode).apply()
 }
