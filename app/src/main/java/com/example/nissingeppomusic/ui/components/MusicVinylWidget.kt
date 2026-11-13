@@ -1,5 +1,6 @@
 package com.example.nissingeppomusic.ui.components
 
+import android.graphics.Bitmap
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
