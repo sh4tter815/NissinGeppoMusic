@@ -234,6 +234,7 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     var accentHex by remember { mutableStateOf(repo.prefManager.getAccentColorHex()) }
+    var matchArtwork by remember { mutableStateOf(repo.prefManager.isMatchArtworkColor()) }
     val currentAccentColor = parseHexColor(accentHex)
 
     var iconSize by remember { mutableFloatStateOf(repo.prefManager.getAppDiscIconSizeDp()) }
@@ -738,6 +739,25 @@ fun SettingsScreen(
                                                     modifier = Modifier.padding(20.dp),
                                                     verticalArrangement = Arrangement.spacedBy(16.dp)
                                                 ) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Column(modifier = Modifier.weight(1f)) {
+                                                            Text("アートワークに合わせる", color = Color.White, fontSize = 14.sp)
+                                                            Text("再生中の曲のアートワークから、アクセントと背景の色を自動で決めます", color = Color.Gray, fontSize = 12.sp)
+                                                        }
+                                                        Switch(
+                                                            checked = matchArtwork,
+                                                            onCheckedChange = {
+                                                                matchArtwork = it
+                                                                repo.prefManager.setMatchArtworkColor(it)
+                                                                onChanged()
+                                                            },
+                                                            colors = switchColors
+                                                        )
+                                                    }
                                                     Text("アクセントカラー", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Normal)
                                                     Row(
                                                         modifier = Modifier.fillMaxWidth(),
