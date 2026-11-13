@@ -36,7 +36,8 @@ fun MusicSeekBarDisc(
     discCenterXDp: Float,
     discCenterYDp: Float,
     discRadiusDp: Float = 165f,
-    accentColor: Color = Color(0xFFE53935)
+    accentColor: Color = Color(0xFFE53935),
+    accentGlow: Boolean = false
 ) {
     val context = LocalContext.current
     val prefManager = remember { AppPreferenceManager(context) }
@@ -151,6 +152,18 @@ fun MusicSeekBarDisc(
 
             // 内側の進行状況インジケーターリング（300度スパン）
             val progressSweepAngle = activeSeconds * anglePerSecond
+            if (accentGlow) {
+                // コントラストが低い配色のときは太い半透明の弧を下に敷いてグローさせる
+                drawArc(
+                    color = accentColor.copy(alpha = 0.28f),
+                    startAngle = rotationDegrees,
+                    sweepAngle = progressSweepAngle,
+                    useCenter = false,
+                    topLeft = Offset(cx - r + 8f, cy - r + 8f),
+                    size = androidx.compose.ui.geometry.Size((r - 8f) * 2f, (r - 8f) * 2f),
+                    style = Stroke(width = 13f)
+                )
+            }
             drawArc(
                 color = accentColor,
                 startAngle = rotationDegrees,
