@@ -24,6 +24,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Lyrics
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
@@ -304,6 +305,9 @@ fun MainLauncherScreen() {
 
     // 下ダイヤルを押して拡大している間は、リピート/シャッフルボタンを隠す
     var isDialPressed by remember { mutableStateOf(false) }
+
+    // 歌詞モード（ボタンだけ先に用意。歌詞ページは後で作る）
+    var showLyrics by remember { mutableStateOf(false) }
 
     var showWelcomeTutorial by remember { mutableStateOf(false) }
     var showIndexTutorial by remember { mutableStateOf(false) }
@@ -1030,6 +1034,40 @@ fun MainLauncherScreen() {
                         imageVector = Icons.Default.Shuffle,
                         contentDescription = "シャッフル",
                         tint = if (musicPlayerManager.shuffleEnabled) accentColor else Color.White.copy(alpha = 0.55f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            // 歌詞（シャッフルと対称の位置、円周の -141°。左下）
+            run {
+                val rad = -141f * (PI.toFloat() / 180f)
+                val dx = dialRadiusForButtons * cos(rad)
+                val dy = dialCenterBelowBand + dialRadiusForButtons * sin(rad) + 20f
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = bottomPaddingDp + 4.dp)
+                        .offset(x = dx.dp, y = dy.dp)
+                        .size(40.dp)
+                        .zIndex(260f)
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            showLyrics = !showLyrics
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (accentGlow && showLyrics) {
+                        Icon(
+                            imageVector = Icons.Default.Lyrics,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(20.dp).blur(6.dp)
+                        )
+                    }
+                    Icon(
+                        imageVector = Icons.Default.Lyrics,
+                        contentDescription = "歌詞",
+                        tint = if (showLyrics) accentColor else Color.White.copy(alpha = 0.55f),
                         modifier = Modifier.size(20.dp)
                     )
                 }
