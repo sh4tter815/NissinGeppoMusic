@@ -25,6 +25,8 @@ import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,7 +62,8 @@ fun RotatableAppDisc(
     selectedPackages: Set<String>? = null,
     onAppClick: (AppInfo) -> Unit,
     onLongClick: (AppInfo) -> Unit,
-    onHoldingChanged: (Boolean) -> Unit = {}
+    onHoldingChanged: (Boolean) -> Unit = {},
+    accentGlow: Boolean = false
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val prefManager = remember { com.example.nissingeppomusic.data.AppPreferenceManager(context) }
@@ -335,7 +338,8 @@ fun RotatableAppDisc(
                             accentColor = accentColor,
                             selectedPackages = selectedPackages,
                             onAppClick = onAppClick,
-                            onLongClick = onLongClick
+                            onLongClick = onLongClick,
+                            accentGlow = accentGlow
                         )
                     }
                 }
@@ -367,7 +371,8 @@ fun RotatableAppDisc(
                             accentColor = accentColor,
                             selectedPackages = selectedPackages,
                             onAppClick = onAppClick,
-                            onLongClick = onLongClick
+                            onLongClick = onLongClick,
+                            accentGlow = accentGlow
                         )
                     }
                 }
@@ -393,7 +398,8 @@ private fun RenderDiscItem(
     accentColor: Color,
     selectedPackages: Set<String>?,
     onAppClick: (AppInfo) -> Unit,
-    onLongClick: (AppInfo) -> Unit
+    onLongClick: (AppInfo) -> Unit,
+    accentGlow: Boolean = false
 ) {
     when (discItem) {
         is DiscItem.IndexEntry -> {
@@ -412,7 +418,10 @@ private fun RenderDiscItem(
                     fontSize = textSizeSp.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = letterSpacingSp.sp,
-                    textAlign = TextAlign.End
+                    textAlign = TextAlign.End,
+                    style = TextStyle(
+                        shadow = if (accentGlow) Shadow(color = accentColor, blurRadius = 16f) else null
+                    )
                 )
             }
         }
@@ -481,7 +490,10 @@ private fun RenderDiscItem(
                             letterSpacing = letterSpacingSp.sp,
                             textAlign = TextAlign.End,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            style = TextStyle(
+                                shadow = if (accentGlow && isChecked) Shadow(color = accentColor, blurRadius = 16f) else null
+                            )
                         )
                     }
                 }
@@ -514,7 +526,10 @@ private fun RenderDiscItem(
                             letterSpacing = letterSpacingSp.sp,
                             textAlign = TextAlign.Start,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            style = TextStyle(
+                                shadow = if (accentGlow && isChecked) Shadow(color = accentColor, blurRadius = 16f) else null
+                            )
                         )
                     }
                 }
