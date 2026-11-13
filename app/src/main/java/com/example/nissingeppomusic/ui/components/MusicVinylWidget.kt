@@ -179,8 +179,8 @@ fun MusicVinylWidget(
                                 if (abs(deltaY) > 4f) {
                                     moved = true
                                 }
-                                // スクロール位置を指に追従させる
-                                widgetScope.launch { scrollAnim.snapTo(rawDragY / itemStepPx) }
+                                // スクロール位置を指に追従させる（方向は反転済み）
+                                widgetScope.launch { scrollAnim.snapTo(-rawDragY / itemStepPx) }
                                 change.consume()
                             }
 
@@ -221,8 +221,8 @@ fun MusicVinylWidget(
             // スクロール位置（小数）に追従してディスクが滑らかに流れ、配置は左上から
             // 下に向かって少しずつ右へずれるカスケード状にする
             val virtualPos = rackCurrentIndex + scrollAnim.value
-            val firstIdx = maxOf(0, floor(virtualPos - 4f).toInt())
-            val lastIdx = minOf(rackSize - 1, ceil(virtualPos + 4f).toInt())
+            val firstIdx = maxOf(0, floor(virtualPos - 6f).toInt())
+            val lastIdx = minOf(rackSize - 1, ceil(virtualPos + 6f).toInt())
 
             for (targetTrackIdx in firstIdx..lastIdx) {
                 val relPos = targetTrackIdx - virtualPos
@@ -231,11 +231,12 @@ fun MusicVinylWidget(
                 val isFocused = (targetTrackIdx == focusedIndex)
 
                 // 上から下へ少しずつ右へずらし、選択中はさらに右へ押し出す
-                val focusBump = (1f - min(1f, abs(relPos))) * 16f
+                val focusBump = (1f - min(1f, abs(relPos))) * 30f
                 val xShiftDp = relPos * 7f + focusBump
 
                 // 一番上と一番下は境目が分からないようグラデーションで消す
-                val edgeFade = (1f - (abs(relPos) - 2.2f) / 1.8f).coerceIn(0f, 1f)
+                // （画面下目一杯までディスクで埋めるため、フェード開始は遅め）
+                val edgeFade = (1f - (abs(relPos) - 4.2f) / 2f).coerceIn(0f, 1f)
 
                 Box(
                     modifier = Modifier
