@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -39,6 +40,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -46,6 +48,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -333,6 +336,26 @@ fun MainLauncherScreen() {
 
     // 下ダイヤルを押して拡大している間は、リピート/シャッフルボタンを隠す
     var isDialPressed by remember { mutableStateOf(false) }
+
+    // 歌詞ブラウズ（画面上部を長押し→歌詞全文をラック式にステップスクロール→離すとその行へジャンプ）
+    var isLyricsBrowsing by remember { mutableStateOf(false) }
+    var lyricsBrowseStartIndex by remember { mutableIntStateOf(0) }
+    var lyricsTargetOffset by remember { mutableIntStateOf(0) }
+    var lyricsStepAnimRunning by remember { mutableStateOf(false) }
+    val lyricsScrollAnim = remember { Animatable(0f) }
+    fun runLyricsSteps() {
+        if (lyricsStepAnimRunning) return
+        lyricsStepAnimRunning = true
+        coroutineScope.launch {
+            while (lyricsScrollAnim.value != lyricsTargetOffset.toFloat()) {
+                lyricsScrollAnim.animateTo(
+                    targetValue = lyricsTargetOffset.toFloat(),
+                    animationSpec = tween(durationMillis = 170, easing = FastOutSlowInEasing)
+                )
+            }
+            lyricsStepAnimRunning = false
+        }
+    }
 
     // 歌詞モード（ボタンだけ先に用意。歌詞ページは後で作る）
     var showLyrics by remember { mutableStateOf(false) }
@@ -644,6 +667,59 @@ fun MainLauncherScreen() {
                         modifier = Modifier
                             .padding(start = 28.dp, top = topPaddingDp + 48.dp)
                             .zIndex(10f)
+                            .fillMaxWidth()
+                            .heightIn(min = 190.dp)
+                            .graphicsLayer { alpha = if (isLyricsBrowsing) 0f else 1f }
+                            .pointerInput(showLyrics, lyricsLines) {
+                                if (!showLyrics || lyricsLines == null) return@pointerInput
+                                awaitPointerEventScope {
+                                    while (true) {
+                                        val down = awaitFirstDown(requireUnconsumed = false)
+                                        val longPress = awaitLongPressOrCancellation(down.id) ?: continue
+                                        val lines = lyricsLines ?: continue
+                                        // 歌詞ブラウズ開始: 現在の行を起点にステップ式スクロール
+                                        lyricsBrowseStartIndex = lines.indexOfLast {
+                                            it.timeMs <= musicPlayerManager.currentPosition
+                                        }.coerceAtLeast(0)
+                                        lyricsTargetOffset = 0
+                                        lyricsScrollAnim.snapTo(0f)
+                                        isLyricsBrowsing = true
+                                        val dirSign = if (repo.prefManager.isReverseScroll()) -1 else 1
+                                        var acc = 0f
+                                        var lastY = longPress.position.y
+                                        var done = false
+                                        while (!done) {
+                                            val event = awaitPointerEvent()
+                                            val change = event.changes.firstOrNull { it.id == down.id } ?: continue
+                                            if (change.changedToUp()) {
+                                                done = true
+                                            } else {
+                                                val dy = change.position.y - lastY
+                                                lastY = change.position.y
+                                                acc += dy
+                                                while (acc <= -40f || acc >= 40f) {
+                                                    // ラックと同じ方式: 40pxごとに1行ジャンプ（方向は反転設定に従う）
+                                                    val dir = (if (acc <= -40f) 1 else -1) * dirSign
+                                                    val newTarget = lyricsTargetOffset + dir
+                                                    if (lyricsBrowseStartIndex + newTarget in lines.indices) {
+                                                        lyricsTargetOffset = newTarget
+                                                        runLyricsSteps()
+                                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                                    }
+                                                    if (acc <= -40f) acc += 40f else acc -= 40f
+                                                }
+                                                change.consume()
+                                            }
+                                        }
+                                        // 指を離したら、選んでいた行のタイムスタンプへジャンプする
+                                        val targetLine = lines.getOrNull(lyricsBrowseStartIndex + lyricsTargetOffset)
+                                        isLyricsBrowsing = false
+                                        if (targetLine != null) {
+                                            musicPlayerManager.seekTo(targetLine.timeMs)
+                                        }
+                                    }
+                                }
+                            }
                     ) {
                         Text(
                             text = displayTitle,
@@ -719,7 +795,7 @@ fun MainLauncherScreen() {
                         }
                     }
 
-                    if (!isRackShown) {
+                    if (!isRackShown && !isLyricsBrowsing) {
                         MusicSeekBarDisc(
                             modifier = Modifier.fillMaxSize(),
                             playerManager = musicPlayerManager,
@@ -736,6 +812,7 @@ fun MainLauncherScreen() {
                         modifier = Modifier
                             .fillMaxSize()
                             .zIndex(50f)
+                            .graphicsLayer { alpha = if (isLyricsBrowsing) 0f else 1f }
                     ) {
                         MusicVinylWidget(
                             modifier = Modifier.fillMaxSize(),
@@ -746,6 +823,7 @@ fun MainLauncherScreen() {
                             discRadiusDp = disc1RadiusDp,
                             accentColor = accentColor,
                             accentGlow = accentGlow,
+                            topZoneReserved = showLyrics && lyricsLines != null,
                             onPlayTrack = { song ->
                                 // レコードラックの一覧（全曲）をキューにして選んだ曲から再生
                                 val startIndex = allApps.indexOfFirst { it.packageName == song.packageName }
@@ -770,6 +848,45 @@ fun MainLauncherScreen() {
                             onFocusTrackChanged = { focusedTrackPreview = it },
                             onRackVisibilityChanged = { isRackShown = it }
                         )
+                    }
+
+                    // 歌詞ブラウズ中: 歌詞全文をラック表示のように上から下へ並べる
+                    if (isLyricsBrowsing && lyricsLines != null) {
+                        val lines = lyricsLines!!
+                        val virtualPos = lyricsBrowseStartIndex + lyricsScrollAnim.value
+                        BoxWithConstraints(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .zIndex(90f)
+                        ) {
+                            val centerYDp = maxHeight.value / 2f
+                            val firstIdx = maxOf(0, floor(virtualPos - 7f).toInt())
+                            val lastIdx = minOf(lines.size - 1, ceil(virtualPos + 7f).toInt())
+                            for (idx in firstIdx..lastIdx) {
+                                val relPos = idx - virtualPos
+                                val isFocusedLine = idx == lyricsBrowseStartIndex + lyricsTargetOffset
+                                val fade = (1f - (abs(relPos) - 4f) / 3f).coerceIn(0f, 1f)
+                                Text(
+                                    text = lines[idx].text,
+                                    color = if (isFocusedLine) accentColor else Color.White.copy(alpha = 0.75f * fade),
+                                    fontSize = 15.sp,
+                                    fontWeight = if (isFocusedLine) FontWeight.Bold else FontWeight.Normal,
+                                    letterSpacing = 1.0.sp,
+                                    textAlign = TextAlign.Start,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = LocalTextStyle.current.copy(
+                                        shadow = if (accentGlow && isFocusedLine) Shadow(color = accentColor, blurRadius = 14f) else null
+                                    ),
+                                    modifier = Modifier
+                                        .offset(
+                                            x = (40f + relPos * 5f).dp,
+                                            y = (centerYDp + relPos * 46f - 11f).dp
+                                        )
+                                        .fillMaxWidth(0.85f)
+                                )
+                            }
+                        }
                     }
                 }
                 2 -> {
@@ -1016,7 +1133,7 @@ fun MainLauncherScreen() {
         }
 
                 // --- 画面下部 ページ切り替え (ボタン式 / ダイヤル式を設定で切替、ラック表示中は隠す) ---
-        if (!isRackShown) {
+        if (!isRackShown && !isLyricsBrowsing) {
         if (repo.prefManager.getPageSwitchStyle() == "dial") {
             // ダイヤルは6ストップ: 0=設定, 1=ホーム(再生中), 2=曲名, 3=アーティスト, 4=アルバム, 5=プレイリスト(フォルダ)
             PeekPageDial(
@@ -1069,7 +1186,7 @@ fun MainLauncherScreen() {
         // --- ホーム画面のみ: リピート／シャッフルボタンを下ダイヤルの円周（右下）の外側に沿って配置 ---
         // ダイヤルの円: 中心は帯の下端から99dp下、半径165dp。
         // ボタンは輪郭の上に乗せず、少し離して外側（輪郭+ボタン半径+余白）に中心を置く
-        if (currentLauncherPage == 1 && !isRackShown && !isDialPressed) {
+        if (currentLauncherPage == 1 && !isRackShown && !isDialPressed && !isLyricsBrowsing) {
             val dialRadiusForButtons = 192f
             val dialCenterBelowBand = 99f
             // リピート（円周の -54° の位置）
