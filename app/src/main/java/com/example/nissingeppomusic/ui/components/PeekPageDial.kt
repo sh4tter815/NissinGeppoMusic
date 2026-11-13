@@ -1,7 +1,12 @@
 package com.example.nissingeppomusic.ui.components
 
+import android.content.Context
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -17,6 +22,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -26,10 +32,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import kotlin.math.PI
@@ -53,8 +58,28 @@ fun PeekPageDial(
     modifier: Modifier = Modifier
 ) {
     val density = LocalDensity.current
-    val haptic = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
+
+    // 強いハプティクス用（Compose標準のTextHandleMoveは弱いため、Vibratorを直接使う）
+    val context = LocalContext.current
+    val vibrator = remember { context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator }
+    fun vibrateStrong(durationMs: Long, amplitude: Int) {
+        val v = vibrator ?: return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            v.vibrate(VibrationEffect.createOneShot(durationMs, amplitude))
+        } else {
+            @Suppress("DEPRECATION")
+            v.vibrate(durationMs)
+        }
+    }
+
+    // 押している間はフォルダ選択の円盤（MechanicalDisc）と同じく1.30倍に拡大し、指で隠れないようにする
+    var isPressed by remember { mutableStateOf(false) }
+    val expandScale by animateFloatAsState(
+        targetValue = if (isPressed) 1.30f else 1.0f,
+        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+        label = "DialExpandScale"
+    )
 
     // ストップは6つ: 0=設定, 1=ホーム(再生中), 2=曲名, 3=アーティスト, 4=アルバム, 5=プレイリスト(フォルダ)
     val totalPages = 6
@@ -95,7 +120,7 @@ fun PeekPageDial(
     var lastHapticIndex by remember { mutableIntStateOf(-1) }
     LaunchedEffect(selectedIndex) {
         if (selectedIndex != lastHapticIndex && lastHapticIndex != -1) {
-            haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            vibrateStrong(35, 200)
         }
         lastHapticIndex = selectedIndex
     }
@@ -117,6 +142,7 @@ fun PeekPageDial(
                     awaitPointerEventScope {
                         while (true) {
                             val down = awaitFirstDown(requireUnconsumed = false)
+                            isPressed = true
 
                             // フレームワーク標準の drag() は、他の円盤にイベントを消費されると
                             // 開始前にキャンセルされてしまう（ホーム画面のお気に入り円盤との競合）。
@@ -173,6 +199,8 @@ fun PeekPageDial(
                                 }
                             }
 
+                            isPressed = false
+
                             if (isDragStarted) {
                                 val inertiaTarget = rawRotationAngle + lastDeltaAngle * 6f
                                 val nearestIndex = (-inertiaTarget / stepAngle).roundToInt()
@@ -187,6 +215,7 @@ fun PeekPageDial(
                                     )
                                 }
                                 if (nearestIndex != latestCurrentPage.value) {
+                                    vibrateStrong(60, 255)
                                     onStopSelected(nearestIndex)
                                 }
                             }
@@ -199,13 +228,13 @@ fun PeekPageDial(
                 val center = Offset(discCenterXDp.dp.toPx(), discCenterYDp.dp.toPx())
                 drawCircle(
                     color = Color.White.copy(alpha = 0.85f),
-                    radius = discRadiusDp.dp.toPx(),
+                    radius = (discRadiusDp * expandScale).dp.toPx(),
                     center = center,
                     style = Stroke(width = 1.5f)
                 )
             }
 
-            val innerIconRadiusDp = discRadiusDp - 18f
+            val innerIconRadiusDp = (discRadiusDp - 18f) * expandScale
 
             for (index in 0 until totalPages) {
                 val itemAngle = baseCenterAngle + (index * stepAngle) + currentRotation
@@ -232,12 +261,12 @@ fun PeekPageDial(
                         contentAlignment = Alignment.Center
                     ) {
                         when (index) {
-                            0 -> WhiteGearIcon(size = 22.dp, color = iconColor)
-                            1 -> WhiteHomeIcon(size = 22.dp, color = iconColor)
-                            2 -> WhiteMusicNoteIcon(size = 22.dp, color = iconColor)
-                            3 -> WhitePersonIcon(size = 22.dp, color = iconColor)
-                            4 -> WhiteAlbumIcon(size = 22.dp, color = iconColor)
-                            5 -> WhiteFolderIcon(size = 22.dp, color = iconColor)
+                            0 -> WhiteGearIcon(size = (22f * expandScale).dp, color = iconColor)
+                            1 -> WhiteHomeIcon(size = (22f * expandScale).dp, color = iconColor)
+                            2 -> WhiteMusicNoteIcon(size = (22f * expandScale).dp, color = iconColor)
+                            3 -> WhitePersonIcon(size = (22f * expandScale).dp, color = iconColor)
+                            4 -> WhiteAlbumIcon(size = (22f * expandScale).dp, color = iconColor)
+                            5 -> WhiteFolderIcon(size = (22f * expandScale).dp, color = iconColor)
                         }
                     }
                 }
