@@ -25,7 +25,7 @@ class MusicRepository(private val context: Context) {
     companion object {
         private var cachedTracks: List<AppInfo>? = null
         private var cachedRecords: List<TrackRecord>? = null
-        private val albumArtCache = LruCache<Long, Bitmap>(100)
+        private val albumArtCache = LruCache<Long, Bitmap>(24)
 
         fun invalidateCache() {
             cachedTracks = null
@@ -139,11 +139,11 @@ class MusicRepository(private val context: Context) {
         val changedSet = changedIds.toSet()
         val merged = old.filter { it.id !in removedIds && it.id !in changedSet } + fetched
 
-        // 使われなくなったアートファイルを掃除する
+        // 使われなくなったアートファイルを掃除する（高画質版の _hq サフィックスは同一キー扱い）
         val validKeys = merged.map { it.artKey() }.toSet()
         try {
             artDir().listFiles()?.forEach { file ->
-                if (file.nameWithoutExtension !in validKeys) file.delete()
+                if (file.nameWithoutExtension.removeSuffix("_hq") !in validKeys) file.delete()
             }
         } catch (_: Exception) {}
 
@@ -356,7 +356,10 @@ class MusicRepository(private val context: Context) {
 
     private fun artDir(): File = File(context.filesDir, "album_art").apply { mkdirs() }
 
-    private fun artFile(artKey: String): File = File(artDir(), "$artKey.jpg")
+    // 高画質キャッシュ用ファイル名（旧画質キャッシュ "$artKey.jpg" と区別する）
+    private fun artFile(artKey: String): File = File(artDir(), "${artKey}_hq.jpg")
+
+    private fun legacyArtFile(artKey: String): File = File(artDir(), "$artKey.jpg")
 
     /**
      * アート取得の順序: メモリ → アプリ内保存ファイル → （許可時のみ）MediaStore等からデコードして保存。
@@ -379,22 +382,53 @@ class MusicRepository(private val context: Context) {
 
         val noArtMarker = File(artDir(), "${rec.artKey()}.none")
         if (noArtMarker.exists() && !forceRetry) return null
-        if (!allowSourceDecode) return null
+        if (!allowSourceDecode) {
+            // 起動高速化パス: 高画質版がまだ無ければ、旧画質キャッシュを当面の表示に使う
+            val legacy = legacyArtFile(rec.artKey())
+            if (legacy.exists()) {
+                val fromLegacy = try { BitmapFactory.decodeFile(legacy.absolutePath) } catch (_: Exception) { null }
+                if (fromLegacy != null) {
+                    albumArtCache.put(memKey, fromLegacy)
+                    return fromLegacy
+                }
+            }
+            return null
+        }
 
         val decoded = decodeArtFromSource(rec.albumId, rec.filePath)
         if (decoded == null) {
+            // ソースから取り直せない場合は旧画質キャッシュで妥協する（マーカーは置かない）
+            val legacy = legacyArtFile(rec.artKey())
+            if (legacy.exists()) {
+                val fromLegacy = try { BitmapFactory.decodeFile(legacy.absolutePath) } catch (_: Exception) { null }
+                if (fromLegacy != null) {
+                    albumArtCache.put(memKey, fromLegacy)
+                    return fromLegacy
+                }
+            }
             try { noArtMarker.createNewFile() } catch (_: Exception) {}
             return null
         }
-        val scaled = if (decoded.width > 300 || decoded.height > 300) {
-            Bitmap.createScaledBitmap(decoded, 300, 300, true)
+        // 高画質化: 最大900px・アスペクト比維持・JPEG品質95で保存する
+        val maxDim = maxOf(decoded.width, decoded.height)
+        val scaled = if (maxDim > 900) {
+            val ratio = 900f / maxDim
+            Bitmap.createScaledBitmap(
+                decoded,
+                (decoded.width * ratio).toInt().coerceAtLeast(1),
+                (decoded.height * ratio).toInt().coerceAtLeast(1),
+                true
+            )
         } else decoded
 
         try {
             FileOutputStream(file).use { out ->
-                scaled.compress(Bitmap.CompressFormat.JPEG, 85, out)
+                scaled.compress(Bitmap.CompressFormat.JPEG, 95, out)
             }
             if (noArtMarker.exists()) noArtMarker.delete()
+            // 高画質版が保存できたら旧画質ファイルは不要なので消す
+            val legacy = legacyArtFile(rec.artKey())
+            if (legacy.exists()) legacy.delete()
         } catch (_: Exception) {}
 
         albumArtCache.put(memKey, scaled)
