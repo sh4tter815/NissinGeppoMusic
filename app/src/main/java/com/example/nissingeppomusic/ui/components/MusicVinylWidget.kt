@@ -50,6 +50,7 @@ fun MusicVinylWidget(
     discCenterYDp: Float,
     discRadiusDp: Float = 165f,
     accentColor: Color = Color(0xFFE53935),
+    accentGlow: Boolean = false,
     onPlayTrack: (AppInfo) -> Unit = {},
     onFocusTrackChanged: (AppInfo?) -> Unit = {},
     onRackVisibilityChanged: (Boolean) -> Unit = {}
@@ -188,13 +189,16 @@ fun MusicVinylWidget(
                             lastHapticIndex = startIdx
                             rackTargetOffset = 0
                             var stepBaseY = down.position.y
+                            // 共通の「スクロール方向の反転」設定に従う（OFF時の基準方向:
+                            // 上へドラッグで次の曲、下で前の曲。ONなら逆になる）
+                            val dirSign = if (prefManager.isReverseScroll()) -1 else 1
 
                             drag(down.id) { change ->
-                                // ステップ式ジャンプ: 指の移動40pxごとに1曲分進む（方向は反転済み:
-                                // 上へドラッグで次の曲、下で前の曲）。実位置はアニメーションで追いつく
+                                // ステップ式ジャンプ: 指の移動40pxごとに1曲分進む。
+                                // 実位置はアニメーションで追いつく
                                 var dy = change.position.y - stepBaseY
                                 while (dy <= -40f || dy >= 40f) {
-                                    val dir = if (dy <= -40f) 1 else -1
+                                    val dir = (if (dy <= -40f) 1 else -1) * dirSign
                                     val newTarget = rackTargetOffset + dir
                                     if (startIdx + newTarget in 0 until rackSize) {
                                         rackTargetOffset = newTarget
@@ -281,6 +285,15 @@ fun MusicVinylWidget(
                     Canvas(modifier = Modifier.fillMaxSize()) {
                         val center = Offset(size.width / 2f, size.height / 2f)
                         val outerRadius = size.width / 2f
+                        if (isFocused && accentGlow) {
+                            // コントラストが低い配色のときは太い半透明リングを下に敷いてグローさせる
+                            drawCircle(
+                                color = accentColor.copy(alpha = 0.30f),
+                                radius = outerRadius,
+                                center = center,
+                                style = Stroke(width = 10f)
+                            )
+                        }
                         drawCircle(
                             color = if (isFocused) accentColor else Color.White.copy(alpha = 0.5f),
                             radius = outerRadius,
