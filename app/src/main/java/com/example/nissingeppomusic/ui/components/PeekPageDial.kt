@@ -55,7 +55,8 @@ fun PeekPageDial(
     currentStop: Int,
     onStopSelected: (Int) -> Unit,
     accentColor: Color = Color(0xFFE53935),
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onPressedChanged: (Boolean) -> Unit = {}
 ) {
     val view = LocalView.current
     // すべてのスクロールに共通の反転オプション（リスト円盤と同じ設定を読む）
@@ -65,6 +66,11 @@ fun PeekPageDial(
 
     // 押している間はフォルダ選択の円盤（MechanicalDisc）と同じく1.30倍に拡大し、指で隠れないようにする
     var isPressed by remember { mutableStateOf(false) }
+
+    // 押下状態を親へ通知する（拡大中はリピート/シャッフルボタンを隠すため）
+    LaunchedEffect(isPressed) {
+        onPressedChanged(isPressed)
+    }
     val expandScale by animateFloatAsState(
         targetValue = if (isPressed) 1.30f else 1.0f,
         animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
