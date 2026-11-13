@@ -278,6 +278,9 @@ fun MainLauncherScreen() {
     // ラック（左円のキュー表示）表示中は、右円と下ダイヤルを隠す
     var isRackShown by remember { mutableStateOf(false) }
 
+    // 下ダイヤルを押して拡大している間は、リピート/シャッフルボタンを隠す
+    var isDialPressed by remember { mutableStateOf(false) }
+
     var showWelcomeTutorial by remember { mutableStateOf(false) }
     var showIndexTutorial by remember { mutableStateOf(false) }
     var showHideTutorial by remember { mutableStateOf(false) }
@@ -910,7 +913,8 @@ fun MainLauncherScreen() {
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = bottomPaddingDp + 4.dp)
-                    .zIndex(250f)
+                    .zIndex(250f),
+                onPressedChanged = { isDialPressed = it }
             )
         } else {
             BottomPageDial(
@@ -930,7 +934,7 @@ fun MainLauncherScreen() {
         // --- ホーム画面のみ: リピート／シャッフルボタンを下ダイヤルの円周（右下）の外側に沿って配置 ---
         // ダイヤルの円: 中心は帯の下端から99dp下、半径165dp。
         // ボタンは輪郭の上に乗せず、少し離して外側（輪郭+ボタン半径+余白）に中心を置く
-        if (currentLauncherPage == 1 && !isRackShown) {
+        if (currentLauncherPage == 1 && !isRackShown && !isDialPressed) {
             val dialRadiusForButtons = 192f
             val dialCenterBelowBand = 99f
             // リピート（円周の -54° の位置）
