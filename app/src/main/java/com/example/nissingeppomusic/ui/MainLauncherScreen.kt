@@ -937,8 +937,6 @@ fun MainLauncherScreen() {
                         .offset(x = dx.dp, y = dy.dp)
                         .size(40.dp)
                         .zIndex(260f)
-                        .clip(CircleShape)
-                        .background(Color(0xFF0B101D).copy(alpha = 0.45f))
                         .clickable {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             musicPlayerManager.cycleRepeatMode()
@@ -965,8 +963,6 @@ fun MainLauncherScreen() {
                         .offset(x = dx.dp, y = dy.dp)
                         .size(40.dp)
                         .zIndex(260f)
-                        .clip(CircleShape)
-                        .background(Color(0xFF0B101D).copy(alpha = 0.45f))
                         .clickable {
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             musicPlayerManager.toggleShuffle()
