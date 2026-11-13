@@ -8,6 +8,8 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Text
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -95,21 +97,38 @@ fun MusicVinylWidget(
         if (idx != -1) idx else 0
     }
 
+    // ラックの中身: 再生キューがあるときはキューを再生順（シャッフル時はその順序）で、
+    // ないときは従来どおり全曲ライブラリを表示する
+    val queueMode = playerManager.playOrder.isNotEmpty()
+    val rackCurrentIndex = if (queueMode) playerManager.playOrderCurrentPos else currentTrackIndex
+    val rackSize = if (queueMode) playerManager.playOrder.size else allApps.size
+    fun rackArt(index: Int): Bitmap? =
+        if (queueMode) playerManager.playOrder.getOrNull(index)?.albumArt else allApps.getOrNull(index)?.albumArt
+    fun rackAppInfo(index: Int): AppInfo? =
+        if (queueMode) {
+            val uri = playerManager.playOrder.getOrNull(index)?.uriString
+            allApps.find { it.packageName == uri }
+        } else allApps.getOrNull(index)
+    fun rackTitle(index: Int): String =
+        rackAppInfo(index)?.label
+            ?: if (queueMode) playerManager.playOrder.getOrNull(index)?.title ?: "" else ""
+
     val itemStepDp = 42f
     val itemStepPx = with(density) { itemStepDp.dp.toPx() }
 
     val focusIndexOffset = (rawDragY / itemStepPx).roundToInt()
-    val focusedIndex = remember(currentTrackIndex, focusIndexOffset, allApps.size) {
-        if (allApps.isEmpty()) 0
-        else (currentTrackIndex + focusIndexOffset).coerceIn(0, allApps.size - 1)
+    val focusedIndex = remember(rackCurrentIndex, focusIndexOffset, rackSize) {
+        if (rackSize == 0) 0
+        else (rackCurrentIndex + focusIndexOffset).coerceIn(0, rackSize - 1)
     }
 
-    var lastHapticIndex by remember { mutableIntStateOf(currentTrackIndex) }
+    var lastHapticIndex by remember { mutableIntStateOf(rackCurrentIndex) }
 
     LaunchedEffect(isLeftInteracting, focusedIndex) {
         if (isLeftInteracting) {
-            if (focusedIndex in allApps.indices) {
-                onFocusTrackChanged(allApps[focusedIndex])
+            val focusedApp = rackAppInfo(focusedIndex)
+            if (focusedApp != null) {
+                onFocusTrackChanged(focusedApp)
                 if (focusedIndex != lastHapticIndex) {
                     haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                     lastHapticIndex = focusedIndex
@@ -129,7 +148,7 @@ fun MusicVinylWidget(
                 .fillMaxHeight()
                 .fillMaxWidth(0.5f)
                 .align(Alignment.CenterStart)
-                .pointerInput(allApps, playerManager.currentSongUri) {
+                .pointerInput(allApps, playerManager.currentSongUri, playerManager.playOrder) {
                     awaitPointerEventScope {
                         while (true) {
                             val down = awaitFirstDown(requireUnconsumed = false)
@@ -138,7 +157,7 @@ fun MusicVinylWidget(
                             var moved = false
                             val startY = pos.y
                             rawDragY = 0f
-                            val startIdx = allApps.indexOfFirst { it.packageName == playerManager.currentSongUri }.coerceAtLeast(0)
+                            val startIdx = rackCurrentIndex
                             lastHapticIndex = startIdx
 
                             drag(down.id) { change ->
@@ -151,12 +170,18 @@ fun MusicVinylWidget(
                             }
 
                             val finalOffset = (rawDragY / itemStepPx).roundToInt()
-                            val finalIndex = (startIdx + finalOffset).coerceIn(0, (allApps.size - 1).coerceAtLeast(0))
+                            val finalIndex = (startIdx + finalOffset).coerceIn(0, (rackSize - 1).coerceAtLeast(0))
 
-                            if (!moved) {
-                                playerManager.togglePlayPause()
-                            } else {
-                                if (allApps.isNotEmpty() && finalIndex in allApps.indices) {
+                            // 左側を押してその場で離しただけでは何もしない
+                            // （再生/一時停止は右のシーク円盤のタップだけ）
+                            if (moved) {
+                                if (queueMode) {
+                                    // キュー表示中: スワイプで選んだ曲へジャンプ（＝次の曲/前の曲の操作）
+                                    if (finalIndex in playerManager.playOrder.indices && finalIndex != playerManager.playOrderCurrentPos) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        playerManager.playAtQueuePosition(finalIndex)
+                                    }
+                                } else if (allApps.isNotEmpty() && finalIndex in allApps.indices) {
                                     val selectedApp = allApps[finalIndex]
                                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     onPlayTrack(selectedApp)
@@ -171,14 +196,14 @@ fun MusicVinylWidget(
                 }
         )
 
-        if (isLeftInteracting && allApps.isNotEmpty()) {
+        if (isLeftInteracting && rackSize > 0) {
             // --- 横倒しレコード盤の【位置固定】スロット型スタック描画 ---
             // ディスクの位置(Y座標)は移動させず、Y位置は固定。スクロールすると各スロットのアートワーク中身のみ切り替わる
             val relOffsets = listOf(-3, -2, -1, 0, 1, 2, 3)
 
             for (relOffset in relOffsets) {
                 val targetTrackIdx = focusedIndex + relOffset
-                if (targetTrackIdx !in allApps.indices) continue
+                if (targetTrackIdx !in 0 until rackSize) continue
 
                 val gapOffset = when {
                     relOffset < 0 -> -24f
@@ -188,7 +213,6 @@ fun MusicVinylWidget(
                 // Y座標の位置はピクセルドラッグによらず完全固定
                 val yPosDp = discCenterYDp + (relOffset * itemStepDp) + gapOffset
                 val isFocused = (relOffset == 0)
-                val trackApp = allApps[targetTrackIdx]
 
                 // 選択中以外のディスクは少し左へずらし、選択中が右へ出て見えるようにする
                 val xShiftDp = if (isFocused) 0f else -12f
@@ -221,7 +245,7 @@ fun MusicVinylWidget(
                             .clip(CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        val art = trackApp.albumArt
+                        val art = rackArt(targetTrackIdx)
                         if (art != null) {
                             Image(
                                 bitmap = art.asImageBitmap(),
@@ -236,6 +260,21 @@ fun MusicVinylWidget(
 
                     }
                 }
+
+                // 各ディスクの右に曲名を表示（右の円にかぶらない幅で省略表示）
+                Text(
+                    text = rackTitle(targetTrackIdx),
+                    color = if (isFocused) Color.White else Color.White.copy(alpha = 0.65f),
+                    fontSize = if (isFocused) 14.sp else 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .offset(
+                            x = (discCenterXDp + discRadiusDp + xShiftDp + 10f).dp,
+                            y = (yPosDp - 9f).dp
+                        )
+                        .width(105.dp)
+                )
             }
         } else {
             // --- 通常時の単一回転レコード盤 ---
@@ -306,6 +345,8 @@ fun MusicVinylWidget(
         parseNativeTypeface(context, fontChoice, customFontPath)
     }
 
+    // ラック表示中は曲情報（FLAC等）を隠す
+    if (!isLeftInteracting) {
     Box(
         modifier = modifier.fillMaxSize()
     ) {
@@ -336,5 +377,6 @@ fun MusicVinylWidget(
             }
             drawContext.canvas.nativeCanvas.drawTextOnPath(displayInfo, textPath, 0f, 0f, paint)
         }
+    }
     }
 }
