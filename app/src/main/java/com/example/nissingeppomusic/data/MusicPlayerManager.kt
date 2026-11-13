@@ -40,6 +40,28 @@ class MusicPlayerManager(context: Context) {
     var duration by mutableStateOf(0L)
         private set
 
+    private val prefManager = AppPreferenceManager(appContext)
+
+    // 再生キュー（曲をタップしたとき、その一覧をそのままキューとして再生する）
+    data class QueueItem(
+        val uriString: String,
+        val title: String,
+        val artist: String,
+        val album: String,
+        val albumArt: Bitmap?,
+        val filePath: String
+    )
+
+    var queue: List<QueueItem> = emptyList()
+        private set
+    var currentQueueIndex by mutableStateOf(-1)
+        private set
+    // リピート: 0=オフ, 1=全曲リピート, 2=1曲リピート
+    var repeatMode by mutableStateOf(0)
+        private set
+    var shuffleEnabled by mutableStateOf(false)
+        private set
+
     private val playerScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var progressJob: Job? = null
 
@@ -61,7 +83,26 @@ class MusicPlayerManager(context: Context) {
                     currentPosition = 0L
                 }
             }
+
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                // 曲が切り替わったら（自動送り・シャッフル含む）表示情報をキュー側に同期する
+                val item = mediaItem ?: return
+                val idx = queue.indexOfFirst { it.uriString == item.mediaId }
+                if (idx >= 0) {
+                    applyQueueItem(queue[idx], idx)
+                }
+            }
         })
+
+        // リピート／シャッフルの保存値を復元
+        repeatMode = prefManager.getRepeatMode().coerceIn(0, 2)
+        exoPlayer.repeatMode = when (repeatMode) {
+            1 -> Player.REPEAT_MODE_ALL
+            2 -> Player.REPEAT_MODE_ONE
+            else -> Player.REPEAT_MODE_OFF
+        }
+        shuffleEnabled = prefManager.isShuffleEnabled()
+        exoPlayer.shuffleModeEnabled = shuffleEnabled
     }
 
     private fun startProgressTicker() {
@@ -82,32 +123,62 @@ class MusicPlayerManager(context: Context) {
         progressJob = null
     }
 
-    fun playSong(uriString: String, title: String, artist: String = "", album: String = "", albumArt: Bitmap? = null, filePath: String = "") {
+    private fun applyQueueItem(item: QueueItem, index: Int) {
+        currentQueueIndex = index
+        currentSongUri = item.uriString
+        currentTitle = item.title
+        currentArtist = item.artist
+        currentAlbum = item.album
+        currentAlbumArt = item.albumArt
+        currentFileInfo = formatAudioFileInfo(item.filePath, item.uriString)
+        currentPosition = 0L
+        duration = exoPlayer.duration.coerceAtLeast(1000L)
+    }
+
+    fun playQueue(items: List<QueueItem>, startIndex: Int) {
+        if (items.isEmpty()) return
         try {
-            currentSongUri = uriString
-            currentTitle = title
-            currentArtist = artist
-            currentAlbum = album
-            currentAlbumArt = albumArt
-            currentFileInfo = formatAudioFileInfo(filePath, uriString)
-
-            val metadata = MediaMetadata.Builder()
-                .setTitle(title)
-                .setArtist(artist)
-                .setAlbumTitle(album)
-                .build()
-
-            val mediaItem = MediaItem.Builder()
-                .setUri(Uri.parse(uriString))
-                .setMediaMetadata(metadata)
-                .build()
-
-            exoPlayer.setMediaItem(mediaItem)
+            queue = items
+            val start = startIndex.coerceIn(0, items.size - 1)
+            val mediaItems = items.map { item ->
+                val metadata = MediaMetadata.Builder()
+                    .setTitle(item.title)
+                    .setArtist(item.artist)
+                    .setAlbumTitle(item.album)
+                    .build()
+                MediaItem.Builder()
+                    .setUri(Uri.parse(item.uriString))
+                    .setMediaId(item.uriString)
+                    .setMediaMetadata(metadata)
+                    .build()
+            }
+            exoPlayer.setMediaItems(mediaItems, start, 0L)
             exoPlayer.prepare()
             exoPlayer.play()
+            applyQueueItem(items[start], start)
             isPlaying = true
-            duration = exoPlayer.duration.coerceAtLeast(1000L)
         } catch (_: Exception) {}
+    }
+
+    fun playSong(uriString: String, title: String, artist: String = "", album: String = "", albumArt: Bitmap? = null, filePath: String = "") {
+        playQueue(listOf(QueueItem(uriString, title, artist, album, albumArt, filePath)), 0)
+    }
+
+    // リピート切替: オフ → 全曲 → 1曲 → オフ…
+    fun cycleRepeatMode() {
+        repeatMode = (repeatMode + 1) % 3
+        exoPlayer.repeatMode = when (repeatMode) {
+            1 -> Player.REPEAT_MODE_ALL
+            2 -> Player.REPEAT_MODE_ONE
+            else -> Player.REPEAT_MODE_OFF
+        }
+        prefManager.setRepeatMode(repeatMode)
+    }
+
+    fun toggleShuffle() {
+        shuffleEnabled = !shuffleEnabled
+        exoPlayer.shuffleModeEnabled = shuffleEnabled
+        prefManager.setShuffleEnabled(shuffleEnabled)
     }
 
     private fun formatAudioFileInfo(filePath: String, uriString: String): String {

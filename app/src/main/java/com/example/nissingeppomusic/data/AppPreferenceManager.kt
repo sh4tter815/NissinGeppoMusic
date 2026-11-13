@@ -196,6 +196,12 @@ class AppPreferenceManager(private val context: Context) {
     fun isMatchArtworkColor(): Boolean = prefs.getBoolean("match_artwork_color", false)
     fun setMatchArtworkColor(enabled: Boolean) = prefs.edit().putBoolean("match_artwork_color", enabled).apply()
 
+    // 再生のリピート（0=オフ, 1=全曲, 2=1曲）とシャッフル
+    fun getRepeatMode(): Int = prefs.getInt("repeat_mode", 0)
+    fun setRepeatMode(mode: Int) = prefs.edit().putInt("repeat_mode", mode).apply()
+    fun isShuffleEnabled(): Boolean = prefs.getBoolean("shuffle_enabled", false)
+    fun setShuffleEnabled(enabled: Boolean) = prefs.edit().putBoolean("shuffle_enabled", enabled).apply()
+
     // ホーム画面背景の不透明度 (暗さ)
     fun getHomeWallpaperAlpha(): Float = prefs.getFloat("home_wallpaper_alpha", 0.35f)
     fun setHomeWallpaperAlpha(alpha: Float) = prefs.edit().putFloat("home_wallpaper_alpha", alpha).apply()
