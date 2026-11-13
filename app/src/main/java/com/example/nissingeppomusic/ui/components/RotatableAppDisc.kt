@@ -53,6 +53,7 @@ fun RotatableAppDisc(
     letterSpacingSp: Float = 1.2f,
     accentColor: Color = Color(0xFFE53935),
     selectedIndexChar: String? = null,
+    resetKey: Any? = null,
     isRightDisc: Boolean = true,
     showIndices: Boolean = true,
     isLoopable: Boolean = false, // 全アプリ一覧のみ true (循環ループ)。お気に入り・検索・フォルダアプリは false (ループなし)
@@ -99,11 +100,20 @@ fun RotatableAppDisc(
     val maxRotation = 0f
 
     var isScrolling by remember { mutableStateOf(false) }
+    // 音楽アプリでは回転中も文字を消さない（ランチャー版はフェード仕様のまま）
     val scrollAlpha by animateFloatAsState(
-        targetValue = if (isScrolling) 0.0f else 1.0f,
+        targetValue = 1.0f,
         animationSpec = tween(durationMillis = 100),
         label = "ScrollAlpha"
     )
+
+    // モード切替や絞り込み変更時は円盤を先頭に戻す（切替前の回転位置が残って末尾から始まるのを防ぐ）
+    LaunchedEffect(resetKey) {
+        if (resetKey != null) {
+            rawRotationAngle = 0f
+            animatableRotation.snapTo(0f)
+        }
+    }
 
     LaunchedEffect(selectedIndexChar) {
         if (!selectedIndexChar.isNullOrEmpty() && discItems.isNotEmpty()) {
