@@ -8,6 +8,7 @@ import android.provider.MediaStore
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -32,6 +33,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -49,6 +51,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.example.nissingeppomusic.data.AppInfo
 import com.example.nissingeppomusic.data.AppRepository
+import com.example.nissingeppomusic.data.LyricLine
+import com.example.nissingeppomusic.data.LyricsManager
 import com.example.nissingeppomusic.data.MusicPlayerManager
 import com.example.nissingeppomusic.ui.components.*
 import kotlinx.coroutines.Dispatchers
@@ -286,7 +290,29 @@ fun MainLauncherScreen() {
             artworkBackground = null
         }
     }
-    val accentColor = if (matchArtwork) artworkAccent ?: manualAccentColor else manualAccentColor
+    val accentColor = if (matchArtwork) {
+        val extracted = artworkAccent
+        val bg = artworkBackground
+        if (extracted != null && bg != null && contrastRatio(extracted, bg) < 2.8f) {
+            // コントラストが低い場合は、同じ色味のまま白へ寄せて読みやすくする（グローと併用）
+            var blended = extracted
+            var t = 0f
+            while (contrastRatio(blended, bg) < 3.0f && t < 0.5f) {
+                t += 0.1f
+                blended = Color(
+                    red = extracted.red + (1f - extracted.red) * t,
+                    green = extracted.green + (1f - extracted.green) * t,
+                    blue = extracted.blue + (1f - extracted.blue) * t,
+                    alpha = extracted.alpha
+                )
+            }
+            blended
+        } else {
+            extracted ?: manualAccentColor
+        }
+    } else {
+        manualAccentColor
+    }
 
     // 抽出アクセント色と背景色のコントラストが低いときは、アクセント色の
     // アイコンや文字にグロー（発光）をかけて見やすくする
@@ -308,6 +334,32 @@ fun MainLauncherScreen() {
 
     // 歌詞モード（ボタンだけ先に用意。歌詞ページは後で作る）
     var showLyrics by remember { mutableStateOf(false) }
+
+    // 同期歌詞: 歌詞モードONの間、再生中の曲の同期歌詞を取得して現在の1行を表示する
+    var lyricsLines by remember { mutableStateOf<List<LyricLine>?>(null) }
+    var lyricsSongUri by remember { mutableStateOf<String?>(null) }
+    var lyricsLoading by remember { mutableStateOf(false) }
+    var lyricsNotFound by remember { mutableStateOf(false) }
+    LaunchedEffect(showLyrics, musicPlayerManager.currentSongUri) {
+        val uri = musicPlayerManager.currentSongUri
+        if (showLyrics && uri != null && uri != lyricsSongUri) {
+            lyricsLoading = true
+            lyricsNotFound = false
+            val song = allApps.firstOrNull { it.packageName == uri }
+            val result = LyricsManager.getSyncedLyrics(
+                context = context,
+                title = musicPlayerManager.currentTitle,
+                artist = musicPlayerManager.currentArtist,
+                album = musicPlayerManager.currentAlbum,
+                durationMs = musicPlayerManager.duration,
+                filePath = song?.filePath
+            )
+            lyricsLines = result
+            lyricsSongUri = uri
+            lyricsNotFound = result == null
+            lyricsLoading = false
+        }
+    }
 
     var showWelcomeTutorial by remember { mutableStateOf(false) }
     var showIndexTutorial by remember { mutableStateOf(false) }
@@ -615,6 +667,54 @@ fun MainLauncherScreen() {
                             letterSpacing = 1.0.sp,
                             textAlign = TextAlign.Start
                         )
+                        if (showLyrics) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            val lines = lyricsLines
+                            when {
+                                lyricsLoading -> {
+                                    Text(
+                                        text = "歌詞を取得中…",
+                                        color = Color.White.copy(alpha = 0.45f),
+                                        fontSize = 12.sp,
+                                        letterSpacing = 1.0.sp,
+                                        textAlign = TextAlign.Start
+                                    )
+                                }
+                                lines != null -> {
+                                    // 同期歌詞の現在の1行を、行の切り替わりにフェードをかけて表示
+                                    val currentLyricIndex = lines.indexOfLast {
+                                        it.timeMs <= musicPlayerManager.currentPosition
+                                    }
+                                    Crossfade(
+                                        targetState = currentLyricIndex,
+                                        animationSpec = tween(durationMillis = 350),
+                                        label = "lyricFade"
+                                    ) { idx ->
+                                        Text(
+                                            text = if (idx >= 0) lines[idx].text else "",
+                                            color = accentColor,
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            letterSpacing = 1.0.sp,
+                                            textAlign = TextAlign.Start,
+                                            maxLines = 2,
+                                            style = LocalTextStyle.current.copy(
+                                                shadow = if (accentGlow) Shadow(color = accentColor, blurRadius = 14f) else null
+                                            )
+                                        )
+                                    }
+                                }
+                                lyricsNotFound -> {
+                                    Text(
+                                        text = "同期歌詞が見つかりませんでした",
+                                        color = Color.White.copy(alpha = 0.45f),
+                                        fontSize = 12.sp,
+                                        letterSpacing = 1.0.sp,
+                                        textAlign = TextAlign.Start
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     if (!isRackShown) {
