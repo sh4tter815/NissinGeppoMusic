@@ -192,6 +192,10 @@ class AppPreferenceManager(private val context: Context) {
     fun getAccentColorHex(): String = prefs.getString("accent_color_hex", "#E53935") ?: "#E53935"
     fun setAccentColorHex(hex: String) = prefs.edit().putString("accent_color_hex", hex).apply()
 
+    // アートワーク連動カラー（再生中の曲のアートワークから配色を決める）
+    fun isMatchArtworkColor(): Boolean = prefs.getBoolean("match_artwork_color", false)
+    fun setMatchArtworkColor(enabled: Boolean) = prefs.edit().putBoolean("match_artwork_color", enabled).apply()
+
     // ホーム画面背景の不透明度 (暗さ)
     fun getHomeWallpaperAlpha(): Float = prefs.getFloat("home_wallpaper_alpha", 0.35f)
     fun setHomeWallpaperAlpha(alpha: Float) = prefs.edit().putFloat("home_wallpaper_alpha", alpha).apply()
