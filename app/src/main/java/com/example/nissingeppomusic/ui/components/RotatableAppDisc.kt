@@ -25,8 +25,8 @@ import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.ui.graphics.Shadow
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -419,7 +419,7 @@ private fun RenderDiscItem(
                     fontWeight = FontWeight.Bold,
                     letterSpacing = letterSpacingSp.sp,
                     textAlign = TextAlign.End,
-                    style = TextStyle(
+                    style = LocalTextStyle.current.copy(
                         shadow = if (accentGlow) Shadow(color = accentColor, blurRadius = 16f) else null
                     )
                 )
@@ -491,7 +491,7 @@ private fun RenderDiscItem(
                             textAlign = TextAlign.End,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            style = TextStyle(
+                            style = LocalTextStyle.current.copy(
                                 shadow = if (accentGlow && isChecked) Shadow(color = accentColor, blurRadius = 16f) else null
                             )
                         )
@@ -527,7 +527,7 @@ private fun RenderDiscItem(
                             textAlign = TextAlign.Start,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            style = TextStyle(
+                            style = LocalTextStyle.current.copy(
                                 shadow = if (accentGlow && isChecked) Shadow(color = accentColor, blurRadius = 16f) else null
                             )
                         )
