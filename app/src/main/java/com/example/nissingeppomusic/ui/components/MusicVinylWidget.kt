@@ -230,8 +230,12 @@ fun MusicVinylWidget(
                 val yPosDp = discCenterYDp + (relPos * itemStepDp) + gapOffset
                 val isFocused = (targetTrackIdx == focusedIndex)
 
-                // 上から下へ少しずつ右へずらす
-                val xShiftDp = relPos * 7f
+                // 上から下へ少しずつ右へずらし、選択中はさらに右へ押し出す
+                val focusBump = (1f - min(1f, abs(relPos))) * 16f
+                val xShiftDp = relPos * 7f + focusBump
+
+                // 一番上と一番下は境目が分からないようグラデーションで消す
+                val edgeFade = (1f - (abs(relPos) - 2.2f) / 1.8f).coerceIn(0f, 1f)
 
                 Box(
                     modifier = Modifier
@@ -240,6 +244,7 @@ fun MusicVinylWidget(
                         .graphicsLayer {
                             rotationX = discTiltX
                             cameraDistance = 12 * density.density
+                            alpha = edgeFade
                         }
                         .clip(CircleShape),
                     contentAlignment = Alignment.Center
@@ -280,7 +285,7 @@ fun MusicVinylWidget(
                 // 各ディスクの右に曲名を表示（右の円にかぶらない幅で省略表示）
                 Text(
                     text = rackTitle(targetTrackIdx),
-                    color = if (isFocused) Color.White else Color.White.copy(alpha = 0.65f),
+                    color = if (isFocused) Color.White.copy(alpha = edgeFade) else Color.White.copy(alpha = 0.65f * edgeFade),
                     fontSize = if (isFocused) 14.sp else 12.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
