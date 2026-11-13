@@ -482,7 +482,7 @@ fun SettingsScreen(
                                         ) {
                                             Column(modifier = Modifier.weight(1f)) {
                                                 Text("スクロール方向の反転", color = Color.White, fontSize = 14.sp)
-                                                Text("有効にすると、ダイヤルをドラッグした際の回転方向が逆になります", color = Color.Gray, fontSize = 12.sp)
+                                                Text("有効にすると、すべてのダイヤルとスクロールの方向が逆になります", color = Color.Gray, fontSize = 12.sp)
                                             }
                                             Switch(
                                                 checked = isReverseScroll,
