@@ -170,16 +170,41 @@ fun MusicSeekBarDisc(
                 radius = 12.dp.toPx() * pulseScale,
                 center = Offset(leftDotX, leftDotY)
             )
-            // 中心の実線の白い点
-            drawCircle(
-                color = Color.White,
-                radius = 5.dp.toPx(),
-                center = Offset(leftDotX, leftDotY)
-            )
 
             val nativeCanvas = drawContext.canvas.nativeCanvas
 
-            // 円の外（現在地点の丸の左側）に「経過時間」と「曲の長さ」を2行で直線区切り表示
+            // 中心には再生状態のアイコンを白で描く（再生中=一時停止マーク、停止中=再生マーク）
+            val iconPaint = android.graphics.Paint().apply {
+                color = android.graphics.Color.WHITE
+                isAntiAlias = true
+                style = android.graphics.Paint.Style.FILL
+                setShadowLayer(4f, 0f, 0f, android.graphics.Color.BLACK)
+            }
+            if (isPlaying) {
+                val barW = 3.2.dp.toPx()
+                val barH = 11.dp.toPx()
+                val gap = 3.4.dp.toPx()
+                nativeCanvas.drawRect(
+                    leftDotX - gap / 2f - barW, leftDotY - barH / 2f,
+                    leftDotX - gap / 2f, leftDotY + barH / 2f, iconPaint
+                )
+                nativeCanvas.drawRect(
+                    leftDotX + gap / 2f, leftDotY - barH / 2f,
+                    leftDotX + gap / 2f + barW, leftDotY + barH / 2f, iconPaint
+                )
+            } else {
+                val triW = 10.dp.toPx()
+                val triH = 12.dp.toPx()
+                val triPath = android.graphics.Path().apply {
+                    moveTo(leftDotX - triW / 2f + 1.dp.toPx(), leftDotY - triH / 2f)
+                    lineTo(leftDotX - triW / 2f + 1.dp.toPx(), leftDotY + triH / 2f)
+                    lineTo(leftDotX + triW / 2f + 1.dp.toPx(), leftDotY)
+                    close()
+                }
+                nativeCanvas.drawPath(triPath, iconPaint)
+            }
+
+            // 右の円の画面に見えているアーチエリアの中に「経過時間」と「曲の長さ」を2行で直線区切り表示
             val activeMin = activeSeconds.toInt() / 60
             val activeSec = activeSeconds.toInt() % 60
             val totalMin = totalSeconds.toInt() / 60
@@ -188,8 +213,8 @@ fun MusicSeekBarDisc(
             val elapsedText = String.format(Locale.getDefault(), "%d:%02d", activeMin, activeSec)
             val totalText = String.format(Locale.getDefault(), "%d:%02d", totalMin, totalSec)
 
-            // 現在地点の丸から左へ40dp（円の外側）
-            val textX = leftDotX - 40.dp.toPx()
+            // 画面右端（size.width）から左へ38dpの位置（円の中）
+            val textX = size.width - 38.dp.toPx()
 
             val elapsedPaint = android.graphics.Paint().apply {
                 color = android.graphics.Color.WHITE
@@ -225,39 +250,6 @@ fun MusicSeekBarDisc(
 
             // 2行目: 曲の長さ (例: "3:45")
             nativeCanvas.drawText(totalText, textX, cy + 13.dp.toPx(), totalPaint)
-
-            // 円の中（右側、時間表示があった場所）には再生状態のアイコンを白で描く
-            // 再生中=一時停止マーク、停止中=再生マーク
-            val stateIconX = size.width - 38.dp.toPx()
-            val iconPaint = android.graphics.Paint().apply {
-                color = android.graphics.Color.WHITE
-                isAntiAlias = true
-                style = android.graphics.Paint.Style.FILL
-                setShadowLayer(4f, 0f, 0f, android.graphics.Color.BLACK)
-            }
-            if (isPlaying) {
-                val barW = 4.5.dp.toPx()
-                val barH = 20.dp.toPx()
-                val gap = 5.dp.toPx()
-                nativeCanvas.drawRect(
-                    stateIconX - gap / 2f - barW, cy - barH / 2f,
-                    stateIconX - gap / 2f, cy + barH / 2f, iconPaint
-                )
-                nativeCanvas.drawRect(
-                    stateIconX + gap / 2f, cy - barH / 2f,
-                    stateIconX + gap / 2f + barW, cy + barH / 2f, iconPaint
-                )
-            } else {
-                val triW = 17.dp.toPx()
-                val triH = 20.dp.toPx()
-                val triPath = android.graphics.Path().apply {
-                    moveTo(stateIconX - triW / 2f + 1.5.dp.toPx(), cy - triH / 2f)
-                    lineTo(stateIconX - triW / 2f + 1.5.dp.toPx(), cy + triH / 2f)
-                    lineTo(stateIconX + triW / 2f + 1.5.dp.toPx(), cy)
-                    close()
-                }
-                nativeCanvas.drawPath(triPath, iconPaint)
-            }
 
             val paint = android.graphics.Paint().apply {
                 color = android.graphics.Color.WHITE
