@@ -682,7 +682,7 @@ fun MainLauncherScreen() {
                                             it.timeMs <= musicPlayerManager.currentPosition
                                         }.coerceAtLeast(0)
                                         lyricsTargetOffset = 0
-                                        lyricsScrollAnim.snapTo(0f)
+                                        coroutineScope.launch { lyricsScrollAnim.snapTo(0f) }
                                         isLyricsBrowsing = true
                                         val dirSign = if (repo.prefManager.isReverseScroll()) -1 else 1
                                         var acc = 0f
