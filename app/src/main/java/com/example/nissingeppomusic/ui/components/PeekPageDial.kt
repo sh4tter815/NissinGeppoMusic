@@ -21,6 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,7 +46,8 @@ import kotlin.math.sin
  * 一番上（真上）に来たページが選択状態。円盤の上には現在のページ名を小さく表示する。
  * 操作はスワイプ式: 指を少し動かすと1ストップ分だけ進み／戻り、その間の回転は
  * アニメーションだけで補間する（指に追従する自由回転はしない）。
- * 右スワイプで前のストップ、左スワイプで次のストップ。離した時点でページが切り替わる。
+ * 右スワイプで前のストップ、左スワイプで次のストップ。
+ * 指を離さなくても、アイコンが切り替わった時点でページも切り替わる。
  * 設定の「スクロール方向の反転」がONのときは向きが逆になる（他の円盤と共通）。
  */
 @Composable
@@ -79,6 +81,8 @@ fun PeekPageDial(
     // ダイヤルが向かっているストップ。回転はこの値へのアニメーションだけで行う
     var targetStop by remember { mutableIntStateOf(currentStop) }
     val animatableRotation = remember { Animatable(-currentStop * stepAngle) }
+    // pointerInput内のループは再コンポーズで再起動しないため、最新値の参照用
+    val latestCurrentStop = rememberUpdatedState(currentStop)
 
     // ページが外部から切り替わったとき（他UIからの遷移など）はダイヤルも追従させる
     LaunchedEffect(currentStop) {
@@ -87,8 +91,12 @@ fun PeekPageDial(
         }
     }
 
-    // 目標ストップが変わるたびに、回転アニメーションでその位置まで補間移動する
+    // 目標ストップが変わるたびに、回転アニメーションでその位置まで補間移動し、
+    // 指を離さなくてもその時点でページも切り替える
     LaunchedEffect(targetStop) {
+        if (targetStop != latestCurrentStop.value) {
+            onStopSelected(targetStop)
+        }
         animatableRotation.animateTo(
             targetValue = -targetStop * stepAngle,
             animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing)
@@ -175,11 +183,13 @@ fun PeekPageDial(
 
                             isPressed = false
 
-                            if (didSwipe && targetStop != currentStop) {
+                            // ページ切替は通常はステップした時点で済んでいるが、
+                            // 速すぎて反映が間に合わなかった場合の保険として離した時点でも確認する
+                            if (didSwipe && targetStop != latestCurrentStop.value) {
                                 onStopSelected(targetStop)
                             } else if (!didSwipe) {
                                 // スワイプしなかった（タップ等）場合は現在位置に戻す
-                                targetStop = currentStop
+                                targetStop = latestCurrentStop.value
                             }
                         }
                     }
