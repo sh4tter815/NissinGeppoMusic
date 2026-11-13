@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
@@ -105,6 +106,17 @@ private fun japaneseGroupOf(ch: Char): String {
  * アクセントは「画素数 × 平均彩度」が最大の色相グループの平均色、
  * 背景は暗い画素の平均色（なければ全体平均を暗く落とす）。
  */
+/** 相対輝度ベースのコントラスト比（WCAG方式、1.0〜21.0） */
+private fun contrastRatio(a: Color, b: Color): Float {
+    fun luminance(c: Color): Float {
+        fun lin(v: Float): Float = if (v <= 0.03928f) v / 12.92f else ((v + 0.055f) / 1.055f).pow(2.4f)
+        return 0.2126f * lin(c.red) + 0.7152f * lin(c.green) + 0.0722f * lin(c.blue)
+    }
+    val l1 = luminance(a)
+    val l2 = luminance(b)
+    return (max(l1, l2) + 0.05f) / (min(l1, l2) + 0.05f)
+}
+
 private fun extractArtworkColors(bitmap: Bitmap): Pair<Color, Color> {
     val size = 48
     val scaled = if (bitmap.width == size && bitmap.height == size) bitmap
@@ -274,6 +286,18 @@ fun MainLauncherScreen() {
         }
     }
     val accentColor = if (matchArtwork) artworkAccent ?: manualAccentColor else manualAccentColor
+
+    // 抽出アクセント色と背景色のコントラストが低いときは、アクセント色の
+    // アイコンや文字にグロー（発光）をかけて見やすくする
+    val accentGlow = remember(artworkAccent, artworkBackground, matchArtwork) {
+        val fg = artworkAccent
+        val bg = artworkBackground
+        if (matchArtwork && fg != null && bg != null) {
+            contrastRatio(fg, bg) < 2.8f
+        } else {
+            false
+        }
+    }
 
     // ラック（左円のキュー表示）表示中は、右円と下ダイヤルを隠す
     var isRackShown by remember { mutableStateOf(false) }
@@ -597,7 +621,8 @@ fun MainLauncherScreen() {
                             discCenterXDp = animatedDisc2CenterX,
                             discCenterYDp = disc2CenterY,
                             discRadiusDp = disc2RadiusDp,
-                            accentColor = accentColor
+                            accentColor = accentColor,
+                            accentGlow = accentGlow
                         )
                     }
 
@@ -614,6 +639,7 @@ fun MainLauncherScreen() {
                             discCenterYDp = disc1CenterY,
                             discRadiusDp = disc1RadiusDp,
                             accentColor = accentColor,
+                            accentGlow = accentGlow,
                             onPlayTrack = { song ->
                                 // レコードラックの一覧（全曲）をキューにして選んだ曲から再生
                                 val startIndex = allApps.indexOfFirst { it.packageName == song.packageName }
@@ -761,6 +787,7 @@ fun MainLauncherScreen() {
                         showIndices = true,
                         isLoopable = (!isHideMode && searchQuery.isBlank() && librarySortMode == "title"), // タイトル表示(検索なし)のみ循環ループ、検索時や非表示リスト表示時、アルバム/アーティスト表示時はループなし
                         accentColor = accentColor,
+                        accentGlow = accentGlow,
                         onAppClick = { app ->
                             if (app.packageName.startsWith("album::")) {
                                 selectedAlbumFilter = app.packageName.removePrefix("album::")
@@ -857,6 +884,7 @@ fun MainLauncherScreen() {
                         isLoopable = false, // フォルダ内アプリはループしない
                         selectedPackages = if (isEditingFolder) editingSelectedPackages else null,
                         accentColor = accentColor,
+                        accentGlow = accentGlow,
                         onAppClick = { app ->
                             if (isEditingFolder) {
                                 val updated = editingSelectedPackages.toMutableSet()
@@ -914,7 +942,8 @@ fun MainLauncherScreen() {
                     .align(Alignment.BottomCenter)
                     .padding(bottom = bottomPaddingDp + 4.dp)
                     .zIndex(250f),
-                onPressedChanged = { isDialPressed = it }
+                onPressedChanged = { isDialPressed = it },
+                accentGlow = accentGlow
             )
         } else {
             BottomPageDial(
@@ -955,6 +984,14 @@ fun MainLauncherScreen() {
                         },
                     contentAlignment = Alignment.Center
                 ) {
+                    if (accentGlow && musicPlayerManager.repeatMode != 0) {
+                        Icon(
+                            imageVector = if (musicPlayerManager.repeatMode == 2) Icons.Default.RepeatOne else Icons.Default.Repeat,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(20.dp).blur(6.dp)
+                        )
+                    }
                     Icon(
                         imageVector = if (musicPlayerManager.repeatMode == 2) Icons.Default.RepeatOne else Icons.Default.Repeat,
                         contentDescription = "リピート",
@@ -981,6 +1018,14 @@ fun MainLauncherScreen() {
                         },
                     contentAlignment = Alignment.Center
                 ) {
+                    if (accentGlow && musicPlayerManager.shuffleEnabled) {
+                        Icon(
+                            imageVector = Icons.Default.Shuffle,
+                            contentDescription = null,
+                            tint = accentColor,
+                            modifier = Modifier.size(20.dp).blur(6.dp)
+                        )
+                    }
                     Icon(
                         imageVector = Icons.Default.Shuffle,
                         contentDescription = "シャッフル",
