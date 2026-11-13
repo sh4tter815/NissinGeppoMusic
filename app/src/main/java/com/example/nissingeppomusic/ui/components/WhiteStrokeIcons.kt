@@ -109,3 +109,33 @@ fun WhiteCloseIcon(size: Dp = 16.dp, color: Color = Color.Gray) {
         modifier = Modifier.size(size)
     )
 }
+
+@Composable
+fun WhiteMusicNoteIcon(size: Dp = 22.dp, color: Color = Color.White) {
+    Icon(
+        imageVector = Icons.Default.MusicNote,
+        contentDescription = null,
+        tint = color,
+        modifier = Modifier.size(size)
+    )
+}
+
+@Composable
+fun WhitePersonIcon(size: Dp = 22.dp, color: Color = Color.White) {
+    Icon(
+        imageVector = Icons.Default.Person,
+        contentDescription = null,
+        tint = color,
+        modifier = Modifier.size(size)
+    )
+}
+
+@Composable
+fun WhiteAlbumIcon(size: Dp = 22.dp, color: Color = Color.White) {
+    Icon(
+        imageVector = Icons.Default.Album,
+        contentDescription = null,
+        tint = color,
+        modifier = Modifier.size(size)
+    )
+}
