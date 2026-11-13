@@ -191,7 +191,37 @@ class MusicPlayerManager(context: Context) {
             "OGG" -> "OGG"
             else -> if (uriString.contains("flac", true)) "FLAC" else "FLAC"
         }
-        return "$format ・ 44.1kHz ・ 32bit"
+        val base = "$format ・ 44.1kHz ・ 32bit"
+        val kbps = computeBitrateKbps(filePath)
+        return if (kbps > 0) "$base ・ ${kbps}kbps" else base
+    }
+
+    // ビットレート(kbps)を実ファイルから計算する。
+    // メタデータにビットレートがあればそれを使い、なければ「ファイルサイズ×8÷再生時間」で求める
+    private fun computeBitrateKbps(filePath: String): Int {
+        if (filePath.isBlank()) return 0
+        return try {
+            val mmr = android.media.MediaMetadataRetriever()
+            try {
+                mmr.setDataSource(filePath)
+                val direct = mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_BITRATE)?.toIntOrNull()
+                if (direct != null && direct > 0) {
+                    direct / 1000
+                } else {
+                    val durationMs = mmr.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+                    val sizeBytes = java.io.File(filePath).length()
+                    if (durationMs > 0 && sizeBytes > 0) {
+                        (sizeBytes * 8L * 1000L / durationMs / 1000L).toInt()
+                    } else {
+                        0
+                    }
+                }
+            } finally {
+                mmr.release()
+            }
+        } catch (e: Exception) {
+            0
+        }
     }
 
     fun seekTo(positionMs: Long) {
