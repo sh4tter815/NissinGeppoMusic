@@ -6,7 +6,6 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -14,9 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -237,16 +234,16 @@ fun PeekPageDial(
                 }
             }
 
-            // 現在のページ名を、円の外側（ダイヤルの上）に小さくフローティング表示
+            // 現在のページ名を円の外側に小さく表示。
+            // 押して円が拡大したときも内側に入らないよう、円の大きさに合わせて位置も一緒に動かす
+            val labelOffsetYDp = (discCenterYDp - discRadiusDp * expandScale) - 18f
             Text(
                 text = stopLabels[targetStop],
                 color = Color.White.copy(alpha = 0.9f),
                 fontSize = 11.sp,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .offset(y = (-34).dp)
-                    .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
-                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                    .offset(y = labelOffsetYDp.dp)
             )
         }
     }
