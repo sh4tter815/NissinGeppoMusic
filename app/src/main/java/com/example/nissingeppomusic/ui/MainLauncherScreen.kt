@@ -49,6 +49,40 @@ import java.io.File
 import java.io.FileOutputStream
 import kotlin.math.*
 
+/** 表示名（アーティスト名・アルバム名）から頭文字（日本語行／英字）を求める。MusicRepository.extractInitials と同じ規則 */
+private fun initialsOfLabel(label: String): Pair<String, String> {
+    val firstChar = label.firstOrNull() ?: return Pair("＃", "＃")
+    val englishInitial = if (firstChar.isLetter() && firstChar.code < 128) {
+        firstChar.uppercaseChar().toString()
+    } else {
+        "＃"
+    }
+    return Pair(japaneseGroupOf(firstChar), englishInitial)
+}
+
+private fun japaneseGroupOf(ch: Char): String {
+    val code = ch.code
+    val hiraChar = when (code) {
+        in 0x30A1..0x30FA -> (code - 0x60).toChar()
+        else -> ch
+    }
+    return when (hiraChar) {
+        'あ', 'い', 'う', 'え', 'お', 'ぁ', 'ぃ', 'ぅ', 'ぇ', 'ぉ' -> "あ"
+        'か', 'き', 'く', 'け', 'こ', 'が', 'ぎ', 'ぐ', 'げ', 'ご' -> "か"
+        'さ', 'し', 'す', 'せ', 'そ', 'ざ', 'じ', 'ず', 'ぜ', 'ぞ' -> "さ"
+        'た', 'ち', 'つ', 'て', 'と', 'だ', 'ぢ', 'づ', 'で', 'ど', 'っ' -> "た"
+        'な', 'に', 'ぬ', 'ね', 'の' -> "な"
+        'は', 'ひ', 'ふ', 'へ', 'ほ', 'ば', 'び', 'ぶ', 'べ', 'ぼ', 'ぱ', 'ぴ', 'ぷ', 'ぺ', 'ぽ' -> "は"
+        'ま', 'み', 'む', 'め', 'も' -> "ま"
+        'や', 'ゆ', 'よ', 'ゃ', 'ゅ', 'ょ' -> "や"
+        'ら', 'り', 'る', 'れ', 'ろ' -> "ら"
+        'わ', 'を', 'ん' -> "わ"
+        else -> {
+            if (ch.isLetter() && ch.code < 128) ch.uppercaseChar().toString() else "＃"
+        }
+    }
+}
+
 @Composable
 fun MainLauncherScreen() {
     val context = LocalContext.current
@@ -475,6 +509,13 @@ fun MainLauncherScreen() {
                                 allApps
                                     .filter { it.artist == selectedArtistFilter && !it.isHidden }
                                     .sortedWith(compareBy({ it.album }, { if (it.trackNumber > 0) it.trackNumber else Int.MAX_VALUE }, { it.label }))
+                                    .map { track ->
+                                        // アーティスト絞り込み後の曲一覧では、左ホイールのインデックスが
+                                        // 曲名の頭文字で効くように付け替える（通常の頭文字はアーティスト名基準のため）
+                                        val (jp, en) = initialsOfLabel(if (track.customYomi.isNotBlank()) track.customYomi else track.label)
+                                        if (track.initialJapanese == jp && track.initialEnglish == en) track
+                                        else track.copy(initialJapanese = jp, initialEnglish = en)
+                                    }
                             }
                             searchQuery.isNotBlank() -> {
                                 allApps.filter {
@@ -492,11 +533,19 @@ fun MainLauncherScreen() {
                                     .values
                                     .map { albumTracks ->
                                         val first = albumTracks.first()
+                                        val (jp, en) = initialsOfLabel(first.album)
                                         first.copy(
                                             label = first.album,
-                                            packageName = "album::" + first.album
+                                            packageName = "album::" + first.album,
+                                            initialJapanese = jp,
+                                            initialEnglish = en
                                         )
                                     }
+                                    // 頭文字の行順（あ→ん→A→Z）で昇順に並べ、左ホイールのインデックスと一致させる
+                                    .sortedWith(compareBy(
+                                        { val i = INDEX_ITEMS.indexOf(it.initialJapanese); if (i < 0) INDEX_ITEMS.size else i },
+                                        { it.label.lowercase() }
+                                    ))
                             }
                             librarySortMode == "artist" -> {
                                 allApps.filter { !it.isHidden }
@@ -504,11 +553,19 @@ fun MainLauncherScreen() {
                                     .values
                                     .map { artistTracks ->
                                         val first = artistTracks.first()
+                                        val (jp, en) = initialsOfLabel(first.artist)
                                         first.copy(
                                             label = first.artist,
-                                            packageName = "artist::" + first.artist
+                                            packageName = "artist::" + first.artist,
+                                            initialJapanese = jp,
+                                            initialEnglish = en
                                         )
                                     }
+                                    // 頭文字の行順（あ→ん→A→Z）で昇順に並べ、左ホイールのインデックスと一致させる
+                                    .sortedWith(compareBy(
+                                        { val i = INDEX_ITEMS.indexOf(it.initialJapanese); if (i < 0) INDEX_ITEMS.size else i },
+                                        { it.label.lowercase() }
+                                    ))
                             }
                             else -> allApps.filter { !it.isHidden }
                         }
@@ -525,6 +582,7 @@ fun MainLauncherScreen() {
                         letterSpacingSp = appDiscLetterSpacing,
                         stepAngle = appDiscStepAngle,
                         selectedIndexChar = selectedIndexChar,
+                        resetKey = librarySortMode + "|" + (selectedAlbumFilter ?: "") + "|" + (selectedArtistFilter ?: ""),
                         isRightDisc = true,
                         showIndices = true,
                         isLoopable = (!isHideMode && searchQuery.isBlank() && librarySortMode == "title"), // タイトル表示(検索なし)のみ循環ループ、検索時や非表示リスト表示時、アルバム/アーティスト表示時はループなし
