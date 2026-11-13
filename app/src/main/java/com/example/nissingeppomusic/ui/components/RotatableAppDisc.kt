@@ -204,6 +204,10 @@ fun RotatableAppDisc(
                         var isDragStarted = false
                         var lastDeltaAngle = 0f
                         var lastTime = System.currentTimeMillis()
+                        // ステップ式回転用（フォルダ／インデックス円盤のタッチパネルと同じ閾値40px）
+                        val stepThresholdPx = 40f
+                        var accumulatedDy = 0f
+                        var currentStepIndex = (-rawRotationAngle / stepAngle).roundToInt()
 
                         drag(down.id) { change: PointerInputChange ->
                             val prevPos = currentPos
@@ -228,54 +232,51 @@ fun RotatableAppDisc(
                             if (isDragStarted) {
                                 change.consume()
 
-                                val dyPx = currentPos.y - prevPos.y
+                                // フォルダ／インデックス円盤と同じステップ式: 指の移動が閾値を超えるたびに
+                                // 1項目分だけアニメーションで吸い付くように回る（自由回転はしない）
                                 val directionFactor = if (isReverseScroll) -1f else 1f
-                                val deltaAngle = -(dyPx / radiusPx) * (180f / PI.toFloat()) * (if (isRightDisc) 1.2f else -1.2f) * directionFactor
-
-                                val dt = (currentTime - lastTime).coerceAtLeast(1)
-                                lastDeltaAngle = deltaAngle / dt * 16f
-                                lastTime = currentTime
-
-                                val targetAngle = rawRotationAngle + deltaAngle
-                                val constrainedAngle = if (isLoopable) {
-                                    targetAngle
-                                } else {
-                                    targetAngle.coerceIn(minRotation - 20f, maxRotation + 20f)
+                                accumulatedDy += dy * directionFactor
+                                val stepSign = if (isRightDisc) 1 else -1
+                                var stepped = false
+                                while (accumulatedDy >= stepThresholdPx) {
+                                    accumulatedDy -= stepThresholdPx
+                                    currentStepIndex += stepSign
+                                    stepped = true
                                 }
-                                rawRotationAngle = constrainedAngle
-                                coroutineScope.launch {
-                                    animatableRotation.snapTo(constrainedAngle)
+                                while (accumulatedDy <= -stepThresholdPx) {
+                                    accumulatedDy += stepThresholdPx
+                                    currentStepIndex -= stepSign
+                                    stepped = true
+                                }
+                                if (stepped) {
+                                    if (!isLoopable) {
+                                        currentStepIndex = currentStepIndex.coerceIn(0, (discItems.size - 1).coerceAtLeast(0))
+                                    }
+                                    val targetAngle = if (isLoopable) {
+                                        -currentStepIndex * stepAngle
+                                    } else {
+                                        (-currentStepIndex * stepAngle).coerceIn(minRotation, maxRotation)
+                                    }
+                                    rawRotationAngle = targetAngle
+                                    coroutineScope.launch {
+                                        animatableRotation.animateTo(
+                                            targetValue = targetAngle,
+                                            animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)
+                                        )
+                                    }
                                 }
                             }
                         }
 
                         if (isDragStarted && discItems.isNotEmpty()) {
-                            if (isLoopable) {
-                                val inertiaTarget = rawRotationAngle + lastDeltaAngle * 10f
-                                val nearestIndex = (-inertiaTarget / stepAngle).roundToInt()
-                                val finalSnapAngle = -nearestIndex * stepAngle
-
-                                rawRotationAngle = finalSnapAngle
-                                coroutineScope.launch {
-                                    animatableRotation.animateTo(
-                                        targetValue = finalSnapAngle,
-                                        animationSpec = tween(durationMillis = 750, easing = FastOutSlowInEasing)
-                                    )
-                                    isScrolling = false
-                                }
-                            } else {
-                                val inertiaTarget = rawRotationAngle + lastDeltaAngle * 6f
-                                val nearestIndex = (-inertiaTarget / stepAngle).roundToInt()
-                                val finalSnapAngle = (-nearestIndex * stepAngle).coerceIn(minRotation, maxRotation)
-
-                                rawRotationAngle = finalSnapAngle
-                                coroutineScope.launch {
-                                    animatableRotation.animateTo(
-                                        targetValue = finalSnapAngle,
-                                        animationSpec = spring(stiffness = 220f, dampingRatio = 0.65f)
-                                    )
-                                    isScrolling = false
-                                }
+                            // ステップ式: 離した時点のステップ位置にそのまま収束させる（自由回転の慣性フリングはしない）
+                            val finalAngle = rawRotationAngle
+                            coroutineScope.launch {
+                                animatableRotation.animateTo(
+                                    targetValue = finalAngle,
+                                    animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing)
+                                )
+                                isScrolling = false
                             }
                         } else {
                             isScrolling = false
