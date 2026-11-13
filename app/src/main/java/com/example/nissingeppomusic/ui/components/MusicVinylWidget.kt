@@ -51,6 +51,7 @@ fun MusicVinylWidget(
     discRadiusDp: Float = 165f,
     accentColor: Color = Color(0xFFE53935),
     accentGlow: Boolean = false,
+    topZoneReserved: Boolean = false,
     onPlayTrack: (AppInfo) -> Unit = {},
     onFocusTrackChanged: (AppInfo?) -> Unit = {},
     onRackVisibilityChanged: (Boolean) -> Unit = {}
@@ -183,6 +184,10 @@ fun MusicVinylWidget(
                     awaitPointerEventScope {
                         while (true) {
                             val down = awaitFirstDown(requireUnconsumed = false)
+                            // 歌詞表示中は画面上部（タイトル付近）を歌詞ブラウズ用に空ける
+                            if (topZoneReserved && down.position.y < 230.dp.toPx()) {
+                                continue
+                            }
                             isLeftInteracting = true
                             var moved = false
                             val startIdx = rackCurrentIndex
