@@ -98,7 +98,7 @@ fun MusicVinylWidget(
     val itemStepDp = 42f
     val itemStepPx = with(density) { itemStepDp.dp.toPx() }
 
-    val focusIndexOffset = (-rawDragY / itemStepPx).roundToInt()
+    val focusIndexOffset = (rawDragY / itemStepPx).roundToInt()
     val focusedIndex = remember(currentTrackIndex, focusIndexOffset, allApps.size) {
         if (allApps.isEmpty()) 0
         else (currentTrackIndex + focusIndexOffset).coerceIn(0, allApps.size - 1)
@@ -150,7 +150,7 @@ fun MusicVinylWidget(
                                 change.consume()
                             }
 
-                            val finalOffset = (-rawDragY / itemStepPx).roundToInt()
+                            val finalOffset = (rawDragY / itemStepPx).roundToInt()
                             val finalIndex = (startIdx + finalOffset).coerceIn(0, (allApps.size - 1).coerceAtLeast(0))
 
                             if (!moved) {
@@ -190,14 +190,16 @@ fun MusicVinylWidget(
                 val isFocused = (relOffset == 0)
                 val trackApp = allApps[targetTrackIdx]
 
+                // 選択中以外のディスクは少し左へずらし、選択中が右へ出て見えるようにする
+                val xShiftDp = if (isFocused) 0f else -12f
+
                 Box(
                     modifier = Modifier
-                        .offset(x = (discCenterXDp - discRadiusDp).dp, y = (yPosDp - discRadiusDp).dp)
+                        .offset(x = (discCenterXDp - discRadiusDp + xShiftDp).dp, y = (yPosDp - discRadiusDp).dp)
                         .size((discRadiusDp * 2f).dp)
                         .graphicsLayer {
                             rotationX = discTiltX
                             cameraDistance = 12 * density.density
-                            alpha = if (isFocused) 1.0f else 0.45f
                         }
                         .clip(CircleShape),
                     contentAlignment = Alignment.Center
@@ -232,14 +234,6 @@ fun MusicVinylWidget(
                             }
                         }
 
-                        // 選択中以外のディスクは暗く透けないようにオーバーレイを重ねる
-                        if (!isFocused) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .background(Color(0xFF0B101D).copy(alpha = 0.65f))
-                            )
-                        }
                     }
                 }
             }
