@@ -651,10 +651,30 @@ fun MainLauncherScreen() {
 
                 // --- 画面下部 ページ切り替え (ボタン式 / ダイヤル式を設定で切替) ---
         if (repo.prefManager.getPageSwitchStyle() == "dial") {
+            // ダイヤルは6ストップ: 0=設定, 1=ホーム(再生中), 2=曲名, 3=アーティスト, 4=アルバム, 5=プレイリスト(フォルダ)
             PeekPageDial(
-                currentPage = currentLauncherPage,
-                onPageSelected = { targetPage ->
-                    changePageWithTransition(targetPage)
+                currentStop = when (currentLauncherPage) {
+                    2 -> 2 + listOf("title", "artist", "album").indexOf(librarySortMode).coerceAtLeast(0)
+                    3 -> 5
+                    else -> currentLauncherPage
+                },
+                onStopSelected = { stop ->
+                    when (stop) {
+                        0, 1 -> changePageWithTransition(stop)
+                        2, 3, 4 -> {
+                            val mode = listOf("title", "artist", "album")[stop - 2]
+                            if (librarySortMode != mode) {
+                                librarySortMode = mode
+                                selectedAlbumFilter = null
+                                selectedArtistFilter = null
+                                repo.prefManager.setLibrarySortMode(mode)
+                                AppRepository.invalidateCache()
+                                refreshApps()
+                            }
+                            changePageWithTransition(2)
+                        }
+                        5 -> changePageWithTransition(3)
+                    }
                 },
                 accentColor = accentColor,
                 modifier = Modifier
