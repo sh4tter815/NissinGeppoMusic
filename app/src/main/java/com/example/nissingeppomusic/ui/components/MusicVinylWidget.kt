@@ -38,6 +38,7 @@ import kotlin.math.floor
 import kotlin.math.min
 import kotlin.math.roundToInt
 import kotlin.math.sign
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
@@ -91,11 +92,27 @@ fun MusicVinylWidget(
 
     // ディスクラック操作用状態（操作時は3D X軸回転で横倒しレコード盤になる）
     var isLeftInteracting by remember { mutableStateOf(false) }
-    var rawDragY by remember { mutableFloatStateOf(0f) }
 
-    // ラックのスクロール位置（曲のインデックス単位・小数）。指に追従し、離すと最も近い曲へスナップする
+    // ラックのスクロール位置（曲のインデックス単位・小数）。
+    // インデックス円盤と同じステップ式: 指の移動40pxごとに1曲分ジャンプし、
+    // 実位置は短いアニメーションで目標ステップへ吸着する（指の位置への連続追従はしない）
     val widgetScope = rememberCoroutineScope()
     val scrollAnim = remember { Animatable(0f) }
+    var rackTargetOffset by remember { mutableIntStateOf(0) }
+    var rackStepAnimRunning by remember { mutableStateOf(false) }
+    fun runRackSteps() {
+        if (rackStepAnimRunning) return
+        rackStepAnimRunning = true
+        widgetScope.launch {
+            while (scrollAnim.value != rackTargetOffset.toFloat()) {
+                scrollAnim.animateTo(
+                    targetValue = rackTargetOffset.toFloat(),
+                    animationSpec = tween(durationMillis = 170, easing = FastOutSlowInEasing)
+                )
+            }
+            rackStepAnimRunning = false
+        }
+    }
 
     // ラック表示中は外側（右円・下ダイヤル等）を隠すよう親へ通知する
     LaunchedEffect(isLeftInteracting) {
@@ -165,36 +182,47 @@ fun MusicVinylWidget(
                     awaitPointerEventScope {
                         while (true) {
                             val down = awaitFirstDown(requireUnconsumed = false)
-                            val pos = down.position
                             isLeftInteracting = true
                             var moved = false
-                            val startY = pos.y
-                            rawDragY = 0f
                             val startIdx = rackCurrentIndex
                             lastHapticIndex = startIdx
+                            rackTargetOffset = 0
+                            var stepBaseY = down.position.y
 
                             drag(down.id) { change ->
-                                val deltaY = change.position.y - startY
-                                rawDragY = deltaY
-                                if (abs(deltaY) > 4f) {
-                                    moved = true
+                                // ステップ式ジャンプ: 指の移動40pxごとに1曲分進む（方向は反転済み:
+                                // 上へドラッグで次の曲、下で前の曲）。実位置はアニメーションで追いつく
+                                var dy = change.position.y - stepBaseY
+                                while (dy <= -40f || dy >= 40f) {
+                                    val dir = if (dy <= -40f) 1 else -1
+                                    val newTarget = rackTargetOffset + dir
+                                    if (startIdx + newTarget in 0 until rackSize) {
+                                        rackTargetOffset = newTarget
+                                        moved = true
+                                        runRackSteps()
+                                    }
+                                    if (dy <= -40f) {
+                                        stepBaseY -= 40f
+                                        dy += 40f
+                                    } else {
+                                        stepBaseY += 40f
+                                        dy -= 40f
+                                    }
                                 }
-                                // スクロール位置を指に追従させる（方向は反転済み）
-                                widgetScope.launch { scrollAnim.snapTo(-rawDragY / itemStepPx) }
                                 change.consume()
                             }
 
-                            val finalIndex = (startIdx + scrollAnim.value.roundToInt()).coerceIn(0, (rackSize - 1).coerceAtLeast(0))
-                            val targetOffset = (finalIndex - startIdx).toFloat()
+                            val finalIndex = (startIdx + rackTargetOffset).coerceIn(0, (rackSize - 1).coerceAtLeast(0))
                             val shouldPlay = moved && finalIndex != startIdx
 
-                            // 離したら最も近い曲へ補間スナップし、完了後に再生/ジャンプしてラックを閉じる
+                            // ステップアニメーションが目標へ到達したら再生/ジャンプしてラックを閉じる
                             // （左側を押してその場で離しただけでは何もしない。再生/一時停止は右のシーク円盤だけ）
                             widgetScope.launch {
-                                scrollAnim.animateTo(
-                                    targetValue = targetOffset,
-                                    animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing)
-                                )
+                                var guard = 0
+                                while ((rackStepAnimRunning || scrollAnim.value != rackTargetOffset.toFloat()) && guard < 120) {
+                                    delay(30)
+                                    guard++
+                                }
                                 if (shouldPlay) {
                                     if (queueMode) {
                                         if (finalIndex in playerManager.playOrder.indices) {
@@ -208,7 +236,7 @@ fun MusicVinylWidget(
                                 }
                                 isLeftInteracting = false
                                 scrollAnim.snapTo(0f)
-                                rawDragY = 0f
+                                rackTargetOffset = 0
                                 onFocusTrackChanged(null)
                             }
                         }
