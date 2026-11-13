@@ -919,10 +919,11 @@ fun MainLauncherScreen() {
             )
         }
 
-        // --- ホーム画面のみ: リピート／シャッフルボタンを下ダイヤルの円周（右下）に沿って配置 ---
-        // ダイヤルの円: 中心は帯の下端から99dp下、半径165dp。円周上の点にボタンの中心を合わせる
+        // --- ホーム画面のみ: リピート／シャッフルボタンを下ダイヤルの円周（右下）の外側に沿って配置 ---
+        // ダイヤルの円: 中心は帯の下端から99dp下、半径165dp。
+        // ボタンは輪郭の上に乗せず、少し離して外側（輪郭+ボタン半径+余白）に中心を置く
         if (currentLauncherPage == 1) {
-            val dialRadiusForButtons = 165f
+            val dialRadiusForButtons = 192f
             val dialCenterBelowBand = 99f
             // リピート（円周の -54° の位置）
             run {
