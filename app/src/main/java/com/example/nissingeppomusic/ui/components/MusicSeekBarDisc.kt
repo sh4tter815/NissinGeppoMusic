@@ -318,6 +318,66 @@ fun MusicSeekBarDisc(
                     nativeCanvas.drawText(timeStr, tx, ty, paint)
                 }
             }
+
+            // 終端（曲の終わり）の位置に、太めの目盛り線と「END」ラベルを描く
+            val endRad = Math.toRadians((rotationDegrees + totalSpanDegrees).toDouble())
+            val endTickInnerRadius = r - 22.dp.toPx()
+            nativeCanvas.drawLine(
+                cx + endTickInnerRadius * cos(endRad).toFloat(),
+                cy + endTickInnerRadius * sin(endRad).toFloat(),
+                cx + r * cos(endRad).toFloat(),
+                cy + r * sin(endRad).toFloat(),
+                android.graphics.Paint().apply {
+                    color = android.graphics.Color.WHITE
+                    strokeWidth = 3f
+                    isAntiAlias = true
+                    setShadowLayer(3f, 0f, 0f, android.graphics.Color.BLACK)
+                }
+            )
+            val endTextRadius = r + 14.dp.toPx()
+            nativeCanvas.drawText(
+                "END",
+                cx + endTextRadius * cos(endRad).toFloat(),
+                cy + endTextRadius * sin(endRad).toFloat() + 4.dp.toPx(),
+                android.graphics.Paint().apply {
+                    color = android.graphics.Color.WHITE
+                    textSize = 10.sp.toPx()
+                    isAntiAlias = true
+                    textAlign = android.graphics.Paint.Align.CENTER
+                    isFakeBoldText = true
+                    setShadowLayer(4f, 0f, 0f, android.graphics.Color.BLACK)
+                    if (customTypeface != null) typeface = customTypeface
+                }
+            )
+
+            // 始端（0秒）の位置にも、太めの目盛り線と「START」ラベルを描く
+            val startRad = Math.toRadians(rotationDegrees.toDouble())
+            nativeCanvas.drawLine(
+                cx + endTickInnerRadius * cos(startRad).toFloat(),
+                cy + endTickInnerRadius * sin(startRad).toFloat(),
+                cx + r * cos(startRad).toFloat(),
+                cy + r * sin(startRad).toFloat(),
+                android.graphics.Paint().apply {
+                    color = android.graphics.Color.WHITE
+                    strokeWidth = 3f
+                    isAntiAlias = true
+                    setShadowLayer(3f, 0f, 0f, android.graphics.Color.BLACK)
+                }
+            )
+            nativeCanvas.drawText(
+                "START",
+                cx + endTextRadius * cos(startRad).toFloat(),
+                cy + endTextRadius * sin(startRad).toFloat() + 4.dp.toPx(),
+                android.graphics.Paint().apply {
+                    color = android.graphics.Color.WHITE
+                    textSize = 10.sp.toPx()
+                    isAntiAlias = true
+                    textAlign = android.graphics.Paint.Align.CENTER
+                    isFakeBoldText = true
+                    setShadowLayer(4f, 0f, 0f, android.graphics.Color.BLACK)
+                    if (customTypeface != null) typeface = customTypeface
+                }
+            )
         }
     }
 }
