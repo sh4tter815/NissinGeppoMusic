@@ -33,7 +33,12 @@ import com.example.nissingeppomusic.data.AppInfo
 import com.example.nissingeppomusic.data.AppPreferenceManager
 import com.example.nissingeppomusic.data.MusicPlayerManager
 import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.floor
+import kotlin.math.min
 import kotlin.math.roundToInt
+import kotlin.math.sign
+import kotlinx.coroutines.launch
 
 @Composable
 fun MusicVinylWidget(
@@ -45,7 +50,8 @@ fun MusicVinylWidget(
     discRadiusDp: Float = 165f,
     accentColor: Color = Color(0xFFE53935),
     onPlayTrack: (AppInfo) -> Unit = {},
-    onFocusTrackChanged: (AppInfo?) -> Unit = {}
+    onFocusTrackChanged: (AppInfo?) -> Unit = {},
+    onRackVisibilityChanged: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
     val prefManager = remember { AppPreferenceManager(context) }
@@ -83,9 +89,18 @@ fun MusicVinylWidget(
         }
     }
 
-    // ディスクラック操作用状態（操作時は3D X軸回転で横倒しレコード盤になり、位置は固定で中身だけ切り替わる）
+    // ディスクラック操作用状態（操作時は3D X軸回転で横倒しレコード盤になる）
     var isLeftInteracting by remember { mutableStateOf(false) }
     var rawDragY by remember { mutableFloatStateOf(0f) }
+
+    // ラックのスクロール位置（曲のインデックス単位・小数）。指に追従し、離すと最も近い曲へスナップする
+    val widgetScope = rememberCoroutineScope()
+    val scrollAnim = remember { Animatable(0f) }
+
+    // ラック表示中は外側（右円・下ダイヤル等）を隠すよう親へ通知する
+    LaunchedEffect(isLeftInteracting) {
+        onRackVisibilityChanged(isLeftInteracting)
+    }
 
     val discTiltX by animateFloatAsState(
         targetValue = if (isLeftInteracting) 55f else 0f,
@@ -117,11 +132,8 @@ fun MusicVinylWidget(
     val itemStepDp = 42f
     val itemStepPx = with(density) { itemStepDp.dp.toPx() }
 
-    val focusIndexOffset = (rawDragY / itemStepPx).roundToInt()
-    val focusedIndex = remember(rackCurrentIndex, focusIndexOffset, rackSize) {
-        if (rackSize == 0) 0
-        else (rackCurrentIndex + focusIndexOffset).coerceIn(0, rackSize - 1)
-    }
+    val focusedIndex = if (rackSize == 0) 0
+        else (rackCurrentIndex + scrollAnim.value.roundToInt()).coerceIn(0, rackSize - 1)
 
     var lastHapticIndex by remember { mutableIntStateOf(rackCurrentIndex) }
 
@@ -167,56 +179,59 @@ fun MusicVinylWidget(
                                 if (abs(deltaY) > 4f) {
                                     moved = true
                                 }
+                                // スクロール位置を指に追従させる
+                                widgetScope.launch { scrollAnim.snapTo(rawDragY / itemStepPx) }
                                 change.consume()
                             }
 
-                            val finalOffset = (rawDragY / itemStepPx).roundToInt()
-                            val finalIndex = (startIdx + finalOffset).coerceIn(0, (rackSize - 1).coerceAtLeast(0))
+                            val finalIndex = (startIdx + scrollAnim.value.roundToInt()).coerceIn(0, (rackSize - 1).coerceAtLeast(0))
+                            val targetOffset = (finalIndex - startIdx).toFloat()
+                            val shouldPlay = moved && finalIndex != startIdx
 
-                            // 左側を押してその場で離しただけでは何もしない
-                            // （再生/一時停止は右のシーク円盤のタップだけ）
-                            if (moved) {
-                                if (queueMode) {
-                                    // キュー表示中: スワイプで選んだ曲へジャンプ（＝次の曲/前の曲の操作）
-                                    if (finalIndex in playerManager.playOrder.indices && finalIndex != playerManager.playOrderCurrentPos) {
+                            // 離したら最も近い曲へ補間スナップし、完了後に再生/ジャンプしてラックを閉じる
+                            // （左側を押してその場で離しただけでは何もしない。再生/一時停止は右のシーク円盤だけ）
+                            widgetScope.launch {
+                                scrollAnim.animateTo(
+                                    targetValue = targetOffset,
+                                    animationSpec = tween(durationMillis = 200, easing = FastOutSlowInEasing)
+                                )
+                                if (shouldPlay) {
+                                    if (queueMode) {
+                                        if (finalIndex in playerManager.playOrder.indices) {
+                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            playerManager.playAtQueuePosition(finalIndex)
+                                        }
+                                    } else if (allApps.isNotEmpty() && finalIndex in allApps.indices) {
                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        playerManager.playAtQueuePosition(finalIndex)
+                                        onPlayTrack(allApps[finalIndex])
                                     }
-                                } else if (allApps.isNotEmpty() && finalIndex in allApps.indices) {
-                                    val selectedApp = allApps[finalIndex]
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    onPlayTrack(selectedApp)
                                 }
+                                isLeftInteracting = false
+                                scrollAnim.snapTo(0f)
+                                rawDragY = 0f
+                                onFocusTrackChanged(null)
                             }
-
-                            isLeftInteracting = false
-                            rawDragY = 0f
-                            onFocusTrackChanged(null)
                         }
                     }
                 }
         )
 
         if (isLeftInteracting && rackSize > 0) {
-            // --- 横倒しレコード盤の【位置固定】スロット型スタック描画 ---
-            // ディスクの位置(Y座標)は移動させず、Y位置は固定。スクロールすると各スロットのアートワーク中身のみ切り替わる
-            val relOffsets = listOf(-3, -2, -1, 0, 1, 2, 3)
+            // --- 横倒しレコード盤スタック ---
+            // スクロール位置（小数）に追従してディスクが滑らかに流れ、配置は左上から
+            // 下に向かって少しずつ右へずれるカスケード状にする
+            val virtualPos = rackCurrentIndex + scrollAnim.value
+            val firstIdx = maxOf(0, floor(virtualPos - 4f).toInt())
+            val lastIdx = minOf(rackSize - 1, ceil(virtualPos + 4f).toInt())
 
-            for (relOffset in relOffsets) {
-                val targetTrackIdx = focusedIndex + relOffset
-                if (targetTrackIdx !in 0 until rackSize) continue
+            for (targetTrackIdx in firstIdx..lastIdx) {
+                val relPos = targetTrackIdx - virtualPos
+                val gapOffset = sign(relPos) * 24f * min(1f, abs(relPos))
+                val yPosDp = discCenterYDp + (relPos * itemStepDp) + gapOffset
+                val isFocused = (targetTrackIdx == focusedIndex)
 
-                val gapOffset = when {
-                    relOffset < 0 -> -24f
-                    relOffset > 0 -> 24f
-                    else -> 0f
-                }
-                // Y座標の位置はピクセルドラッグによらず完全固定
-                val yPosDp = discCenterYDp + (relOffset * itemStepDp) + gapOffset
-                val isFocused = (relOffset == 0)
-
-                // 選択中以外のディスクは少し左へずらし、選択中が右へ出て見えるようにする
-                val xShiftDp = if (isFocused) 0f else -12f
+                // 上から下へ少しずつ右へずらす
+                val xShiftDp = relPos * 7f
 
                 Box(
                     modifier = Modifier
