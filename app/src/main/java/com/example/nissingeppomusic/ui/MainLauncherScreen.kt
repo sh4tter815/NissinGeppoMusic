@@ -60,6 +60,14 @@ private fun initialsOfLabel(label: String): Pair<String, String> {
     return Pair(japaneseGroupOf(firstChar), englishInitial)
 }
 
+/** カタカナをひらがなに寄せて小文字化する（五十音順ソート用）。MusicRepository.toHiragana と同じ変換 */
+private fun hiraganaSortKey(text: String): String {
+    return text.lowercase().map { ch ->
+        val code = ch.code
+        if (code in 0x30A1..0x30FA) (code - 0x60).toChar() else ch
+    }.joinToString("")
+}
+
 private fun japaneseGroupOf(ch: Char): String {
     val code = ch.code
     val hiraChar = when (code) {
@@ -506,16 +514,20 @@ fun MainLauncherScreen() {
                                     .mapIndexed { index, track -> track.copy(label = "${index + 1}. ${track.label}") }
                             }
                             selectedArtistFilter != null -> {
+                                // アーティストの全曲をアルバムに関係なく五十音順に並べ、曲名の頭文字でインデックスする
                                 allApps
                                     .filter { it.artist == selectedArtistFilter && !it.isHidden }
-                                    .sortedWith(compareBy({ it.album }, { if (it.trackNumber > 0) it.trackNumber else Int.MAX_VALUE }, { it.label }))
                                     .map { track ->
-                                        // アーティスト絞り込み後の曲一覧では、左ホイールのインデックスが
-                                        // 曲名の頭文字で効くように付け替える（通常の頭文字はアーティスト名基準のため）
+                                        // 頭文字は曲名基準に付け替える（通常の頭文字はアーティスト名基準のため）
                                         val (jp, en) = initialsOfLabel(if (track.customYomi.isNotBlank()) track.customYomi else track.label)
                                         if (track.initialJapanese == jp && track.initialEnglish == en) track
                                         else track.copy(initialJapanese = jp, initialEnglish = en)
                                     }
+                                    .sortedWith(compareBy(
+                                        { val i = INDEX_ITEMS.indexOf(it.initialJapanese); if (i < 0) INDEX_ITEMS.size else i },
+                                        { hiraganaSortKey(if (it.customYomi.isNotBlank()) it.customYomi else it.label) },
+                                        { it.label.lowercase() }
+                                    ))
                             }
                             searchQuery.isNotBlank() -> {
                                 allApps.filter {
