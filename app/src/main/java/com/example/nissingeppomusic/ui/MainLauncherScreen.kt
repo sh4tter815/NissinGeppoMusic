@@ -19,7 +19,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -29,6 +34,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -446,18 +452,33 @@ fun MainLauncherScreen() {
         }
     }
 
-    val onAppClick: (String) -> Unit = { songUri ->
+    // 曲タップ: 表示中の一覧をそのまま再生キューにして、タップした曲から再生する
+    val onAppClick: (String, List<AppInfo>) -> Unit = { songUri, contextList ->
         coroutineScope.launch {
-            val song = allApps.find { it.packageName == songUri }
+            val song = contextList.find { it.packageName == songUri }
+                ?: allApps.find { it.packageName == songUri }
             if (song != null) {
-                musicPlayerManager.playSong(
-                    uriString = song.packageName,
-                    title = song.label,
-                    artist = song.artist,
-                    album = song.album,
-                    albumArt = song.albumArt,
-                    filePath = song.filePath
-                )
+                val queueApps = contextList.filter {
+                    !it.packageName.startsWith("album::") && !it.packageName.startsWith("artist::")
+                }
+                val startIndex = queueApps.indexOfFirst { it.packageName == songUri }
+                if (queueApps.size > 1 && startIndex >= 0) {
+                    musicPlayerManager.playQueue(
+                        queueApps.map {
+                            MusicPlayerManager.QueueItem(it.packageName, it.label, it.artist, it.album, it.albumArt, it.filePath)
+                        },
+                        startIndex
+                    )
+                } else {
+                    musicPlayerManager.playSong(
+                        uriString = song.packageName,
+                        title = song.label,
+                        artist = song.artist,
+                        album = song.album,
+                        albumArt = song.albumArt,
+                        filePath = song.filePath
+                    )
+                }
                 changePageWithTransition(1)
             }
         }
@@ -586,14 +607,25 @@ fun MainLauncherScreen() {
                             discRadiusDp = disc1RadiusDp,
                             accentColor = accentColor,
                             onPlayTrack = { song ->
-                                musicPlayerManager.playSong(
-                                    uriString = song.packageName,
-                                    title = song.label,
-                                    artist = song.artist,
-                                    album = song.album,
-                                    albumArt = song.albumArt,
-                                    filePath = song.filePath
-                                )
+                                // レコードラックの一覧（全曲）をキューにして選んだ曲から再生
+                                val startIndex = allApps.indexOfFirst { it.packageName == song.packageName }
+                                if (allApps.size > 1 && startIndex >= 0) {
+                                    musicPlayerManager.playQueue(
+                                        allApps.map {
+                                            MusicPlayerManager.QueueItem(it.packageName, it.label, it.artist, it.album, it.albumArt, it.filePath)
+                                        },
+                                        startIndex
+                                    )
+                                } else {
+                                    musicPlayerManager.playSong(
+                                        uriString = song.packageName,
+                                        title = song.label,
+                                        artist = song.artist,
+                                        album = song.album,
+                                        albumArt = song.albumArt,
+                                        filePath = song.filePath
+                                    )
+                                }
                             },
                             onFocusTrackChanged = { focusedTrackPreview = it }
                         )
@@ -726,7 +758,7 @@ fun MainLauncherScreen() {
                             } else if (app.packageName.startsWith("artist::")) {
                                 selectedArtistFilter = app.packageName.removePrefix("artist::")
                             } else {
-                                onAppClick(app.packageName)
+                                onAppClick(app.packageName, displayedApps)
                             }
                         },
                         onLongClick = { app ->
@@ -826,7 +858,7 @@ fun MainLauncherScreen() {
                                 }
                                 editingSelectedPackages = updated
                             } else {
-                                onAppClick(app.packageName)
+                                onAppClick(app.packageName, discApps)
                             }
                         },
                         onLongClick = { app ->
@@ -885,6 +917,69 @@ fun MainLauncherScreen() {
                     .padding(bottom = bottomPaddingDp + 4.dp)
                     .zIndex(250f)
             )
+        }
+
+        // --- ホーム画面のみ: リピート／シャッフルボタンを下ダイヤルの円周（右下）に沿って配置 ---
+        // ダイヤルの円: 中心は帯の下端から99dp下、半径165dp。円周上の点にボタンの中心を合わせる
+        if (currentLauncherPage == 1) {
+            val dialRadiusForButtons = 165f
+            val dialCenterBelowBand = 99f
+            // リピート（円周の -54° の位置）
+            run {
+                val rad = -54f * (PI.toFloat() / 180f)
+                val dx = dialRadiusForButtons * cos(rad)
+                val dy = dialCenterBelowBand + dialRadiusForButtons * sin(rad) + 20f
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = bottomPaddingDp + 4.dp)
+                        .offset(x = dx.dp, y = dy.dp)
+                        .size(40.dp)
+                        .zIndex(260f)
+                        .clip(CircleShape)
+                        .background(Color(0xFF0B101D).copy(alpha = 0.45f))
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            musicPlayerManager.cycleRepeatMode()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (musicPlayerManager.repeatMode == 2) Icons.Default.RepeatOne else Icons.Default.Repeat,
+                        contentDescription = "リピート",
+                        tint = if (musicPlayerManager.repeatMode != 0) accentColor else Color.White.copy(alpha = 0.55f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            // シャッフル（円周の -39° の位置）
+            run {
+                val rad = -39f * (PI.toFloat() / 180f)
+                val dx = dialRadiusForButtons * cos(rad)
+                val dy = dialCenterBelowBand + dialRadiusForButtons * sin(rad) + 20f
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = bottomPaddingDp + 4.dp)
+                        .offset(x = dx.dp, y = dy.dp)
+                        .size(40.dp)
+                        .zIndex(260f)
+                        .clip(CircleShape)
+                        .background(Color(0xFF0B101D).copy(alpha = 0.45f))
+                        .clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            musicPlayerManager.toggleShuffle()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Shuffle,
+                        contentDescription = "シャッフル",
+                        tint = if (musicPlayerManager.shuffleEnabled) accentColor else Color.White.copy(alpha = 0.55f),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
         }
 
         // --- タッチ操作パネル (左半分: アプリ一覧(2) & フォルダ(3)) ---
