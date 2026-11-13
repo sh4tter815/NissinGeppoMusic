@@ -6,6 +6,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -13,7 +14,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -28,6 +31,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,7 +48,8 @@ import kotlin.math.sin
  * 一番上（真上）に来たページが選択状態。円盤の上には現在のページ名を小さく表示する。
  * 操作はスワイプ式: 指を少し動かすと1ストップ分だけ進み／戻り、その間の回転は
  * アニメーションだけで補間する（指に追従する自由回転はしない）。
- * 右スワイプで次のストップ、左スワイプで前のストップ。離した時点でページが切り替わる。
+ * 右スワイプで前のストップ、左スワイプで次のストップ。離した時点でページが切り替わる。
+ * 設定の「スクロール方向の反転」がONのときは向きが逆になる（他の円盤と共通）。
  */
 @Composable
 fun PeekPageDial(
@@ -54,6 +59,10 @@ fun PeekPageDial(
     modifier: Modifier = Modifier
 ) {
     val view = LocalView.current
+    // すべてのスクロールに共通の反転オプション（リスト円盤と同じ設定を読む）
+    val context = LocalContext.current
+    val prefManager = remember { com.example.nissingeppomusic.data.AppPreferenceManager(context) }
+    val isReverseScroll = prefManager.isReverseScroll()
 
     // 押している間はフォルダ選択の円盤（MechanicalDisc）と同じく1.30倍に拡大し、指で隠れないようにする
     var isPressed by remember { mutableStateOf(false) }
@@ -101,8 +110,7 @@ fun PeekPageDial(
             .height(72.dp)
     ) {
         val discCenterXDp = maxWidth.value / 2f
-        // ページ名ラベルを円盤の上に置くぶん、円盤は少し下げて表示する
-        val discCenterYDp = 16f + discRadiusDp
+        val discCenterYDp = 6f + discRadiusDp
 
         Box(
             modifier = Modifier
@@ -139,20 +147,24 @@ fun PeekPageDial(
                                 lastPos = change.position
                                 accumulatedDx += dx
 
-                                // 右スワイプで次のストップ、左スワイプで前のストップへ。
+                                // 右スワイプで前のストップ、左スワイプで次のストップへ
+                                // （共通の反転オプションがONのときは逆になる）。
                                 // 回転そのものは LaunchedEffect(targetStop) のアニメーションが行う
+                                val stepForRight = if (isReverseScroll) 1 else -1
                                 var stepped = false
                                 while (accumulatedDx >= stepThresholdPx) {
                                     accumulatedDx -= stepThresholdPx
-                                    if (targetStop < totalPages - 1) {
-                                        targetStop += 1
+                                    val next = targetStop + stepForRight
+                                    if (next in 0 until totalPages) {
+                                        targetStop = next
                                         stepped = true
                                     }
                                 }
                                 while (accumulatedDx <= -stepThresholdPx) {
                                     accumulatedDx += stepThresholdPx
-                                    if (targetStop > 0) {
-                                        targetStop -= 1
+                                    val next = targetStop - stepForRight
+                                    if (next in 0 until totalPages) {
+                                        targetStop = next
                                         stepped = true
                                     }
                                 }
@@ -225,14 +237,16 @@ fun PeekPageDial(
                 }
             }
 
-            // 円盤の上に現在のページ名を小さく表示
+            // 現在のページ名を、円の外側（ダイヤルの上）に小さくフローティング表示
             Text(
                 text = stopLabels[targetStop],
-                color = Color.White.copy(alpha = 0.85f),
+                color = Color.White.copy(alpha = 0.9f),
                 fontSize = 11.sp,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .offset(y = 1.dp)
+                    .offset(y = (-34).dp)
+                    .background(Color.Black.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 8.dp, vertical = 2.dp)
             )
         }
     }
