@@ -56,6 +56,14 @@ class MusicPlayerManager(context: Context) {
         private set
     var currentQueueIndex by mutableStateOf(-1)
         private set
+
+    // 実際の再生順（シャッフル時はシャッフル後の順序）で並べたキュー。ラック表示用
+    var playOrder by mutableStateOf<List<QueueItem>>(emptyList())
+        private set
+    var playOrderIndices by mutableStateOf<List<Int>>(emptyList())
+        private set
+    var playOrderCurrentPos by mutableStateOf(0)
+        private set
     // リピート: 0=オフ, 1=全曲リピート, 2=1曲リピート
     var repeatMode by mutableStateOf(0)
         private set
@@ -91,6 +99,11 @@ class MusicPlayerManager(context: Context) {
                 if (idx >= 0) {
                     applyQueueItem(queue[idx], idx)
                 }
+                refreshPlayOrder()
+            }
+
+            override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                refreshPlayOrder()
             }
         })
 
@@ -173,12 +186,75 @@ class MusicPlayerManager(context: Context) {
             else -> Player.REPEAT_MODE_OFF
         }
         prefManager.setRepeatMode(repeatMode)
+        refreshPlayOrder()
     }
 
     fun toggleShuffle() {
         shuffleEnabled = !shuffleEnabled
         exoPlayer.shuffleModeEnabled = shuffleEnabled
         prefManager.setShuffleEnabled(shuffleEnabled)
+        refreshPlayOrder()
+    }
+
+    /**
+     * 実際の再生順（シャッフル時はシャッフル後の順序）でキューを並べ直す。
+     * プレイヤーのタイムラインを前後に辿って、現在曲を中心に再生順リストを作る。
+     * 全曲リピート時は端で折り返す。
+     */
+    fun refreshPlayOrder() {
+        if (queue.isEmpty()) {
+            playOrder = emptyList()
+            playOrderIndices = emptyList()
+            playOrderCurrentPos = 0
+            return
+        }
+        try {
+            val timeline = exoPlayer.currentTimeline
+            val currentIdx = exoPlayer.currentMediaItemIndex
+            if (timeline.isEmpty || currentIdx !in queue.indices) {
+                playOrder = queue
+                playOrderIndices = queue.indices.toList()
+                playOrderCurrentPos = currentIdx.coerceIn(0, queue.size - 1)
+                return
+            }
+            val shuffle = shuffleEnabled
+            // 全曲リピート時は列挙も折り返す（現在曲に戻ってきたら止めるので重複しない）
+            val repeatForWalk = if (repeatMode == 1) Player.REPEAT_MODE_ALL else Player.REPEAT_MODE_OFF
+
+            val prevList = mutableListOf<Int>()
+            var p = currentIdx
+            while (prevList.size < queue.size - 1) {
+                val prev = timeline.getPreviousWindowIndex(p, repeatForWalk, shuffle)
+                if (prev == -1 || prev == currentIdx) break
+                prevList.add(prev)
+                p = prev
+            }
+            val nextList = mutableListOf<Int>()
+            var n = currentIdx
+            while (nextList.size < queue.size - 1) {
+                val next = timeline.getNextWindowIndex(n, repeatForWalk, shuffle)
+                if (next == -1 || next == currentIdx) break
+                nextList.add(next)
+                n = next
+            }
+            val order = prevList.reversed() + listOf(currentIdx) + nextList
+            playOrderIndices = order
+            playOrder = order.map { queue[it] }
+            playOrderCurrentPos = prevList.size
+        } catch (e: Exception) {
+            playOrder = queue
+            playOrderIndices = queue.indices.toList()
+            playOrderCurrentPos = currentQueueIndex.coerceIn(0, queue.size - 1)
+        }
+    }
+
+    // ラックで選んだ再生順ポジションへジャンプして再生する
+    fun playAtQueuePosition(position: Int) {
+        val mediaIdx = playOrderIndices.getOrNull(position) ?: return
+        try {
+            exoPlayer.seekTo(mediaIdx, 0L)
+            exoPlayer.play()
+        } catch (_: Exception) {}
     }
 
     private fun formatAudioFileInfo(filePath: String, uriString: String): String {
