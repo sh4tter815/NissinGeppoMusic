@@ -25,7 +25,9 @@ fun WallpaperBackground(
     customPath: String? = null,
     updateKey: Long = 0L,
     isHome: Boolean = false,
-    currentAlbumArt: Bitmap? = null
+    currentAlbumArt: Bitmap? = null,
+    // アートワーク連動カラーON時に、アートワークから抽出した背景色でオーバーレイを染める
+    dynamicBackground: Color? = null
 ) {
     val context = LocalContext.current
     val prefManager = remember { AppPreferenceManager(context) }
@@ -75,7 +77,7 @@ fun WallpaperBackground(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xFF0B101D).copy(alpha = 0.55f))
+                    .background((dynamicBackground ?: Color(0xFF0B101D)).copy(alpha = 0.55f))
             )
         } else if (backgroundBitmap != null) {
             Image(
