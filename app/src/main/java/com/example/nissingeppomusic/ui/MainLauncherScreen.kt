@@ -275,6 +275,9 @@ fun MainLauncherScreen() {
     }
     val accentColor = if (matchArtwork) artworkAccent ?: manualAccentColor else manualAccentColor
 
+    // ラック（左円のキュー表示）表示中は、右円と下ダイヤルを隠す
+    var isRackShown by remember { mutableStateOf(false) }
+
     var showWelcomeTutorial by remember { mutableStateOf(false) }
     var showIndexTutorial by remember { mutableStateOf(false) }
     var showHideTutorial by remember { mutableStateOf(false) }
@@ -583,15 +586,17 @@ fun MainLauncherScreen() {
                         )
                     }
 
-                    MusicSeekBarDisc(
-                        modifier = Modifier.fillMaxSize(),
-                        playerManager = musicPlayerManager,
-                        focusedTrack = focusedTrackPreview,
-                        discCenterXDp = animatedDisc2CenterX,
-                        discCenterYDp = disc2CenterY,
-                        discRadiusDp = disc2RadiusDp,
-                        accentColor = accentColor
-                    )
+                    if (!isRackShown) {
+                        MusicSeekBarDisc(
+                            modifier = Modifier.fillMaxSize(),
+                            playerManager = musicPlayerManager,
+                            focusedTrack = focusedTrackPreview,
+                            discCenterXDp = animatedDisc2CenterX,
+                            discCenterYDp = disc2CenterY,
+                            discRadiusDp = disc2RadiusDp,
+                            accentColor = accentColor
+                        )
+                    }
 
                     Box(
                         modifier = Modifier
@@ -627,7 +632,8 @@ fun MainLauncherScreen() {
                                     )
                                 }
                             },
-                            onFocusTrackChanged = { focusedTrackPreview = it }
+                            onFocusTrackChanged = { focusedTrackPreview = it },
+                            onRackVisibilityChanged = { isRackShown = it }
                         )
                     }
                 }
@@ -872,7 +878,8 @@ fun MainLauncherScreen() {
             }
         }
 
-                // --- 画面下部 ページ切り替え (ボタン式 / ダイヤル式を設定で切替) ---
+                // --- 画面下部 ページ切り替え (ボタン式 / ダイヤル式を設定で切替、ラック表示中は隠す) ---
+        if (!isRackShown) {
         if (repo.prefManager.getPageSwitchStyle() == "dial") {
             // ダイヤルは6ストップ: 0=設定, 1=ホーム(再生中), 2=曲名, 3=アーティスト, 4=アルバム, 5=プレイリスト(フォルダ)
             PeekPageDial(
@@ -918,11 +925,12 @@ fun MainLauncherScreen() {
                     .zIndex(250f)
             )
         }
+        }
 
         // --- ホーム画面のみ: リピート／シャッフルボタンを下ダイヤルの円周（右下）の外側に沿って配置 ---
         // ダイヤルの円: 中心は帯の下端から99dp下、半径165dp。
         // ボタンは輪郭の上に乗せず、少し離して外側（輪郭+ボタン半径+余白）に中心を置く
-        if (currentLauncherPage == 1) {
+        if (currentLauncherPage == 1 && !isRackShown) {
             val dialRadiusForButtons = 192f
             val dialCenterBelowBand = 99f
             // リピート（円周の -54° の位置）
