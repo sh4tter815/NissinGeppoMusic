@@ -233,12 +233,16 @@ fun SettingsScreen(
     repo: AppRepository,
     onBack: () -> Unit = {},
     onChanged: () -> Unit = {},
-        onLibraryUpdated: () -> Unit = {}
+        onLibraryUpdated: () -> Unit = {},
+    // 画面側で算出された現在のアクセント色（アートワーク連動時はその抽出色）
+    accentColor: Color = Color(0xFFE53935)
 ) {
     val context = LocalContext.current
     var accentHex by remember { mutableStateOf(repo.prefManager.getAccentColorHex()) }
     var matchArtwork by remember { mutableStateOf(repo.prefManager.isMatchArtworkColor()) }
-    val currentAccentColor = parseHexColor(accentHex)
+    // 配色をアートワークに合わせるONのときは、画面側で算出されたアートワーク由来の
+    // アクセント色（accentColor引数）を設定UIの色にも使う。OFFのときは手動色
+    val currentAccentColor = if (matchArtwork) accentColor else parseHexColor(accentHex)
 
     var iconSize by remember { mutableFloatStateOf(repo.prefManager.getAppDiscIconSizeDp()) }
     var textSize by remember { mutableFloatStateOf(repo.prefManager.getAppDiscTextSizeSp()) }
