@@ -385,20 +385,8 @@ fun MusicVinylWidget(
                             contentDescription = null,
                             modifier = Modifier.fillMaxSize()
                         )
-                    } else {
-                        Canvas(modifier = Modifier.fillMaxSize()) {
-                            val center = Offset(size.width / 2f, size.height / 2f)
-                            drawCircle(
-                                brush = Brush.radialGradient(
-                                    colors = listOf(accentColor, accentColor.copy(alpha = 0.6f)),
-                                    center = center,
-                                    radius = size.width / 2f
-                                ),
-                                radius = size.width / 2f,
-                                center = center
-                            )
-                        }
                     }
+                    // アートなし（未選択）時は何も塗らない。輪郭だけが残る
                 }
             }
         }
