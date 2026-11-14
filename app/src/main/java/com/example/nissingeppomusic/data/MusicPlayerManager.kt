@@ -97,6 +97,7 @@ class MusicPlayerManager(context: Context) {
                 val idx = queue.indexOfFirst { it.uriString == item.mediaId }
                 if (idx >= 0) {
                     applyQueueItem(queue[idx], idx)
+                    moveArtworkTo(idx)
                 }
                 refreshPlayOrder()
             }
@@ -135,6 +136,60 @@ class MusicPlayerManager(context: Context) {
         progressJob = null
     }
 
+    /** アートワーク付きアートワークを埋め込むのは常に1曲だけにするための管理 */
+    private var artworkItemIndex: Int = -1
+
+    private fun buildMediaItem(item: QueueItem, withArtwork: Boolean): MediaItem {
+        val metadata = MediaMetadata.Builder()
+            .setTitle(item.title)
+            .setArtist(item.artist)
+            .setAlbumTitle(item.album)
+        if (withArtwork) {
+            // 通知やランチャーの円盤にジャケットを出すため、再生中の曲にだけ
+            // アートワークをメタデータへ埋め込む（640px・JPEG88）
+            item.albumArt?.let { art ->
+                try {
+                    val scale = 640f / maxOf(art.width, art.height).coerceAtLeast(1)
+                    val small = if (scale < 1f) {
+                        Bitmap.createScaledBitmap(
+                            art,
+                            (art.width * scale).toInt().coerceAtLeast(1),
+                            (art.height * scale).toInt().coerceAtLeast(1),
+                            true
+                        )
+                    } else {
+                        art
+                    }
+                    val stream = ByteArrayOutputStream()
+                    small.compress(Bitmap.CompressFormat.JPEG, 88, stream)
+                    metadata.setArtworkData(stream.toByteArray(), MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                } catch (_: Exception) {
+                }
+            }
+        }
+        return MediaItem.Builder()
+            .setUri(Uri.parse(item.uriString))
+            .setMediaId(item.uriString)
+            .setMediaMetadata(metadata.build())
+            .build()
+    }
+
+    /** 曲が切り替わったら、アートワーク埋め込みを新しい再生曲へ付け替える */
+    private fun moveArtworkTo(index: Int) {
+        try {
+            if (artworkItemIndex == index) return
+            val prev = artworkItemIndex
+            if (prev in queue.indices) {
+                exoPlayer.replaceMediaItem(prev, buildMediaItem(queue[prev], withArtwork = false))
+            }
+            if (index in queue.indices) {
+                exoPlayer.replaceMediaItem(index, buildMediaItem(queue[index], withArtwork = true))
+            }
+            artworkItemIndex = index
+        } catch (_: Exception) {
+        }
+    }
+
     private fun applyQueueItem(item: QueueItem, index: Int) {
         currentQueueIndex = index
         currentSongUri = item.uriString
@@ -152,38 +207,12 @@ class MusicPlayerManager(context: Context) {
         try {
             queue = items
             val start = startIndex.coerceIn(0, items.size - 1)
-            val mediaItems = items.map { item ->
-                val metadata = MediaMetadata.Builder()
-                    .setTitle(item.title)
-                    .setArtist(item.artist)
-                    .setAlbumTitle(item.album)
-                // 通知やランチャーの円盤にジャケットを出すため、アートワークをメタデータへ埋め込む
-                // （640px・JPEG88: 160pxだと円盤で大きく引き伸ばされて粗く見えるため高画質化）
-                item.albumArt?.let { art ->
-                    try {
-                        val scale = 640f / maxOf(art.width, art.height).coerceAtLeast(1)
-                        val small = if (scale < 1f) {
-                            Bitmap.createScaledBitmap(
-                                art,
-                                (art.width * scale).toInt().coerceAtLeast(1),
-                                (art.height * scale).toInt().coerceAtLeast(1),
-                                true
-                            )
-                        } else {
-                            art
-                        }
-                        val stream = ByteArrayOutputStream()
-                        small.compress(Bitmap.CompressFormat.JPEG, 88, stream)
-                        metadata.setArtworkData(stream.toByteArray(), MediaMetadata.PICTURE_TYPE_FRONT_COVER)
-                    } catch (_: Exception) {
-                    }
-                }
-                MediaItem.Builder()
-                    .setUri(Uri.parse(item.uriString))
-                    .setMediaId(item.uriString)
-                    .setMediaMetadata(metadata.build())
-                    .build()
+            // アートワーク画像は「再生中の1曲」にだけ埋め込む。全曲に埋め込むと
+            // キュー全体が巨大化し、Bluetooth側がキュー取得で落ちる（BadParcelable）ため
+            val mediaItems = items.mapIndexed { index, item ->
+                buildMediaItem(item, withArtwork = index == start)
             }
+            artworkItemIndex = start
             exoPlayer.setMediaItems(mediaItems, start, 0L)
             exoPlayer.prepare()
             exoPlayer.play()
