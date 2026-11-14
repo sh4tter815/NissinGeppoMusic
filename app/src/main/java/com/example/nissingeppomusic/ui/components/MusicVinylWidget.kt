@@ -9,6 +9,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.*
@@ -387,6 +388,15 @@ fun MusicVinylWidget(
                         )
                     }
                     // アートなし（未選択）時は何も塗らない。輪郭だけが残る
+
+                    // 再生の読み込み中はディスク中央にぐるぐるを出す
+                    if (playerManager.isBuffering) {
+                        CircularProgressIndicator(
+                            color = accentColor,
+                            strokeWidth = 3.dp,
+                            modifier = Modifier.size(44.dp)
+                        )
+                    }
                 }
             }
         }
