@@ -203,6 +203,8 @@ class AppPreferenceManager(private val context: Context) {
     fun setShuffleEnabled(enabled: Boolean) = prefs.edit().putBoolean("shuffle_enabled", enabled).apply()
 
     // ホーム画面背景の不透明度 (暗さ)
+    fun getHomeDiscLayout(): String = prefs.getString("home_disc_layout", "artwork") ?: "artwork"
+    fun setHomeDiscLayout(layout: String) { prefs.edit().putString("home_disc_layout", layout).apply() }
     fun getHomeWallpaperAlpha(): Float = prefs.getFloat("home_wallpaper_alpha", 0.35f)
     fun setHomeWallpaperAlpha(alpha: Float) = prefs.edit().putFloat("home_wallpaper_alpha", alpha).apply()
 
