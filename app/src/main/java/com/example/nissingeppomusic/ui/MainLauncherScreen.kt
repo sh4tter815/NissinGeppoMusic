@@ -293,6 +293,7 @@ fun MainLauncherScreen() {
     // アートワーク連動カラー: 設定でONのとき、再生中の曲のアートワークから
     // アクセント色（前景）と背景色を抽出してテーマカラーにする
     var matchArtwork by remember { mutableStateOf(repo.prefManager.isMatchArtworkColor()) }
+    var homeDiscLayout by remember { mutableStateOf(repo.prefManager.getHomeDiscLayout()) }
     var artworkAccent by remember { mutableStateOf<Color?>(null) }
     var artworkBackground by remember { mutableStateOf<Color?>(null) }
     LaunchedEffect(musicPlayerManager.currentAlbumArt, matchArtwork) {
@@ -409,6 +410,7 @@ fun MainLauncherScreen() {
     LaunchedEffect(currentLauncherPage) {
         accentHex = repo.prefManager.getAccentColorHex()
         matchArtwork = repo.prefManager.isMatchArtworkColor()
+        homeDiscLayout = repo.prefManager.getHomeDiscLayout()
         if (currentLauncherPage == 1) {
             if (!repo.prefManager.isFirstWelcomeTutorialShown()) {
                 showWelcomeTutorial = true
@@ -509,7 +511,10 @@ fun MainLauncherScreen() {
     val disc1RadiusDp = 165f
     val disc1CenterXNormal = -80f
     val disc1CenterXHome = 15f // ホーム画面ではさらに右へ寄せてジャケットを見やすく
-    val activeDisc1CenterX = if (currentLauncherPage == 1) disc1CenterXHome else disc1CenterXNormal
+    // レイアウト設定: 大きめ（常時）／従来（常時）／自動（再生中だけ大きめ、停止すると引っ込む）
+    val isBigDiscLayout = currentLauncherPage == 1 &&
+        (homeDiscLayout == "artwork" || (homeDiscLayout == "auto" && musicPlayerManager.isPlaying))
+    val activeDisc1CenterX = if (isBigDiscLayout) disc1CenterXHome else disc1CenterXNormal
     val disc1CenterY = screenHeightDp * 0.50f
 
     val disc2RadiusDp = 165f
