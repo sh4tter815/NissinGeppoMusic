@@ -241,13 +241,16 @@ fun MusicVinylWidget(
 
                             if (stopArmed) {
                                 // 「停止」が表示されたまま離した: 再生を止めて未選択に戻り、ラックを閉じる
+                                // （snapTo等のsuspend呼び出しは制限スコープ内では使えないためlaunch経由にする）
                                 stopArmed = false
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                 playerManager.stopPlayback()
-                                isLeftInteracting = false
-                                scrollAnim.snapTo(0f)
-                                rackTargetOffset = 0
-                                onFocusTrackChanged(null)
+                                widgetScope.launch {
+                                    isLeftInteracting = false
+                                    scrollAnim.snapTo(0f)
+                                    rackTargetOffset = 0
+                                    onFocusTrackChanged(null)
+                                }
                             } else {
                             // ステップアニメーションが目標へ到達したら再生/ジャンプしてラックを閉じる
                             // （左側を押してその場で離しただけでは何もしない。再生/一時停止は右のシーク円盤だけ）
