@@ -157,10 +157,11 @@ class MusicPlayerManager(context: Context) {
                     .setTitle(item.title)
                     .setArtist(item.artist)
                     .setAlbumTitle(item.album)
-                // 通知にジャケットを出すため、小さくしたアートワークをメタデータへ埋め込む
+                // 通知やランチャーの円盤にジャケットを出すため、アートワークをメタデータへ埋め込む
+                // （640px・JPEG88: 160pxだと円盤で大きく引き伸ばされて粗く見えるため高画質化）
                 item.albumArt?.let { art ->
                     try {
-                        val scale = 160f / maxOf(art.width, art.height).coerceAtLeast(1)
+                        val scale = 640f / maxOf(art.width, art.height).coerceAtLeast(1)
                         val small = if (scale < 1f) {
                             Bitmap.createScaledBitmap(
                                 art,
@@ -172,7 +173,7 @@ class MusicPlayerManager(context: Context) {
                             art
                         }
                         val stream = ByteArrayOutputStream()
-                        small.compress(Bitmap.CompressFormat.JPEG, 75, stream)
+                        small.compress(Bitmap.CompressFormat.JPEG, 88, stream)
                         metadata.setArtworkData(stream.toByteArray(), MediaMetadata.PICTURE_TYPE_FRONT_COVER)
                     } catch (_: Exception) {
                     }
