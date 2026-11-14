@@ -447,7 +447,11 @@ class MusicRepository(private val context: Context) {
         val rec = cachedRecords?.firstOrNull { it.filePath == filePath || it.uriString == uriString } ?: return null
         val key = rec.artKey()
         hiResArtCache.get(key)?.let { return it }
-        val decoded = decodeArtFromSource(rec.albumId, rec.filePath) ?: return null
+        val raw = decodeArtFromSource(rec.albumId, rec.filePath) ?: return null
+        // getPixel等の画素アクセスに備え、HARDWAREビットマップはソフトウェアへ変換する
+        val decoded = if (raw.config == Bitmap.Config.HARDWARE) {
+            raw.copy(Bitmap.Config.ARGB_8888, false) ?: raw
+        } else raw
         val maxDim = maxOf(decoded.width, decoded.height)
         val scaled = if (maxDim > 1000) {
             val ratio = 1000f / maxDim
@@ -466,7 +470,11 @@ class MusicRepository(private val context: Context) {
         val albumArtUri = ContentUris.withAppendedId(Uri.parse("content://media/external/audio/albumart"), albumId)
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, albumArtUri))
+                // ALLOCATOR_SOFTWARE必須: 既定のHARDWAREビットマップはgetPixel()できず、
+                // 配色抽出（extractArtworkColors）でクラッシュする
+                ImageDecoder.decodeBitmap(ImageDecoder.createSource(context.contentResolver, albumArtUri)) { decoder, _, _ ->
+                    decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                }
             } else {
                 @Suppress("DEPRECATION")
                 MediaStore.Images.Media.getBitmap(context.contentResolver, albumArtUri)
