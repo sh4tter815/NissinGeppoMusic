@@ -340,12 +340,10 @@ fun MainLauncherScreen() {
     // 選曲されたら、その曲の原画（最大1000px）を読み込んでホーム表示を高画質化する。
     // 一覧やラックのアートは通常キャッシュのまま（軽さ優先）、ホームだけ原画に差し替わる
     LaunchedEffect(musicPlayerManager.currentSongUri) {
-        val uri = musicPlayerManager.currentSongUri
-        if (uri.isNotBlank()) {
-            val path = musicPlayerManager.queue.getOrNull(musicPlayerManager.currentQueueIndex)?.filePath ?: ""
-            val hq = withContext(Dispatchers.IO) { repo.loadOriginalArtwork(path, uri) }
-            if (hq != null) musicPlayerManager.upgradeCurrentArtwork(uri, hq)
-        }
+        val uri = musicPlayerManager.currentSongUri?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        val path = musicPlayerManager.queue.getOrNull(musicPlayerManager.currentQueueIndex)?.filePath ?: ""
+        val hq = withContext(Dispatchers.IO) { repo.loadOriginalArtwork(path, uri) }
+        if (hq != null) musicPlayerManager.upgradeCurrentArtwork(uri, hq)
     }
 
     // ラック（左円のキュー表示）表示中は、右円と下ダイヤルを隠す
