@@ -250,6 +250,7 @@ fun SettingsScreen(
     var stepAngle by remember { mutableFloatStateOf(repo.prefManager.getAppDiscStepAngle()) }
     var backgroundPath by remember { mutableStateOf(repo.prefManager.getCustomBackgroundPath()) }
     var homeDiscLayout by remember { mutableStateOf(repo.prefManager.getHomeDiscLayout()) }
+    var liquidBackground by remember { mutableStateOf(repo.prefManager.isLiquidBackgroundEnabled()) }
     var wallpaperAlpha by remember { mutableFloatStateOf(repo.prefManager.getHomeWallpaperAlpha()) }
     var showPasscodeChangeDialog by remember { mutableStateOf(false) }
     var newPasscodeField by remember { mutableStateOf(repo.prefManager.getPasscode()) }
@@ -778,6 +779,27 @@ fun SettingsScreen(
                                                             "「自動」では、再生中だけアートワーク側の円が大きくなり、停止すると従来の位置に戻ります",
                                                             color = Color.Gray,
                                                             fontSize = 12.sp
+                                                        )
+                                                    }
+
+                                                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Column(modifier = Modifier.weight(1f)) {
+                                                            Text("液体グラデーション背景", color = Color.White, fontSize = 14.sp)
+                                                            Text("未選択のとき背景でグラデーションがゆっくり動きます。再生中（配色連動ON時）はアートワーク背景の下にも薄く重なります", color = Color.Gray, fontSize = 12.sp)
+                                                        }
+                                                        Switch(
+                                                            checked = liquidBackground,
+                                                            onCheckedChange = {
+                                                                liquidBackground = it
+                                                                repo.prefManager.setLiquidBackgroundEnabled(it)
+                                                                onChanged()
+                                                            },
+                                                            colors = switchColors
                                                         )
                                                     }
                                                 }
