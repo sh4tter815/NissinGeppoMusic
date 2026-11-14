@@ -1,9 +1,11 @@
 # 🎵 日進月歩ミュージック (Nissin Geppo Music)
 
 <p align="center">
-  <img src="images/screenshot_music_1.jpg" width="200" alt="再生画面">
-  <img src="images/screenshot_music_2.jpg" width="200" alt="ライブラリ">
-  <img src="images/screenshot_music_3.jpg" width="200" alt="再生画面（レシートフォント）">
+  <img src="images/screenshot_music_1.jpg" width="160">
+    <img src="images/screenshot_music_2.jpg" width="160">
+      <img src="images/screenshot_music_3.jpg" width="160">
+        <img src="images/screenshot_music_4.jpg" width="160">
+          <img src="images/screenshot_music_5.jpg" width="160">
 </p>
 
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.0%2B-blue.svg)](https://kotlinlang.org)
