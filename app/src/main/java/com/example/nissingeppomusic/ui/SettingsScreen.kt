@@ -12,6 +12,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -82,29 +84,29 @@ fun SimpleTickSlider(
     var widthPx by remember { mutableFloatStateOf(1f) }
     val stepCount = steps + 1
     val fraction = ((value - valueRange.start) / (valueRange.endInclusive - valueRange.start)).coerceIn(0f, 1f)
+    val updateVal: (Float) -> Unit = { xPx ->
+        val f = (xPx / widthPx).coerceIn(0f, 1f)
+        val stepIdx = (f * stepCount).roundToInt().coerceIn(0, stepCount)
+        onValueChange(valueRange.start + stepIdx * ((valueRange.endInclusive - valueRange.start) / stepCount))
+    }
 
     Box(
         modifier = modifier
             .fillMaxWidth()
             .height(36.dp)
             .onGloballyPositioned { widthPx = it.size.width.toFloat().coerceAtLeast(1f) }
+            // タップと横ドラッグだけをスライダーが受け取り、縦ドラッグは親のスクロールに渡す
             .pointerInput(valueRange, steps) {
-                awaitPointerEventScope {
-                    while (true) {
-                        val down = awaitFirstDown(requireUnconsumed = false)
-                        val updateVal = { xPx: Float ->
-                            val f = (xPx / widthPx).coerceIn(0f, 1f)
-                            val stepIdx = (f * stepCount).roundToInt().coerceIn(0, stepCount)
-                            val newVal = valueRange.start + stepIdx * ((valueRange.endInclusive - valueRange.start) / stepCount)
-                            onValueChange(newVal)
-                        }
-                        updateVal(down.position.x)
-                        drag(down.id) { change ->
-                            change.consume()
-                            updateVal(change.position.x)
-                        }
+                detectTapGestures { offset -> updateVal(offset.x) }
+            }
+            .pointerInput(valueRange, steps) {
+                detectHorizontalDragGestures(
+                    onDragStart = { offset -> updateVal(offset.x) },
+                    onHorizontalDrag = { change, _ ->
+                        change.consume()
+                        updateVal(change.position.x)
                     }
-                }
+                )
             },
         contentAlignment = Alignment.Center
     ) {
@@ -419,6 +421,7 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = 20.dp, vertical = 12.dp),
+                contentPadding = PaddingValues(bottom = 240.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 if (selectedCategory == null) {
