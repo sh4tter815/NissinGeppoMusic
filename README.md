@@ -2,6 +2,7 @@
 
 <p align="center">
   <img src="images/screenshot_music_1.jpg" width="160">
+    <img src="images/screenshot_music_6.jpg" width="160">
     <img src="images/screenshot_music_2.jpg" width="160">
       <img src="images/screenshot_music_3.jpg" width="160">
         <img src="images/screenshot_music_4.jpg" width="160">
