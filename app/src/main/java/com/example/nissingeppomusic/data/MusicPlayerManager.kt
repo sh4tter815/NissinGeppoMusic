@@ -20,6 +20,8 @@ class MusicPlayerManager(context: Context) {
     val exoPlayer: ExoPlayer = PlaybackCore.player(appContext)
 
     var isPlaying by mutableStateOf(false)
+    // 再生の読み込み中（バッファリング中）。選曲直後のぐるぐる表示に使う
+    var isBuffering by mutableStateOf(false)
         private set
     var currentSongUri by mutableStateOf<String?>(null)
         private set
@@ -71,6 +73,7 @@ class MusicPlayerManager(context: Context) {
 
     private val playerScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var progressJob: Job? = null
+    private var queueBuildJob: Job? = null
 
     init {
         exoPlayer.addListener(object : Player.Listener {
@@ -84,6 +87,7 @@ class MusicPlayerManager(context: Context) {
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
+                isBuffering = playbackState == Player.STATE_BUFFERING
                 if (playbackState == Player.STATE_ENDED) {
                     isPlaying = false
                     stopProgressTicker()
@@ -230,15 +234,9 @@ class MusicPlayerManager(context: Context) {
         try {
             queue = items
             val start = startIndex.coerceIn(0, items.size - 1)
-            // アートワーク画像は「再生中の1曲」にだけ埋め込む。全曲に埋め込むと
-            // キュー全体が巨大化し、Bluetooth側がキュー取得で落ちる（BadParcelable）ため
-            val mediaItems = items.mapIndexed { index, item ->
-                buildMediaItem(item, withArtwork = index == start)
-            }
-            artworkItemIndex = start
-            exoPlayer.setMediaItems(mediaItems, start, 0L)
-            exoPlayer.prepare()
-            exoPlayer.play()
+            // 表示（曲名・アート等）の同期は即時に行い、タップへの反応を先に見せる
+            applyQueueItem(items[start], start)
+            isBuffering = true
             // メディア通知を出すフォアグラウンドサービスを起動する
             try {
                 ContextCompat.startForegroundService(
@@ -247,8 +245,25 @@ class MusicPlayerManager(context: Context) {
                 )
             } catch (_: Exception) {
             }
-            applyQueueItem(items[start], start)
-            isPlaying = true
+            // キュー全曲分のMediaItem構築は曲数が多いと重く、タップ直後に固まる原因になる。
+            // 構築だけ裏スレッドで行い、終わってからプレイヤーへ渡す。
+            // アートワーク画像は「再生中の1曲」にだけ埋め込む。全曲に埋め込むと
+            // キュー全体が巨大化し、Bluetooth側がキュー取得で落ちる（BadParcelable）ため
+            queueBuildJob?.cancel()
+            queueBuildJob = playerScope.launch {
+                val mediaItems = withContext(Dispatchers.Default) {
+                    items.mapIndexed { index, item ->
+                        buildMediaItem(item, withArtwork = index == start)
+                    }
+                }
+                // 待っている間に別の選曲が来ていたら、この結果は古いので捨てる
+                if (queue !== items) return@launch
+                artworkItemIndex = start
+                exoPlayer.setMediaItems(mediaItems, start, 0L)
+                exoPlayer.prepare()
+                exoPlayer.play()
+                isPlaying = true
+            }
         } catch (_: Exception) {}
     }
 
