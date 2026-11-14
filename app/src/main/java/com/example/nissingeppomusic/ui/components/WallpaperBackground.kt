@@ -55,9 +55,8 @@ fun WallpaperBackground(
                 }
                 BitmapFactory.decodeFile(customPath, decodeOptions)?.asImageBitmap()
             } else {
-                @Suppress("DEPRECATION")
-                val wallpaperDrawable = WallpaperManager.getInstance(context).builtInDrawable
-                wallpaperDrawable?.toBitmap()?.asImageBitmap()
+                // 壁紙未選択のときはシステムの壁紙を使わない（背景は真っ黒になる）
+                null
             }
         } catch (_: Exception) {
             null
@@ -92,7 +91,10 @@ fun WallpaperBackground(
                     .background(Color(0xFF0B101D).copy(alpha = homeAlpha))
             )
         } else {
-            val bgColor = if (isHome) Color(0xFF0B101D).copy(alpha = homeAlpha) else Color(0xFF0B101D)
+            // 壁紙未選択なら真っ暗な黒。読み込みに失敗した場合は従来の濃紺に倒す
+            val bgColor = if (customPath.isNullOrBlank()) Color.Black
+                else if (isHome) Color(0xFF0B101D).copy(alpha = homeAlpha)
+                else Color(0xFF0B101D)
             Box(
                 modifier = Modifier
                     .fillMaxSize()
