@@ -64,6 +64,16 @@
         </activity>
 
         <service
+            android:name=".service.PlaybackService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media.session.MediaSessionService" />
+                <action android:name="android.media.session.MediaSessionService" />
+            </intent-filter>
+        </service>
+
+        <service
             android:name=".service.LauncherMediaListenerService"
             android:exported="true"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
