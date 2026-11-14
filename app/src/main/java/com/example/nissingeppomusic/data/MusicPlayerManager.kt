@@ -1,24 +1,23 @@
 package com.example.nissingeppomusic.data
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import androidx.compose.runtime.*
+import androidx.core.content.ContextCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.session.MediaSession
+import com.example.nissingeppomusic.service.PlaybackService
 import kotlinx.coroutines.*
+import java.io.ByteArrayOutputStream
 
 class MusicPlayerManager(context: Context) {
     private val appContext = context.applicationContext
-    val exoPlayer: ExoPlayer = ExoPlayer.Builder(appContext).build()
-    private var mediaSession: MediaSession? = try {
-        MediaSession.Builder(appContext, exoPlayer).build()
-    } catch (_: Exception) {
-        null
-    }
+    // プレイヤーとセッションは PlaybackCore が所有し、PlaybackService と共有する
+    val exoPlayer: ExoPlayer = PlaybackCore.player(appContext)
 
     var isPlaying by mutableStateOf(false)
         private set
@@ -158,16 +157,43 @@ class MusicPlayerManager(context: Context) {
                     .setTitle(item.title)
                     .setArtist(item.artist)
                     .setAlbumTitle(item.album)
-                    .build()
+                // 通知にジャケットを出すため、小さくしたアートワークをメタデータへ埋め込む
+                item.albumArt?.let { art ->
+                    try {
+                        val scale = 160f / maxOf(art.width, art.height).coerceAtLeast(1)
+                        val small = if (scale < 1f) {
+                            Bitmap.createScaledBitmap(
+                                art,
+                                (art.width * scale).toInt().coerceAtLeast(1),
+                                (art.height * scale).toInt().coerceAtLeast(1),
+                                true
+                            )
+                        } else {
+                            art
+                        }
+                        val stream = ByteArrayOutputStream()
+                        small.compress(Bitmap.CompressFormat.JPEG, 75, stream)
+                        metadata.setArtworkData(stream.toByteArray(), MediaMetadata.PICTURE_TYPE_FRONT_COVER)
+                    } catch (_: Exception) {
+                    }
+                }
                 MediaItem.Builder()
                     .setUri(Uri.parse(item.uriString))
                     .setMediaId(item.uriString)
-                    .setMediaMetadata(metadata)
+                    .setMediaMetadata(metadata.build())
                     .build()
             }
             exoPlayer.setMediaItems(mediaItems, start, 0L)
             exoPlayer.prepare()
             exoPlayer.play()
+            // メディア通知を出すフォアグラウンドサービスを起動する
+            try {
+                ContextCompat.startForegroundService(
+                    appContext,
+                    Intent(appContext, PlaybackService::class.java)
+                )
+            } catch (_: Exception) {
+            }
             applyQueueItem(items[start], start)
             isPlaying = true
         } catch (_: Exception) {}
@@ -335,12 +361,8 @@ class MusicPlayerManager(context: Context) {
     }
 
     fun release() {
+        // プレイヤーとセッションは PlaybackCore（サービス側）が所有するため、ここでは解放しない
         stopProgressTicker()
         playerScope.cancel()
-        try {
-            mediaSession?.release()
-            mediaSession = null
-        } catch (_: Exception) {}
-        exoPlayer.release()
     }
 }
