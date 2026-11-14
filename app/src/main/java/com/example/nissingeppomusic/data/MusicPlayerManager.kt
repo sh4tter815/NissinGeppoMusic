@@ -202,6 +202,29 @@ class MusicPlayerManager(context: Context) {
         duration = exoPlayer.duration.coerceAtLeast(1000L)
     }
 
+    /**
+     * 選択中の曲の原画（最大1000px）が読み込めたら差し替える。
+     * ホームの大円盤表示・セッション用アート・キュー内アートが差し替わる。
+     * 今表示中のものより小さい画像では差し替えない。
+     */
+    fun upgradeCurrentArtwork(uriString: String, bitmap: Bitmap) {
+        try {
+            if (currentSongUri != uriString) return
+            val current = currentAlbumArt
+            if (current != null && current.width >= bitmap.width && current.height >= bitmap.height) return
+            currentAlbumArt = bitmap
+            val idx = currentQueueIndex
+            if (idx in queue.indices && queue[idx].uriString == uriString) {
+                val updated = queue.toMutableList()
+                updated[idx] = updated[idx].copy(albumArt = bitmap)
+                queue = updated
+                if (artworkItemIndex == idx) {
+                    exoPlayer.replaceMediaItem(idx, buildMediaItem(updated[idx], withArtwork = true))
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
     fun playQueue(items: List<QueueItem>, startIndex: Int) {
         if (items.isEmpty()) return
         try {
