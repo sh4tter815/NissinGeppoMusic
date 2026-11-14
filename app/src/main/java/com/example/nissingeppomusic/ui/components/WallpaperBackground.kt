@@ -81,30 +81,23 @@ fun WallpaperBackground(
 
     Box(modifier = modifier.fillMaxSize()) {
         if (currentAlbumArt != null) {
-            // 液体ON＋配色連動ONのときは、抽出色パレットの液体を下地に敷き、
-            // アートワークのぼかし背景を少し薄く（不透明度0.85）重ねる
-            val liquidBase = if (liquidEnabled) dynamicBackground else null
-            if (liquidBase != null) {
-                LiquidGradientBackground(baseColor = liquidBase)
-            }
+            Image(
+                bitmap = currentAlbumArt.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .blur(radius = 64.dp)
+            )
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .graphicsLayer { alpha = if (liquidBase != null) 0.85f else 1f }
-            ) {
-                Image(
-                    bitmap = currentAlbumArt.asImageBitmap(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .blur(radius = 64.dp)
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background((dynamicBackground ?: Color(0xFF0B101D)).copy(alpha = 0.55f))
-                )
+                    .background((dynamicBackground ?: Color(0xFF0B101D)).copy(alpha = 0.55f))
+            )
+            // 液体ON＋配色連動ONのときは、アートワーク背景の一番上に液体を薄く重ねる
+            val liquidBase = if (liquidEnabled) dynamicBackground else null
+            if (liquidBase != null) {
+                LiquidGradientBackground(baseColor = liquidBase, onBlack = false, layerAlpha = 0.5f)
             }
         } else if (backgroundBitmap != null) {
             Image(
@@ -141,7 +134,7 @@ fun WallpaperBackground(
  * パレットは基準色から色相をずらして作る。
  */
 @Composable
-private fun LiquidGradientBackground(baseColor: Color) {
+private fun LiquidGradientBackground(baseColor: Color, onBlack: Boolean = true, layerAlpha: Float = 1f) {
     val transition = rememberInfiniteTransition(label = "liquid")
     val t1 by transition.animateFloat(
         initialValue = 0f, targetValue = 1f,
@@ -166,7 +159,12 @@ private fun LiquidGradientBackground(baseColor: Color) {
     val c1 = remember(baseColor) { shiftHue(baseColor, 0f, 1.0f) }
     val c2 = remember(baseColor) { shiftHue(baseColor, 55f, 1.15f) }
     val c3 = remember(baseColor) { shiftHue(baseColor, -45f, 0.55f) }
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .then(if (onBlack) Modifier.background(Color.Black) else Modifier)
+            .graphicsLayer { alpha = layerAlpha }
+    ) {
         Box(modifier = Modifier.fillMaxSize().blur(64.dp)) {
             BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
                 val w = maxWidth
