@@ -294,6 +294,7 @@ fun MainLauncherScreen() {
     // アクセント色（前景）と背景色を抽出してテーマカラーにする
     var matchArtwork by remember { mutableStateOf(repo.prefManager.isMatchArtworkColor()) }
     var homeDiscLayout by remember { mutableStateOf(repo.prefManager.getHomeDiscLayout()) }
+    var liquidBackground by remember { mutableStateOf(repo.prefManager.isLiquidBackgroundEnabled()) }
     var artworkAccent by remember { mutableStateOf<Color?>(null) }
     var artworkBackground by remember { mutableStateOf<Color?>(null) }
     LaunchedEffect(musicPlayerManager.currentAlbumArt, matchArtwork) {
@@ -411,6 +412,7 @@ fun MainLauncherScreen() {
         accentHex = repo.prefManager.getAccentColorHex()
         matchArtwork = repo.prefManager.isMatchArtworkColor()
         homeDiscLayout = repo.prefManager.getHomeDiscLayout()
+        liquidBackground = repo.prefManager.isLiquidBackgroundEnabled()
         if (currentLauncherPage == 1) {
             if (!repo.prefManager.isFirstWelcomeTutorialShown()) {
                 showWelcomeTutorial = true
@@ -646,7 +648,8 @@ fun MainLauncherScreen() {
                 updateKey = backgroundUpdateKey,
                 isHome = (currentLauncherPage == 1),
                 currentAlbumArt = musicPlayerManager.currentAlbumArt,
-                dynamicBackground = if (matchArtwork) artworkBackground else null
+                dynamicBackground = if (matchArtwork) artworkBackground else null,
+                liquidEnabled = liquidBackground
             )
 
             // --- メインコンテンツ描画 (0: 設定, 1: ホーム, 2: アプリ一覧, 3: フォルダ) ---
