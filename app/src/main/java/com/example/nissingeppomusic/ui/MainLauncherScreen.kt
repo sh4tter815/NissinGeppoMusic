@@ -271,6 +271,19 @@ fun MainLauncherScreen() {
         }
     }
 
+    // 通知権限（メディア通知を出すために必要）
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { }
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            context.checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     // ページ管理 (0: 設定, 1: ホーム, 2: アプリ一覧, 3: フォルダ)
     var currentLauncherPage by remember { mutableIntStateOf(1) }
 
@@ -669,7 +682,6 @@ fun MainLauncherScreen() {
                             .zIndex(10f)
                             .fillMaxWidth()
                             .heightIn(min = 190.dp)
-                            .graphicsLayer { alpha = if (isLyricsBrowsing) 0f else 1f }
                             .pointerInput(showLyrics, lyricsLines) {
                                 if (!showLyrics || lyricsLines == null) return@pointerInput
                                 awaitPointerEventScope {
@@ -770,14 +782,14 @@ fun MainLauncherScreen() {
                                     ) { idx ->
                                         Text(
                                             text = if (idx >= 0) lines[idx].text else "",
-                                            color = accentColor,
+                                            color = Color.White,
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.Medium,
                                             letterSpacing = 1.0.sp,
                                             textAlign = TextAlign.Start,
                                             maxLines = 2,
                                             style = LocalTextStyle.current.copy(
-                                                shadow = if (accentGlow) Shadow(color = accentColor, blurRadius = 14f) else null
+                                                shadow = Shadow(color = Color.White.copy(alpha = 0.85f), blurRadius = 16f)
                                             )
                                         )
                                     }
