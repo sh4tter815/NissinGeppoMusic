@@ -12,6 +12,14 @@ import com.example.nissingeppomusic.data.PlaybackCore
  */
 class PlaybackService : MediaSessionService() {
 
+    override fun onCreate() {
+        super.onCreate()
+        // コントローラ接続を待たずにセッションをサービスへ登録する。
+        // これをしないと通知（フォアグラウンド化）が始まらず、
+        // startForegroundService の制限時間切れでアプリごと落とされてしまう。
+        addSession(PlaybackCore.session(this))
+    }
+
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession =
         PlaybackCore.session(this)
 
