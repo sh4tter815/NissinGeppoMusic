@@ -249,6 +249,7 @@ fun SettingsScreen(
     var letterSpacing by remember { mutableFloatStateOf(repo.prefManager.getAppDiscLetterSpacingSp()) }
     var stepAngle by remember { mutableFloatStateOf(repo.prefManager.getAppDiscStepAngle()) }
     var backgroundPath by remember { mutableStateOf(repo.prefManager.getCustomBackgroundPath()) }
+    var homeDiscLayout by remember { mutableStateOf(repo.prefManager.getHomeDiscLayout()) }
     var wallpaperAlpha by remember { mutableFloatStateOf(repo.prefManager.getHomeWallpaperAlpha()) }
     var showPasscodeChangeDialog by remember { mutableStateOf(false) }
     var newPasscodeField by remember { mutableStateOf(repo.prefManager.getPasscode()) }
@@ -732,6 +733,51 @@ fun SettingsScreen(
                                                             valueRange = 0.05f..0.9f,
                                                             steps = 17,
                                                             accentColor = currentAccentColor
+                                                        )
+                                                    }
+
+                                                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+
+                                                    Column {
+                                                        Text("ホーム画面の円の大きさ", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Normal)
+                                                        Spacer(modifier = Modifier.height(8.dp))
+                                                        Row(
+                                                            modifier = Modifier.fillMaxWidth(),
+                                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                        ) {
+                                                            listOf(
+                                                                "classic" to "従来（均等）",
+                                                                "artwork" to "アートワーク大きめ",
+                                                                "auto" to "自動"
+                                                            ).forEach { (layoutId, label) ->
+                                                                val isSelected = homeDiscLayout == layoutId
+                                                                Box(
+                                                                    modifier = Modifier
+                                                                        .weight(1f)
+                                                                        .height(40.dp)
+                                                                        .clip(RoundedCornerShape(12.dp))
+                                                                        .background(if (isSelected) currentAccentColor else Color(0xFF1F293D))
+                                                                        .clickable {
+                                                                            homeDiscLayout = layoutId
+                                                                            repo.prefManager.setHomeDiscLayout(layoutId)
+                                                                            onChanged()
+                                                                        },
+                                                                    contentAlignment = Alignment.Center
+                                                                ) {
+                                                                    Text(
+                                                                        text = label,
+                                                                        color = Color.White,
+                                                                        fontSize = 13.sp,
+                                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                                                    )
+                                                                }
+                                                            }
+                                                        }
+                                                        Spacer(modifier = Modifier.height(8.dp))
+                                                        Text(
+                                                            "「自動」では、再生中だけアートワーク側の円が大きくなり、停止すると従来の位置に戻ります",
+                                                            color = Color.Gray,
+                                                            fontSize = 12.sp
                                                         )
                                                     }
                                                 }
