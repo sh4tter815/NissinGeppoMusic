@@ -267,6 +267,32 @@ class MusicPlayerManager(context: Context) {
         } catch (_: Exception) {}
     }
 
+    /** 再生を止めて「楽曲未選択」の状態に戻す（ラックの左スワイプ停止用） */
+    fun stopPlayback() {
+        try {
+            queueBuildJob?.cancel()
+            stopProgressTicker()
+            exoPlayer.stop()
+            exoPlayer.clearMediaItems()
+        } catch (_: Exception) {}
+        queue = emptyList()
+        currentQueueIndex = -1
+        artworkItemIndex = -1
+        playOrder = emptyList()
+        playOrderIndices = emptyList()
+        playOrderCurrentPos = 0
+        currentSongUri = null
+        currentTitle = ""
+        currentArtist = ""
+        currentAlbum = ""
+        currentAlbumArt = null
+        currentFileInfo = "FLAC ・ 44.1kHz ・ 32bit"
+        currentPosition = 0L
+        duration = 0L
+        isPlaying = false
+        isBuffering = false
+    }
+
     fun playSong(uriString: String, title: String, artist: String = "", album: String = "", albumArt: Bitmap? = null, filePath: String = "") {
         playQueue(listOf(QueueItem(uriString, title, artist, album, albumArt, filePath)), 0)
     }
