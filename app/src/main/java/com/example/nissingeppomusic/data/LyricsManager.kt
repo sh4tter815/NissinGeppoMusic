@@ -163,9 +163,14 @@ object LyricsManager {
 
         fun enc(v: String) = URLEncoder.encode(v, "UTF-8")
 
+        // 検索用タイトル: 先頭のトラック番号（"11. " など）を落とす。
+        // データベース側の曲名には番号が付いていないため、そのままだと照合で不利になる。
+        // 表示やキャッシュのキーは元のタイトルのままにする
+        val queryTitle = title.replace(Regex("""^\\s*\\d{1,3}\\s*[.．、:：_\\-]\\s*"""), "").ifBlank { title }
+
         // 3) LRCLIB /api/get（タイトル・アーティスト・アルバム・長さで照合）
         val durationSec = if (durationMs > 0) durationMs / 1000 else 0
-        val getUrl = "https://lrclib.net/api/get?track_name=${enc(title)}&artist_name=${enc(artist)}" +
+        val getUrl = "https://lrclib.net/api/get?track_name=${enc(queryTitle)}&artist_name=${enc(artist)}" +
             "&album_name=${enc(album)}&duration=$durationSec"
         val getJson = httpGetJson(getUrl)
         val synced = getJson?.optString("syncedLyrics", "")?.takeIf { it.isNotBlank() }
@@ -182,7 +187,7 @@ object LyricsManager {
         }
 
         // 4) LRCLIB /api/search フォールバック（候補の中で曲の長さが一番近いものを選ぶ）
-        val searchUrl = "https://lrclib.net/api/search?track_name=${enc(title)}&artist_name=${enc(artist)}"
+        val searchUrl = "https://lrclib.net/api/search?track_name=${enc(queryTitle)}&artist_name=${enc(artist)}"
         var bestText: String? = null
         var bestDiffSec = Long.MAX_VALUE
         fun consider(results: org.json.JSONArray?, requireCloseDuration: Boolean) {
@@ -207,7 +212,7 @@ object LyricsManager {
         consider(httpGetJsonArray(searchUrl), requireCloseDuration = false)
         if (bestText == null) {
             // アーティスト名の表記ゆれ（日本語／ローマ字など）で空振りした場合は曲名だけで引き直す
-            val titleOnlyUrl = "https://lrclib.net/api/search?track_name=${enc(title)}"
+            val titleOnlyUrl = "https://lrclib.net/api/search?track_name=${enc(queryTitle)}"
             consider(httpGetJsonArray(titleOnlyUrl), requireCloseDuration = true)
         }
         val chosen = bestText
@@ -225,7 +230,7 @@ object LyricsManager {
 
         // 5) NetEase（网易云）: 中国系サービスで、ボカロ曲の同期歌詞が比較的厚い
         val neteaseLrc = try {
-            fetchNetEaseLrc(title, artist, durationMs)
+            fetchNetEaseLrc(queryTitle, artist, durationMs)
         } catch (e: Exception) {
             null
         }
@@ -243,7 +248,7 @@ object LyricsManager {
 
         // 6) Kugou（酷狗）: さらにマニアックな曲の候補
         val kugouLrc = try {
-            fetchKugouLrc(title, artist, durationMs)
+            fetchKugouLrc(queryTitle, artist, durationMs)
         } catch (e: Exception) {
             null
         }
