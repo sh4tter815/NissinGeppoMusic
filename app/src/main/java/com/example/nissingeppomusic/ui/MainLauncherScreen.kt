@@ -334,15 +334,8 @@ fun MainLauncherScreen() {
 
     // 抽出アクセント色と背景色のコントラストが低いときは、アクセント色の
     // アイコンや文字にグロー（発光）をかけて見やすくする
-    val accentGlow = remember(artworkAccent, artworkBackground, matchArtwork) {
-        val fg = artworkAccent
-        val bg = artworkBackground
-        if (matchArtwork && fg != null && bg != null) {
-            contrastRatio(fg, bg) < 2.8f
-        } else {
-            false
-        }
-    }
+    // グローはアクセントの色味に関係なく常時ON（ユーザー希望）
+    val accentGlow = true
 
     // ラック（左円のキュー表示）表示中は、右円と下ダイヤルを隠す
     var isRackShown by remember { mutableStateOf(false) }
@@ -666,7 +659,8 @@ fun MainLauncherScreen() {
                             },
                             onLibraryUpdated = {
                                 refreshApps()
-                            }
+                            },
+                            accentColor = accentColor
                         )
                     }
                 1 -> {
