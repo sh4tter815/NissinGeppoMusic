@@ -435,6 +435,33 @@ class MusicRepository(private val context: Context) {
         return scaled
     }
 
+    // 選択中（再生中）の曲専用の原画キャッシュ。通常表示用の保存キャッシュ（最大900px）
+    // とは別に、原画デコード（最大1000px）をメモリに保持する
+    private val hiResArtCache = LruCache<String, Bitmap>(6)
+
+    /**
+     * 選択中の曲用: 原画を最大1000pxで読み込む（ホームの大円盤表示専用）。
+     * ファイルパス／URIから該当レコードを探し、ソースから直接デコードする。
+     */
+    fun loadOriginalArtwork(filePath: String, uriString: String): Bitmap? {
+        val rec = cachedRecords?.firstOrNull { it.filePath == filePath || it.uriString == uriString } ?: return null
+        val key = rec.artKey()
+        hiResArtCache.get(key)?.let { return it }
+        val decoded = decodeArtFromSource(rec.albumId, rec.filePath) ?: return null
+        val maxDim = maxOf(decoded.width, decoded.height)
+        val scaled = if (maxDim > 1000) {
+            val ratio = 1000f / maxDim
+            Bitmap.createScaledBitmap(
+                decoded,
+                (decoded.width * ratio).toInt().coerceAtLeast(1),
+                (decoded.height * ratio).toInt().coerceAtLeast(1),
+                true
+            )
+        } else decoded
+        hiResArtCache.put(key, scaled)
+        return scaled
+    }
+
     private fun decodeArtFromSource(albumId: Long, filePath: String): Bitmap? {
         val albumArtUri = ContentUris.withAppendedId(Uri.parse("content://media/external/audio/albumart"), albumId)
         return try {
