@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -95,6 +96,8 @@ fun MusicVinylWidget(
 
     // ディスクラック操作用状態（操作時は3D X軸回転で横倒しレコード盤になる）
     var isLeftInteracting by remember { mutableStateOf(false) }
+    // ラック中に左へ強くスワイプすると「停止」がアームされ、離すと停止する
+    var stopArmed by remember { mutableStateOf(false) }
 
     // ラックのスクロール位置（曲のインデックス単位・小数）。
     // インデックス円盤と同じステップ式: 指の移動40pxごとに1曲分ジャンプし、
@@ -190,6 +193,7 @@ fun MusicVinylWidget(
                                 continue
                             }
                             isLeftInteracting = true
+                            stopArmed = false
                             var moved = false
                             val startIdx = rackCurrentIndex
                             lastHapticIndex = startIdx
@@ -198,6 +202,7 @@ fun MusicVinylWidget(
                             // 共通の「スクロール方向の反転」設定に従う（OFF時の基準方向:
                             // 上へドラッグで次の曲、下で前の曲。ONなら逆になる）
                             val dirSign = if (prefManager.isReverseScroll()) -1 else 1
+                            val stopThresholdPx = 110.dp.toPx()
 
                             drag(down.id) { change ->
                                 // ステップ式ジャンプ: 指の移動40pxごとに1曲分進む。
@@ -219,12 +224,31 @@ fun MusicVinylWidget(
                                         dy -= 40f
                                     }
                                 }
+                                // 左へ思いっきりスワイプしたら「停止」をアームする。
+                                // 右へ戻したら解除。アームした瞬間にハプティクスを鳴らす
+                                val dxTotal = change.position.x - down.position.x
+                                if (!stopArmed && dxTotal <= -stopThresholdPx) {
+                                    stopArmed = true
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                } else if (stopArmed && dxTotal > -stopThresholdPx * 0.5f) {
+                                    stopArmed = false
+                                }
                                 change.consume()
                             }
 
                             val finalIndex = (startIdx + rackTargetOffset).coerceIn(0, (rackSize - 1).coerceAtLeast(0))
                             val shouldPlay = moved && finalIndex != startIdx
 
+                            if (stopArmed) {
+                                // 「停止」が表示されたまま離した: 再生を止めて未選択に戻り、ラックを閉じる
+                                stopArmed = false
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                playerManager.stopPlayback()
+                                isLeftInteracting = false
+                                scrollAnim.snapTo(0f)
+                                rackTargetOffset = 0
+                                onFocusTrackChanged(null)
+                            } else {
                             // ステップアニメーションが目標へ到達したら再生/ジャンプしてラックを閉じる
                             // （左側を押してその場で離しただけでは何もしない。再生/一時停止は右のシーク円盤だけ）
                             widgetScope.launch {
@@ -248,6 +272,7 @@ fun MusicVinylWidget(
                                 scrollAnim.snapTo(0f)
                                 rackTargetOffset = 0
                                 onFocusTrackChanged(null)
+                            }
                             }
                         }
                     }
@@ -444,5 +469,21 @@ fun MusicVinylWidget(
             drawContext.canvas.nativeCanvas.drawTextOnPath(displayInfo, textPath, 0f, 0f, paint)
         }
     }
+    }
+
+    // 「停止」アーム中は画面右側にラベルを出す
+    if (stopArmed) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.CenterEnd
+        ) {
+            Text(
+                text = "停止",
+                color = accentColor,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(end = 36.dp)
+            )
+        }
     }
 }
