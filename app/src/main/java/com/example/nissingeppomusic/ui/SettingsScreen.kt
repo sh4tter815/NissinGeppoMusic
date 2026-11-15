@@ -14,7 +14,9 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -251,7 +253,7 @@ fun SettingsScreen(
     var backgroundPath by remember { mutableStateOf(repo.prefManager.getCustomBackgroundPath()) }
     var homeDiscLayout by remember { mutableStateOf(repo.prefManager.getHomeDiscLayout()) }
     var liquidBackground by remember { mutableStateOf(repo.prefManager.isLiquidBackgroundEnabled()) }
-    var lyricsPvMode by remember { mutableStateOf(repo.prefManager.isLyricsPvMode()) }
+    var lyricsDisplayMode by remember { mutableStateOf(repo.prefManager.getLyricsDisplayMode()) }
     var lyricsPvFont by remember { mutableStateOf(repo.prefManager.getLyricsPvFont()) }
     var wallpaperAlpha by remember { mutableFloatStateOf(repo.prefManager.getHomeWallpaperAlpha()) }
     var showPasscodeChangeDialog by remember { mutableStateOf(false) }
@@ -804,25 +806,49 @@ fun SettingsScreen(
                                                             colors = switchColors
                                                         )
                                                     }
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        Column(modifier = Modifier.weight(1f)) {
-                                                            Text("歌詞を背景に大きく表示（文字PV風）", color = Color.White, fontSize = 14.sp)
-                                                            Text("歌詞表示ONのとき、再生中の歌詞を背景に大きく表示します（大きさ・傾き・位置は行ごとに変わります）", color = Color.Gray, fontSize = 12.sp)
-                                                        }
-                                                        Switch(
-                                                            checked = lyricsPvMode,
-                                                            onCheckedChange = {
-                                                                lyricsPvMode = it
-                                                                repo.prefManager.setLyricsPvMode(it)
+                                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                        Text("歌詞の表示モード", color = Color.White, fontSize = 14.sp)
+                                                        Row(
+                                                            modifier = Modifier.fillMaxWidth(),
+                                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                                        ) {
+                                                            LyricsModePreviewCard(
+                                                                mode = "line",
+                                                                label = "現在の行",
+                                                                selected = lyricsDisplayMode == "line",
+                                                                accentColor = currentAccentColor,
+                                                                modifier = Modifier.weight(1f)
+                                                            ) {
+                                                                lyricsDisplayMode = "line"
+                                                                repo.prefManager.setLyricsDisplayMode("line")
                                                                 onChanged()
-                                                            },
-                                                            colors = switchColors
-                                                        )
+                                                            }
+                                                            LyricsModePreviewCard(
+                                                                mode = "video",
+                                                                label = "リリックビデオ",
+                                                                selected = lyricsDisplayMode == "video",
+                                                                accentColor = currentAccentColor,
+                                                                modifier = Modifier.weight(1f)
+                                                            ) {
+                                                                lyricsDisplayMode = "video"
+                                                                repo.prefManager.setLyricsDisplayMode("video")
+                                                                onChanged()
+                                                            }
+                                                            LyricsModePreviewCard(
+                                                                mode = "multi",
+                                                                label = "複数行",
+                                                                selected = lyricsDisplayMode == "multi",
+                                                                accentColor = currentAccentColor,
+                                                                modifier = Modifier.weight(1f)
+                                                            ) {
+                                                                lyricsDisplayMode = "multi"
+                                                                repo.prefManager.setLyricsDisplayMode("multi")
+                                                                onChanged()
+                                                            }
+                                                        }
+                                                        Text("複数行は円を下げて、できた空白に前・今・次の3行を表示します", color = Color.Gray, fontSize = 12.sp)
                                                     }
-                                                    if (lyricsPvMode) {
+                                                    if (lyricsDisplayMode == "video") {
                                                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                                             Text("PV表示のフォント", color = Color.White, fontSize = 14.sp)
                                                             listOf(
@@ -1174,5 +1200,87 @@ fun SettingsScreen(
                 titleContentColor = Color.White
             )
         }
+    }
+}
+
+
+/** 歌詞表示モードのプレビューカード（ミニ画面のモック＋ラベル＋ラジオ） */
+@Composable
+private fun LyricsModePreviewCard(
+    mode: String,
+    label: String,
+    selected: Boolean,
+    accentColor: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier.clickable { onClick() }
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(0.68f)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFF0B101D))
+                .border(
+                    if (selected) 2.dp else 1.dp,
+                    if (selected) accentColor else Color.White.copy(alpha = 0.25f),
+                    RoundedCornerShape(10.dp)
+                )
+        ) {
+            when (mode) {
+                "line" -> {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        Box(Modifier.width(26.dp).height(4.dp).background(Color.White.copy(alpha = 0.85f), RoundedCornerShape(2.dp)))
+                        Spacer(Modifier.height(3.dp))
+                        Box(Modifier.width(18.dp).height(3.dp).background(Color.White.copy(alpha = 0.5f), RoundedCornerShape(2.dp)))
+                        Spacer(Modifier.height(6.dp))
+                        Box(Modifier.width(34.dp).height(3.dp).background(accentColor.copy(alpha = 0.9f), RoundedCornerShape(2.dp)))
+                    }
+                }
+                "video" -> {
+                    Text(
+                        "歌", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.align(Alignment.Center).graphicsLayer { rotationZ = -10f }
+                    )
+                    Text(
+                        "詞", color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                        modifier = Modifier.align(Alignment.TopEnd).padding(6.dp).graphicsLayer { rotationZ = 12f }
+                    )
+                    Text(
+                        "♪", color = accentColor, fontSize = 11.sp,
+                        modifier = Modifier.align(Alignment.BottomStart).padding(6.dp)
+                    )
+                }
+                else -> {
+                    Column(modifier = Modifier.padding(8.dp)) {
+                        Box(Modifier.width(28.dp).height(3.dp).background(Color.White.copy(alpha = 0.4f), RoundedCornerShape(2.dp)))
+                        Spacer(Modifier.height(4.dp))
+                        Box(Modifier.width(38.dp).height(5.dp).background(Color.White, RoundedCornerShape(2.dp)))
+                        Spacer(Modifier.height(4.dp))
+                        Box(Modifier.width(28.dp).height(3.dp).background(Color.White.copy(alpha = 0.4f), RoundedCornerShape(2.dp)))
+                    }
+                    Box(
+                        Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(start = 6.dp, bottom = 6.dp)
+                            .size(20.dp)
+                            .border(1.5.dp, Color.White.copy(alpha = 0.7f), CircleShape)
+                    )
+                    Box(
+                        Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 6.dp, bottom = 6.dp)
+                            .size(20.dp)
+                            .border(1.5.dp, Color.White.copy(alpha = 0.7f), CircleShape)
+                    )
+                }
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(label, color = if (selected) accentColor else Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
+        Text(if (selected) "●" else "○", color = if (selected) accentColor else Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
     }
 }
