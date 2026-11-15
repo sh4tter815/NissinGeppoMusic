@@ -2773,6 +2773,8 @@ private object LyricIcon {
     const val MOUNTAIN = 20; const val WIND = 21
     const val LINE = 22; const val CIRCLE = 23
     const val GLOBE = 24; const val BUBBLE = 25
+    const val COFFIN = 26; const val EYE = 27; const val PLUS = 28
+    const val MINUS = 29; const val MAP = 30; const val BONE = 31
 }
 
 /** 歌詞に出てきたらアイコンを出す単語（前にあるものが優先） */
@@ -2789,7 +2791,10 @@ private val LYRIC_ICON_WORDS: List<Pair<String, Int>> = listOf(
     "雷" to LyricIcon.LIGHTNING, "笑顔" to LyricIcon.SMILE, "魚" to LyricIcon.FISH,
     "山" to LyricIcon.MOUNTAIN, "風" to LyricIcon.WIND,
     "線" to LyricIcon.LINE, "円" to LyricIcon.CIRCLE,
-    "世界" to LyricIcon.GLOBE, "音" to LyricIcon.NOTE, "濡" to LyricIcon.DROP
+    "世界" to LyricIcon.GLOBE, "音" to LyricIcon.NOTE, "濡" to LyricIcon.DROP,
+    "時間" to LyricIcon.CLOCK, "場所" to LyricIcon.MAP, "死" to LyricIcon.COFFIN,
+    "目" to LyricIcon.EYE, "水" to LyricIcon.DROP, "増" to LyricIcon.PLUS,
+    "減" to LyricIcon.MINUS, "骨" to LyricIcon.BONE
 )
 
 /** 白い枠線だけの小さな線画アイコンを描く（キャンバスは正方形前提） */
@@ -2823,9 +2828,11 @@ private fun DrawScope.drawLyricIcon(kind: Int) {
             drawPath(path, col, style = st)
         }
         LyricIcon.MOON -> {
+            // 三日月: 外周と内側の食い込みをベジェで結んだ輪郭
             val path = Path().apply {
-                arcTo(Rect(cx - 30f * u, cy - 30f * u, cx + 30f * u, cy + 30f * u), -125f, 250f, false)
-                arcTo(Rect(cx - 6f * u, cy - 23f * u, cx + 38f * u, cy + 23f * u), 55f, -250f, false)
+                moveTo(14f * u, -22f * u)
+                cubicTo(26f * u, -6f * u, 26f * u, 8f * u, 12f * u, 22f * u)
+                cubicTo(-8f * u, 12f * u, -8f * u, -10f * u, 14f * u, -22f * u)
                 close()
             }
             drawPath(path, col, style = st)
@@ -2980,6 +2987,63 @@ private fun DrawScope.drawLyricIcon(kind: Int) {
         LyricIcon.CIRCLE -> {
             // 「円」そのもの: 円を描く
             drawCircle(col, radius = 26f * u, center = pt(0f, 0f), style = st)
+        }
+        LyricIcon.COFFIN -> {
+            // 棺: 肩が広がった六角形
+            val path = Path().apply {
+                moveTo(-13f * u, -30f * u)
+                lineTo(13f * u, -30f * u)
+                lineTo(25f * u, -6f * u)
+                lineTo(14f * u, 30f * u)
+                lineTo(-14f * u, 30f * u)
+                lineTo(-25f * u, -6f * u)
+                close()
+            }
+            drawPath(path, col, style = st)
+        }
+        LyricIcon.EYE -> {
+            // 目: アーモンド型の輪郭に虹彩
+            val path = Path().apply {
+                moveTo(-30f * u, 0f)
+                quadraticTo(0f, -27f * u, 30f * u, 0f)
+                quadraticTo(0f, 27f * u, -30f * u, 0f)
+                close()
+            }
+            drawPath(path, col, style = st)
+            drawCircle(col, radius = 10f * u, center = pt(0f, 0f), style = st)
+            drawCircle(col, radius = 3.2f * u, center = pt(0f, 0f))
+        }
+        LyricIcon.PLUS -> {
+            drawLine(col, pt(-17f, 0f), pt(17f, 0f), strokeWidth = 7f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(0f, -17f), pt(0f, 17f), strokeWidth = 7f * u, cap = StrokeCap.Round)
+        }
+        LyricIcon.MINUS -> {
+            drawLine(col, pt(-17f, 0f), pt(17f, 0f), strokeWidth = 7f * u, cap = StrokeCap.Round)
+        }
+        LyricIcon.MAP -> {
+            // 折れた地図: 三つ折りの面と折り目
+            val path = Path().apply {
+                moveTo(-28f * u, -17f * u)
+                lineTo(-10f * u, -23f * u)
+                lineTo(10f * u, -17f * u)
+                lineTo(28f * u, -23f * u)
+                lineTo(28f * u, 17f * u)
+                lineTo(10f * u, 23f * u)
+                lineTo(-10f * u, 17f * u)
+                lineTo(-28f * u, 23f * u)
+                close()
+            }
+            drawPath(path, col, style = st)
+            drawLine(col, pt(-10f, -23f), pt(-10f, 17f), strokeWidth = 4f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(10f, -17f), pt(10f, 23f), strokeWidth = 4f * u, cap = StrokeCap.Round)
+        }
+        LyricIcon.BONE -> {
+            // 骨: 斜めの軸の両端にこぶ
+            drawLine(col, pt(-14f, 14f), pt(14f, -14f), strokeWidth = 9f * u, cap = StrokeCap.Round)
+            drawCircle(col, radius = 7.5f * u, center = pt(-19f, 11f), style = st)
+            drawCircle(col, radius = 7.5f * u, center = pt(-11f, 19f), style = st)
+            drawCircle(col, radius = 7.5f * u, center = pt(11f, -19f), style = st)
+            drawCircle(col, radius = 7.5f * u, center = pt(19f, -11f), style = st)
         }
         LyricIcon.GLOBE -> {
             // 地球儀: 円に経線と緯線
