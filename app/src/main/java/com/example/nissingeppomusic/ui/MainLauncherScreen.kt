@@ -831,6 +831,9 @@ fun MainLauncherScreen() {
                                 }
                             }
                         }
+                        if (pvDisplayIndex == -2) {
+                            PvInterludeArt(accentColor = accentColor, modifier = Modifier.fillMaxWidth().padding(top = 175.dp).height(230.dp))
+                        }
                         pvCurrent?.let { (_, curText) ->
                             val ambKind = when {
                                 curText.contains("桜") -> 2
@@ -1892,6 +1895,9 @@ fun MainLauncherScreen() {
                                 }
                             }
                         }
+                        if (fsDisplayIndex == -2) {
+                            PvInterludeArt(accentColor = accentColor, modifier = Modifier.fillMaxSize().padding(60.dp))
+                        }
                         fsCurrent?.let { (_, curText) ->
                             val ambKind = when {
                                 curText.contains("桜") -> 2
@@ -2732,6 +2738,8 @@ private object LyricIcon {
     const val ENVELOPE = 12; const val CLOCK = 13; const val FLAME = 14; const val DROP = 15
     const val RAINBOW = 16; const val LIGHTNING = 17; const val SMILE = 18; const val FISH = 19
     const val MOUNTAIN = 20; const val WIND = 21
+    const val LINE = 22; const val CIRCLE = 23
+    const val GLOBE = 24; const val BUBBLE = 25
 }
 
 /** 歌詞に出てきたらアイコンを出す単語（前にあるものが優先） */
@@ -2741,12 +2749,14 @@ private val LYRIC_ICON_WORDS: List<Pair<String, Int>> = listOf(
     "太陽" to LyricIcon.SUN, "雲" to LyricIcon.CLOUD, "花" to LyricIcon.FLOWER,
     "海" to LyricIcon.WAVES, "波" to LyricIcon.WAVES, "心" to LyricIcon.HEART,
     "ハート" to LyricIcon.HEART, "恋" to LyricIcon.HEART, "愛" to LyricIcon.HEART,
-    "夢" to LyricIcon.STAR, "夜" to LyricIcon.MOON, "鍵" to LyricIcon.KEY,
+    "夢" to LyricIcon.BUBBLE, "夜" to LyricIcon.MOON, "鍵" to LyricIcon.KEY,
     "音楽" to LyricIcon.NOTE, "歌" to LyricIcon.NOTE, "手紙" to LyricIcon.ENVELOPE,
     "時計" to LyricIcon.CLOCK, "炎" to LyricIcon.FLAME, "火" to LyricIcon.FLAME,
     "涙" to LyricIcon.DROP, "雫" to LyricIcon.DROP, "虹" to LyricIcon.RAINBOW,
     "雷" to LyricIcon.LIGHTNING, "笑顔" to LyricIcon.SMILE, "魚" to LyricIcon.FISH,
-    "山" to LyricIcon.MOUNTAIN, "風" to LyricIcon.WIND
+    "山" to LyricIcon.MOUNTAIN, "風" to LyricIcon.WIND,
+    "線" to LyricIcon.LINE, "円" to LyricIcon.CIRCLE,
+    "世界" to LyricIcon.GLOBE, "音" to LyricIcon.NOTE, "濡" to LyricIcon.DROP
 )
 
 /** 白い枠線だけの小さな線画アイコンを描く（キャンバスは正方形前提） */
@@ -2930,6 +2940,27 @@ private fun DrawScope.drawLyricIcon(kind: Int) {
             }
             drawPath(path, col, style = st)
         }
+        LyricIcon.LINE -> {
+            // 「線」そのもの: 少し斜めの線を1本引く
+            drawLine(col, pt(-30f, 8f), pt(30f, -10f), strokeWidth = 6f * u, cap = StrokeCap.Round)
+        }
+        LyricIcon.CIRCLE -> {
+            // 「円」そのもの: 円を描く
+            drawCircle(col, radius = 26f * u, center = pt(0f, 0f), style = st)
+        }
+        LyricIcon.GLOBE -> {
+            // 地球儀: 円に経線と緯線
+            drawCircle(col, radius = 27f * u, center = pt(0f, 0f), style = st)
+            drawOval(col, topLeft = pt(-13f, -27f), size = Size(26f * u, 54f * u), style = st)
+            drawOval(col, topLeft = pt(-27f, -10f), size = Size(54f * u, 20f * u), style = st)
+            drawLine(col, pt(0f, -27f), pt(0f, 27f), strokeWidth = 4f * u, cap = StrokeCap.Round)
+        }
+        LyricIcon.BUBBLE -> {
+            // 夢の吹き出し: 角丸の四角にしっぽ
+            drawRoundRect(col, topLeft = pt(-28f, -25f), size = Size(56f * u, 40f * u), cornerRadius = CornerRadius(11f * u, 11f * u), style = st)
+            drawLine(col, pt(-12f, 14f), pt(-19f, 30f), strokeWidth = 5f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(3f, 14f), pt(-19f, 30f), strokeWidth = 5f * u, cap = StrokeCap.Round)
+        }
         LyricIcon.WIND -> {
             val path = Path().apply {
                 moveTo(cx - 30f * u, cy - 13f * u)
@@ -3048,6 +3079,66 @@ private fun findIconWord(text: String): Pair<String, Int>? {
         }
     }
     return null
+}
+
+/** コーラスの掛け声（yeah / ah / ラララ等）かどうか */
+private val CHORUS_REGEX = Regex("^(yeah|yea|ah|oh|ooh|wow|la|na|hey|uh|yay|hoo|ha|mm|hmm)+$")
+
+private fun isChorusWord(text: String): Boolean {
+    val t = text.trim().lowercase().trim('!', '?', ',', '.', '~', '〜', '・')
+    if (t.isEmpty() || !t.all { it in 'a'..'z' }) return false
+    return CHORUS_REGEX.matches(t)
+}
+
+/** 色名が出てきたら、その文字をその色で塗るための対応表（長い語を先に判定） */
+private val COLOR_WORDS: List<Pair<String, Color>> = listOf(
+    "水色" to Color(0xFF7FD4F2), "ピンク" to Color(0xFFFF8FBF), "オレンジ" to Color(0xFFFF9A3D),
+    "グレー" to Color(0xFF9AA0A6),
+    "青" to Color(0xFF3D7BFF), "赤" to Color(0xFFFF4545), "白" to Color(0xFFF2F3F5),
+    "黒" to Color(0xFF26262C), "紫" to Color(0xFFB07FE8), "緑" to Color(0xFF4FC96B),
+    "黄" to Color(0xFFFFD94D), "金" to Color(0xFFFFC94D), "銀" to Color(0xFFC9CED6),
+    "茶" to Color(0xFFB07B4F), "灰" to Color(0xFF9AA0A6)
+)
+
+/** 間奏中に出す、曲線がいろんな方向に交差するビジュアルアート */
+@Composable
+private fun PvInterludeArt(accentColor: Color, modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "pvart")
+    val t by transition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(16000, easing = LinearEasing), RepeatMode.Restart),
+        label = "pvartT"
+    )
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        val ph = t * 6.2832f
+        for (i in 0 until 7) {
+            val seed = i * 1.618f
+            val yBase = h * (0.16f + 0.12f * i)
+            val amp = h * (0.16f + 0.05f * (i % 3))
+            val colr = if (i % 3 == 0) Color.White.copy(alpha = 0.30f) else accentColor.copy(alpha = 0.38f)
+            val path = Path().apply {
+                moveTo(-w * 0.05f, yBase + sin(ph + seed) * h * 0.05f)
+                cubicTo(
+                    w * 0.30f, yBase - amp * sin(ph * 0.9f + seed * 2f),
+                    w * 0.65f, yBase + amp * kotlin.math.cos(ph * 0.8f + seed),
+                    w * 1.05f, yBase - sin(ph + seed * 3f) * h * 0.06f
+                )
+            }
+            drawPath(path, colr, style = Stroke(width = 2.2f + (i % 3) * 0.9f, cap = StrokeCap.Round))
+        }
+        for (i in 0 until 3) {
+            val cxp = w * (0.25f + 0.25f * i) + sin(ph * 0.7f + i * 2.1f) * w * 0.03f
+            val cyp = h * (0.35f + 0.15f * i) + kotlin.math.cos(ph * 0.6f + i * 1.3f) * h * 0.05f
+            drawCircle(
+                color = Color.White.copy(alpha = 0.22f),
+                radius = h * (0.10f + 0.04f * i) * (0.9f + 0.1f * sin(ph + i)),
+                center = Offset(cxp, cyp),
+                style = Stroke(width = 1.8f)
+            )
+        }
+    }
 }
 
 /** PV入場の8方向（上・右上・右・右下・下・左下・左・左上） */
@@ -3243,6 +3334,7 @@ private fun PvLyricLine(
         ) {
         var globalIndex = 0
         var iconPlaced = false
+        var inParen = false
         rows.forEachIndexed { rowIdx, rowChunks ->
         val unitsInRow = rowChunks.sumOf { renderUnitsOf(it).size }
         var rowUnitIdx = 0
@@ -3256,6 +3348,10 @@ private fun PvLyricLine(
                 if (posInRow > 0 && latinDominant) {
                     Spacer(Modifier.width((fitSize * 0.32f).dp))
                 }
+                // コーラス部分（括弧の中・yeah等の掛け声）は薄く表示する
+                val chunkDim = inParen || chunk.startsWith("（") || chunk.startsWith("(") || isChorusWord(chunk)
+                if (chunk.contains("（") || chunk.contains("(")) inParen = true
+                if (chunk.contains("）") || chunk.contains(")")) inParen = false
                 val chunkIconKind = if (!iconPlaced && iconWord != null && chunk.contains(iconWord.first)) iconWord.second else null
                 var unitIdxInChunk = 0
                 for (ru in renderUnitsOf(chunk)) {
@@ -3289,7 +3385,8 @@ private fun PvLyricLine(
                         fontFamily = fontFamily,
                         accentColor = accentColor,
                         effectKind = effectKind,
-                        iconKind = thisUnitIcon
+                        iconKind = thisUnitIcon,
+                        dimmed = chunkDim
                     )
                 }
             }
@@ -3332,7 +3429,8 @@ private fun PvLyricUnit(
     fontFamily: FontFamily?,
     accentColor: Color,
     effectKind: Int = 0,
-    iconKind: Int? = null
+    iconKind: Int? = null,
+    dimmed: Boolean = false
 ) {
     val pvEaseIn = CubicBezierEasing(0.42f, 0f, 1f, 1f)
     val uSeed = staggerIndex
@@ -3372,6 +3470,15 @@ private fun PvLyricUnit(
             delay(staggerIndex * 45L)
             ulAnim.animateTo(1f, animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing))
             ulAnim.animateTo(2f, animationSpec = tween(durationMillis = 260, easing = pvEaseIn))
+        }
+    }
+    // 色名の文字を、その色で左上から右下へ斜めに塗っていく
+    val colorHit = if (!exiting) COLOR_WORDS.firstOrNull { unitText.contains(it.first) } else null
+    val wipeT = remember { Animatable(0f) }
+    if (colorHit != null) {
+        LaunchedEffect(staggerIndex) {
+            delay(staggerIndex * 45L + 200L)
+            wipeT.animateTo(1f, animationSpec = tween(durationMillis = 650, easing = LinearEasing))
         }
     }
     // 点滅(3)とグリッチ(4)用の進行度
@@ -3444,7 +3551,7 @@ private fun PvLyricUnit(
             }
             Text(
                 text = annotatedUnit,
-            color = Color.White.copy(alpha = 0.92f),
+            color = Color.White.copy(alpha = if (dimmed) 0.40f else 0.92f),
             fontSize = uSize,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
@@ -3452,9 +3559,49 @@ private fun PvLyricUnit(
             style = LocalTextStyle.current.copy(
                 fontFamily = fontFamily,
                 lineHeight = uSize * 1.02f,
-                    shadow = Shadow(color = accentColor.copy(alpha = 0.85f), blurRadius = 22f)
+                    shadow = Shadow(color = accentColor.copy(alpha = if (dimmed) 0.35f else 0.85f), blurRadius = 22f)
                 )
             )
+            if (colorHit != null) {
+                val cWord = colorHit.first
+                val cColor = colorHit.second
+                val cStart = unitText.indexOf(cWord)
+                val wp = wipeT.value.coerceIn(0f, 1f)
+                val wipeBrush = Brush.linearGradient(
+                    colorStops = arrayOf(
+                        0f to cColor,
+                        wp to cColor,
+                        (wp + 0.03f).coerceIn(0f, 1f) to Color.Transparent,
+                        1f to Color.Transparent
+                    ),
+                    start = Offset.Zero,
+                    end = Offset(Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY)
+                )
+                val overlayText = buildAnnotatedString {
+                    unitText.forEachIndexed { ci, ch ->
+                        val inWord = ci >= cStart && ci < cStart + cWord.length
+                        val span = if (inWord) SpanStyle(brush = wipeBrush) else SpanStyle(color = Color.Transparent)
+                        if (ch in "ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ") {
+                            withStyle(SpanStyle(fontSize = uSize * 0.6f)) {
+                                withStyle(span) { append(ch) }
+                            }
+                        } else {
+                            withStyle(span) { append(ch) }
+                        }
+                    }
+                }
+                Text(
+                    text = overlayText,
+                    fontSize = uSize,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    overflow = TextOverflow.Visible,
+                    style = LocalTextStyle.current.copy(
+                        fontFamily = fontFamily,
+                        lineHeight = uSize * 1.02f
+                    )
+                )
+            }
             if (!exiting && (unitText.contains("光") || unitText.contains("輝"))) {
                 // 「光」「輝」はコーティングが反射するみたいにキラキラさせる
                 Canvas(modifier = Modifier.matchParentSize()) {
