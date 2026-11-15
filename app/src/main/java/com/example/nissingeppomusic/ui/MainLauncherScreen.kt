@@ -752,6 +752,8 @@ fun MainLauncherScreen() {
 
             // 文字PV風レイヤー: 背景のすぐ上（他の要素の奥）に、行ごとに大きさ・傾き・位置を変えて大きく表示
             val lyricsFontFamily = parseFontFamily(lyricsPvFont, if (lyricsPvFont == "custom") customFontPath else null)
+            val lyricsBold = repo.prefManager.isLyricsBold()
+            val lyricWeight = if (lyricsBold) FontWeight.Bold else FontWeight.Normal
             if (lyricsPvMode && showLyrics && currentLauncherPage == 1 && !isLyricsBrowsing) {
                 val pvLines = lyricsLines
                 if (pvLines != null) {
@@ -806,6 +808,7 @@ fun MainLauncherScreen() {
                             pvExiting?.let { (exIdx, exText) ->
                                 key("pvexit$exIdx") {
                                     PvLyricLine(
+                                        bold = lyricsBold,
                                         text = exText,
                                         baseSeed = Math.floorMod(exIdx * 31 + exText.hashCode(), 997),
                                         fontFamily = pvFontFamily,
@@ -821,6 +824,7 @@ fun MainLauncherScreen() {
                             pvCurrent?.let { (curIdx, curText) ->
                                 key("pvcur$curIdx") {
                                     PvLyricLine(
+                                        bold = lyricsBold,
                                         text = curText,
                                         baseSeed = Math.floorMod(curIdx * 31 + curText.hashCode(), 997),
                                         fontFamily = pvFontFamily,
@@ -916,7 +920,7 @@ fun MainLauncherScreen() {
                                 text = if (mInterlude) "♪" else (curText ?: ""),
                                 color = Color.White,
                                 fontSize = fitFontSizeSp(if (mInterlude) "♪" else (curText ?: ""), 30f, screenWidthDp - 76f).sp,
-                                fontWeight = FontWeight.Bold,
+                                fontWeight = lyricWeight,
                                 letterSpacing = 3.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -1057,7 +1061,7 @@ fun MainLauncherScreen() {
                                                 15f,
                                                 screenWidthDp - 116f
                                             ).sp,
-                                            fontWeight = FontWeight.Medium,
+                                            fontWeight = lyricWeight,
                                             letterSpacing = 2.0.sp,
                                             textAlign = TextAlign.Start,
                                             maxLines = 1,
@@ -1230,7 +1234,7 @@ fun MainLauncherScreen() {
                                     text = lines[idx].text,
                                     color = if (isFocusedLine) accentColor else Color.White.copy(alpha = 0.75f * fade),
                                     fontSize = fitFontSizeSp(lines[idx].text, if (isFocusedLine) 26f else 15f, maxWidth.value * 0.85f).sp,
-                                    fontWeight = if (isFocusedLine) FontWeight.Bold else FontWeight.Normal,
+                                    fontWeight = if (isFocusedLine) lyricWeight else FontWeight.Normal,
                                     letterSpacing = 1.0.sp,
                                     textAlign = TextAlign.Start,
                                     maxLines = 1,
@@ -1914,6 +1918,7 @@ fun MainLauncherScreen() {
                             fsExiting?.let { (exIdx, exText) ->
                                 key("fsexit$exIdx") {
                                     PvLyricLine(
+                                        bold = lyricsBold,
                                         text = exText,
                                         baseSeed = Math.floorMod(exIdx * 31 + exText.hashCode(), 997),
                                         fontFamily = lyricsFontFamily,
@@ -1930,6 +1935,7 @@ fun MainLauncherScreen() {
                             fsCurrent?.let { (curIdx, curText) ->
                                 key("fscur$curIdx") {
                                     PvLyricLine(
+                                        bold = lyricsBold,
                                         text = curText,
                                         baseSeed = Math.floorMod(curIdx * 31 + curText.hashCode(), 997),
                                         fontFamily = lyricsFontFamily,
@@ -1995,7 +2001,7 @@ fun MainLauncherScreen() {
                                         curText,
                                         color = Color.White,
                                         fontSize = fitFontSizeSp(curText, 30f, fsWidth - 108f).sp,
-                                        fontWeight = FontWeight.Bold,
+                                        fontWeight = lyricWeight,
                                         letterSpacing = 3.sp,
                                         maxLines = 1,
                                         style = LocalTextStyle.current.copy(
@@ -2016,7 +2022,7 @@ fun MainLauncherScreen() {
                                         lineText,
                                         color = Color.White,
                                         fontSize = fitFontSizeSp(lineText, 26f, fsWidth - 80f).sp,
-                                        fontWeight = FontWeight.Bold,
+                                        fontWeight = lyricWeight,
                                         letterSpacing = 2.sp,
                                         maxLines = 1,
                                         style = LocalTextStyle.current.copy(
@@ -3313,6 +3319,7 @@ private fun PvLyricLine(
     fontFamily: FontFamily?,
     accentColor: Color,
     effectKind: Int = 0,
+    bold: Boolean = true,
     bigText: Boolean = false,
     lineDurationMs: Long = Long.MAX_VALUE,
     screenWidthDp: Float,
@@ -3617,6 +3624,7 @@ private fun PvLyricLine(
                         else -> 0.98f
                     }
                     PvLyricUnit(
+                        bold = bold,
                         unitText = ru,
                         uSize = (fitSize * (0.92f + (uSeed % 22) / 100f) * charFactor).coerceIn(fitSize * 0.55f, fitSize * 1.35f).sp,
                         uRot = ((uSeed / 3) % 29 - 14).toFloat(),
@@ -3674,7 +3682,8 @@ private fun PvLyricUnit(
     accentColor: Color,
     effectKind: Int = 0,
     iconKind: Int? = null,
-    dimmed: Boolean = false
+    dimmed: Boolean = false,
+    bold: Boolean = true
 ) {
     val pvEaseIn = CubicBezierEasing(0.42f, 0f, 1f, 1f)
     val uSeed = staggerIndex
@@ -3776,7 +3785,7 @@ private fun PvLyricUnit(
                     text = annotatedUnit,
                     color = accentColor.copy(alpha = flick),
                     fontSize = uSize,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
                     textAlign = TextAlign.Center,
                     overflow = TextOverflow.Visible,
                     style = LocalTextStyle.current.copy(fontFamily = fontFamily, lineHeight = uSize * 1.02f),
@@ -3786,7 +3795,7 @@ private fun PvLyricUnit(
                     text = annotatedUnit,
                     color = accentColor.copy(alpha = flick * 0.55f),
                     fontSize = uSize,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
                     textAlign = TextAlign.Center,
                     overflow = TextOverflow.Visible,
                     style = LocalTextStyle.current.copy(fontFamily = fontFamily, lineHeight = uSize * 1.02f),
@@ -3797,7 +3806,7 @@ private fun PvLyricUnit(
                 text = annotatedUnit,
             color = Color.White.copy(alpha = if (dimmed) 0.40f else 0.92f),
             fontSize = uSize,
-            fontWeight = FontWeight.Bold,
+            fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
             textAlign = TextAlign.Center,
             overflow = TextOverflow.Visible,
             style = LocalTextStyle.current.copy(
@@ -3843,7 +3852,7 @@ private fun PvLyricUnit(
                 Text(
                     text = overlayText,
                     fontSize = uSize,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
                     textAlign = TextAlign.Center,
                     overflow = TextOverflow.Visible,
                     style = LocalTextStyle.current.copy(
@@ -3888,7 +3897,7 @@ private fun PvLyricUnit(
                 text = enCaption,
                 color = accentColor.copy(alpha = 0.85f),
                 fontSize = (uSize.value * 0.30f).sp,
-                fontWeight = FontWeight.Bold,
+                fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
                 letterSpacing = (uSize.value * 0.12f).sp,
                 maxLines = 1,
                 style = LocalTextStyle.current.copy(fontFamily = fontFamily),
