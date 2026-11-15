@@ -412,25 +412,7 @@ fun MainLauncherScreen() {
     var updateInfo by remember { mutableStateOf<UpdateChecker.LatestRelease?>(null) }
     var showUpdateDialog by remember { mutableStateOf(false) }
     var showLyricSearch by remember { mutableStateOf(false) }
-    // 歌詞の対訳（洋楽向け）: 歌詞ブラウズ内のボタンでON/OFFする
-    var lyricTranslations by remember { mutableStateOf<List<String>?>(null) }
-    var translationEnabled by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        translationEnabled = repo.prefManager.isLyricTranslationEnabled()
-    }
-    LaunchedEffect(lyricsLines, translationEnabled) {
-        lyricTranslations = null
-        val lines = lyricsLines
-        if (translationEnabled && lines != null && lines.isNotEmpty()) {
-            lyricTranslations = LyricsManager.translateToJapanese(
-                context,
-                musicPlayerManager.currentTitle,
-                musicPlayerManager.currentArtist,
-                musicPlayerManager.currentAlbum,
-                lines
-            )
-        }
-    }
+    var lyricsSource by remember { mutableStateOf("") }
     LaunchedEffect(Unit) {
         val info = UpdateChecker.checkIfDue(context)
         if (info != null) {
@@ -484,6 +466,25 @@ fun MainLauncherScreen() {
     // 歌詞が見つからなかった曲は、その曲の間だけ歌詞表示をオフにする（曲が変われば自動で再検索）
     var lyricsDisabledUri by remember { mutableStateOf<String?>(null) }
     var notFoundMsgVisible by remember { mutableStateOf(false) }
+    // 歌詞の対訳（洋楽向け）: 歌詞ブラウズ内のボタンでON/OFFする
+    var lyricTranslations by remember { mutableStateOf<List<String>?>(null) }
+    var translationEnabled by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        translationEnabled = repo.prefManager.isLyricTranslationEnabled()
+    }
+    LaunchedEffect(lyricsLines, translationEnabled) {
+        lyricTranslations = null
+        val lines = lyricsLines
+        if (translationEnabled && lines != null && lines.isNotEmpty()) {
+            lyricTranslations = LyricsManager.translateToJapanese(
+                context,
+                musicPlayerManager.currentTitle,
+                musicPlayerManager.currentArtist,
+                musicPlayerManager.currentAlbum,
+                lines
+            )
+        }
+    }
     LaunchedEffect(lyricsDisabledUri) {
         if (lyricsDisabledUri != null) {
             notFoundMsgVisible = true
@@ -496,6 +497,7 @@ fun MainLauncherScreen() {
         if (showLyrics && uri != null && uri != lyricsSongUri) {
             lyricsLoading = true
             lyricsLines = null // 前の曲の歌詞が残らないよう、取得開始で即クリア
+            lyricsSource = ""
             lyricsNotFound = false
             val song = allApps.firstOrNull { it.packageName == uri }
             // 選曲直後は「前の曲の長さ」が残っていて、それを使うと別曲・別バージョンの歌詞を
@@ -515,6 +517,7 @@ fun MainLauncherScreen() {
                 filePath = song?.filePath
             )
             lyricsLines = result
+            lyricsSource = if (result != null) LyricsManager.lastFetchSource else ""
             lyricsSongUri = uri
             lyricsNotFound = result == null
             if (result == null) lyricsDisabledUri = uri else if (lyricsDisabledUri == uri) lyricsDisabledUri = null
@@ -1199,6 +1202,14 @@ fun MainLauncherScreen() {
 
                     // 歌詞ブラウズ中: 歌詞全文をラック表示のように上から下へ並べる
                     if (isLyricsBrowsing && lyricsLines != null) {
+                        if (lyricsSource.isNotBlank()) {
+                            Text(
+                                text = "歌詞ソース: $lyricsSource",
+                                color = Color.White.copy(alpha = 0.45f),
+                                fontSize = 10.sp,
+                                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp).zIndex(91f)
+                            )
+                        }
                         val lines = lyricsLines!!
                         val virtualPos = lyricsBrowseStartIndex + lyricsScrollAnim.value
                         // 同期モード中は再生中の行へ自動で追従する
@@ -2808,8 +2819,10 @@ fun MainLauncherScreen() {
                 currentTitle = musicPlayerManager.currentTitle,
                 currentArtist = musicPlayerManager.currentArtist,
                 currentAlbum = musicPlayerManager.currentAlbum,
-                onApply = { applied ->
+                currentLines = lyricsLines ?: emptyList(),
+                onApply = { applied, source ->
                     lyricsLines = applied
+                    lyricsSource = source
                     lyricsSongUri = musicPlayerManager.currentSongUri
                     if (lyricsDisabledUri == musicPlayerManager.currentSongUri) lyricsDisabledUri = null
                     showLyrics = true

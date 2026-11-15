@@ -866,7 +866,8 @@ fun PvLyricLine(
                         accentColor = accentColor,
                         effectKind = effKind,
                         iconKind = thisUnitIcon,
-                        dimmed = chunkDim
+                        dimmed = chunkDim,
+                        swayScale = if (bigText) 2.8f else 1f
                     )
                 }
             }
@@ -911,7 +912,8 @@ fun PvLyricUnit(
     effectKind: Int = 0,
     iconKind: Int? = null,
     dimmed: Boolean = false,
-    bold: Boolean = true
+    bold: Boolean = true,
+    swayScale: Float = 1f
 ) {
     val pvEaseIn = CubicBezierEasing(0.42f, 0f, 1f, 1f)
     val uSeed = staggerIndex
@@ -1005,8 +1007,9 @@ fun PvLyricUnit(
                     val dir = PV_ENTRY_DIRS[Math.floorMod(uSeed * 131 + 7, 8)]
                     // 波に乗るような揺れ: サイン波でなめらかに、位相は文字ごとにずらす
                     val ph = sway.value * 6.2832f + (uSeed % 7) * 0.9f
-                    val swx = sin(ph) * 3.4f
-                    val swy = sin(ph + 1.3f) * 2.6f
+                    val swx = sin(ph) * 3.4f * swayScale
+                    val swy = sin(ph + 1.3f) * 2.6f * swayScale
+                    if (swayScale > 1f) rotationZ += sin(ph + 0.7f) * 2.4f * (swayScale - 1f)
                     translationX = dir.first * 52f * (1f - a) + swx * a + if (effectKind == 4 && fxT.value < 1f) sin(fxT.value * 55f + uSeed * 2.7f) * 5f * (1f - fxT.value) else 0f
                     translationY = dir.second * 52f * (1f - a) + swy * a + if (effectKind == 7) sin(a * 6.2832f + uSeed * 0.8f) * 15f * (1f - a) else 0f
                 }
@@ -1364,7 +1367,8 @@ fun LyricTagSearchDialog(
     currentTitle: String,
     currentArtist: String,
     currentAlbum: String,
-    onApply: (List<LyricLine>) -> Unit,
+    currentLines: List<LyricLine>,
+    onApply: (List<LyricLine>, String) -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
@@ -1437,7 +1441,7 @@ fun LyricTagSearchDialog(
                                                 LyricsManager.saveLyricsOverride(
                                                     context, currentTitle, currentArtist, currentAlbum, lrc
                                                 )
-                                                onApply(LyricsManager.parseLrc(lrc))
+                                                onApply(LyricsManager.parseLrc(lrc), cand.source)
                                                 onDismiss()
                                             } else {
                                                 message = "その候補の歌詞を取得できませんでした"
@@ -1462,6 +1466,32 @@ fun LyricTagSearchDialog(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
+                                // 今適用されている歌詞と内容が一致する候補には印を付ける
+                                val currentFp = remember(currentLines) {
+                                    if (currentLines.isEmpty()) null
+                                    else currentLines.joinToString("\n") { it.text }.hashCode()
+                                }
+                                var isCurrent by remember(cand) { mutableStateOf(false) }
+                                LaunchedEffect(cand, currentFp) {
+                                    isCurrent = false
+                                    if (currentFp != null) {
+                                        val lrcText = cand.syncedLyrics
+                                            ?: if (cand.source == "Kugou") LyricsManager.fetchCandidateLrc(cand) else null
+                                        if (lrcText != null) {
+                                            val fp = LyricsManager.parseLrc(lrcText)
+                                                .joinToString("\n") { it.text }.hashCode()
+                                            isCurrent = fp == currentFp
+                                        }
+                                    }
+                                }
+                                if (isCurrent) {
+                                    Text(
+                                        text = "現在適用されています",
+                                        color = Color(0xFF7FD4F2),
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                             Box(
                                 modifier = Modifier

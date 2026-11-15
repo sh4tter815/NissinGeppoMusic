@@ -220,6 +220,10 @@ object LyricsManager {
      * 同期歌詞を取得する。見つからなければ null。
      * filePath が実ファイルパスのときは、同フォルダの同名 .lrc も探す。
      */
+    /** 直近の getSyncedLyrics がどのソースから歌詞を取ったか */
+    @Volatile
+    var lastFetchSource: String = ""
+
     suspend fun getSyncedLyrics(
         context: Context,
         title: String,
@@ -228,6 +232,7 @@ object LyricsManager {
         durationMs: Long,
         filePath: String?
     ): List<LyricLine>? = withContext(Dispatchers.IO) {
+        lastFetchSource = ""
         // 1) 音源と同じ場所の .lrc ファイル
         if (!filePath.isNullOrBlank() && filePath.startsWith("/")) {
             val lrcFile = File(filePath.substringBeforeLast('.') + ".lrc")
@@ -237,7 +242,10 @@ object LyricsManager {
                 } catch (e: Exception) {
                     emptyList()
                 }
-                if (parsed.isNotEmpty()) return@withContext parsed
+                if (parsed.isNotEmpty()) {
+                    lastFetchSource = "ローカルファイル"
+                    return@withContext parsed
+                }
             }
         }
 
@@ -249,7 +257,10 @@ object LyricsManager {
             } catch (e: Exception) {
                 emptyList()
             }
-            if (parsed.isNotEmpty()) return@withContext parsed
+            if (parsed.isNotEmpty()) {
+                lastFetchSource = "キャッシュ"
+                return@withContext parsed
+            }
         }
 
         if (title.isBlank()) return@withContext null
@@ -277,6 +288,7 @@ object LyricsManager {
                 } catch (e: Exception) {
                     // キャッシュ保存失敗は無視する
                 }
+                lastFetchSource = "LRCLIB"
                 return@withContext parsed
             }
         }
@@ -333,6 +345,7 @@ object LyricsManager {
                 } catch (e: Exception) {
                     // キャッシュ保存失敗は無視する
                 }
+                lastFetchSource = "LRCLIB"
                 return@withContext parsed
             }
         }
@@ -351,6 +364,7 @@ object LyricsManager {
                 } catch (e: Exception) {
                     // キャッシュ保存失敗は無視する
                 }
+                lastFetchSource = "Kugou"
                 return@withContext parsed
             }
         }
@@ -366,6 +380,7 @@ object LyricsManager {
             if (parsed.isNotEmpty()) {
                 // NetEaseは別曲の歌詞が誤って紐付いていることがあるため、結果をキャッシュしない
                 // （次回再生時にKugou等を先に試し直す）
+                lastFetchSource = "NetEase"
                 return@withContext parsed
             }
         }
