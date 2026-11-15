@@ -6,6 +6,22 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 class AppPreferenceManager(private val context: Context) {
+
+    /** 曲ごとの歌詞タイミング補正（ミリ秒）。キーはタイトル|アーティストのMD5 */
+    fun getLyricOffsetMs(title: String, artist: String): Long {
+        return prefs.getLong("lyric_offset_" + lyricOffsetKey(title, artist), 0L)
+    }
+
+    fun setLyricOffsetMs(title: String, artist: String, offsetMs: Long) {
+        prefs.edit().putLong("lyric_offset_" + lyricOffsetKey(title, artist), offsetMs).apply()
+    }
+
+    private fun lyricOffsetKey(title: String, artist: String): String {
+        val digest = java.security.MessageDigest.getInstance("MD5")
+            .digest("$title|$artist".toByteArray(Charsets.UTF_8))
+        return digest.joinToString("") { "%02x".format(it) }
+    }
+
     private val prefs: SharedPreferences = context.getSharedPreferences("nisshin_geppo_prefs", Context.MODE_PRIVATE)
 
     fun getFavoritePackages(): Set<String> {
