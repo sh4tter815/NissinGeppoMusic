@@ -706,6 +706,7 @@ fun MainLauncherScreen() {
             )
 
             // 文字PV風レイヤー: 背景のすぐ上（他の要素の奥）に、行ごとに大きさ・傾き・位置を変えて大きく表示
+            val lyricsFontFamily = parseFontFamily(lyricsPvFont, if (lyricsPvFont == "custom") customFontPath else null)
             if (lyricsPvMode && showLyrics && currentLauncherPage == 1 && !isLyricsBrowsing) {
                 val pvLines = lyricsLines
                 if (pvLines != null) {
@@ -721,7 +722,7 @@ fun MainLauncherScreen() {
                     }
                     val pvDisplayIndex = if (pvInterlude) -2 else pvIndex
                     if (pvIndex >= 0) {
-                        val pvFontFamily = parseFontFamily(lyricsPvFont, if (lyricsPvFont == "custom") customFontPath else null)
+                        val pvFontFamily = lyricsFontFamily
                         // 前の行は残像にせず、文字ごとにバラバラの遅延で退場アニメーションをかけて消す
                         var pvCurrent by remember { mutableStateOf<Pair<Int, String>?>(null) }
                         var pvExiting by remember { mutableStateOf<Pair<Int, String>?>(null) }
@@ -801,23 +802,24 @@ fun MainLauncherScreen() {
                             val curText = multiLines.getOrNull(rawIdx)?.text
                             val nextText = multiLines.getOrNull(rawIdx + 1)?.text
                             if (prevText != null) {
-                                Text(prevText, color = Color.White.copy(alpha = 0.45f), fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(prevText, color = Color.White.copy(alpha = 0.45f), fontSize = 18.sp, letterSpacing = 2.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily))
                             } else {
                                 Spacer(Modifier.height(24.dp))
                             }
-                            Spacer(Modifier.height(12.dp))
+                            Spacer(Modifier.height(16.dp))
                             Text(
                                 text = if (mInterlude) "♪" else (curText ?: ""),
                                 color = Color.White,
                                 fontSize = 30.sp,
                                 fontWeight = FontWeight.Bold,
+                                letterSpacing = 3.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                style = LocalTextStyle.current.copy(shadow = Shadow(color = accentColor.copy(alpha = 0.8f), blurRadius = 16f))
+                                style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily, shadow = Shadow(color = accentColor.copy(alpha = 0.8f), blurRadius = 16f))
                             )
-                            Spacer(Modifier.height(12.dp))
+                            Spacer(Modifier.height(16.dp))
                             if (nextText != null) {
-                                Text(nextText, color = Color.White.copy(alpha = 0.45f), fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(nextText, color = Color.White.copy(alpha = 0.45f), fontSize = 18.sp, letterSpacing = 2.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily))
                             }
                         }
                     }
@@ -938,10 +940,11 @@ fun MainLauncherScreen() {
                                             color = Color.White,
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.Medium,
-                                            letterSpacing = 1.0.sp,
+                                            letterSpacing = 2.0.sp,
                                             textAlign = TextAlign.Start,
                                             maxLines = 2,
                                             style = LocalTextStyle.current.copy(
+                                                fontFamily = lyricsFontFamily,
                                                 shadow = Shadow(color = Color.White.copy(alpha = 0.85f), blurRadius = 16f)
                                             )
                                         )
@@ -1075,6 +1078,7 @@ fun MainLauncherScreen() {
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                     style = LocalTextStyle.current.copy(
+                                        fontFamily = lyricsFontFamily,
                                         shadow = if (accentGlow && isFocusedLine) Shadow(color = accentColor, blurRadius = 14f) else null
                                     ),
                                     modifier = Modifier
@@ -2533,6 +2537,7 @@ private fun PvLyricUnit(
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
+            .width(IntrinsicSize.Max)
             .offset(y = uYOffset)
             .graphicsLayer {
                 if (exiting) {
