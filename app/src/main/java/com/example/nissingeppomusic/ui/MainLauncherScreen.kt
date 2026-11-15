@@ -550,7 +550,7 @@ fun MainLauncherScreen() {
     val pvDiscShiftY by animateFloatAsState(
         targetValue = when {
             lyricsDisplayMode == "multi" && showLyrics && currentLauncherPage == 1 && !isLyricsBrowsing && lyricsLines != null -> 120f
-            lyricsPvMode && showLyrics && currentLauncherPage == 1 && !isLyricsBrowsing && lyricsLines != null -> 64f
+            lyricsPvMode && showLyrics && currentLauncherPage == 1 && !isLyricsBrowsing && lyricsLines != null -> 80f
             else -> 0f
         },
         animationSpec = tween(durationMillis = 450, easing = FastOutSlowInEasing),
@@ -742,7 +742,7 @@ fun MainLauncherScreen() {
                                         accentColor = accentColor,
                                         screenWidthDp = screenWidthDp,
                                         exiting = true,
-                                        modifier = Modifier.padding(top = 235.dp)
+                                        modifier = Modifier.padding(top = 195.dp)
                                     )
                                 }
                             }
@@ -755,7 +755,7 @@ fun MainLauncherScreen() {
                                         accentColor = accentColor,
                                         screenWidthDp = screenWidthDp,
                                         exiting = false,
-                                        modifier = Modifier.padding(top = 235.dp)
+                                        modifier = Modifier.padding(top = 195.dp)
                                     )
                                 }
                             }
@@ -2250,9 +2250,11 @@ private fun PvLyricLine(
     val charCount = text.length.coerceAtLeast(1)
     // 画面の横幅ギリギリまで大きくする
     val longestRow = if (charCount >= 8) maxOf(charCount / 2 + 1, charCount - charCount / 2 + 1) else charCount
-    val fitSize = minOf(baseFontSize, (screenWidthDp - 12f) / (longestRow * 1.05f))
-    val lineOffsetX = ((baseSeed / 7) % 51 - 25).dp
-    val lineOffsetY = ((baseSeed / 11) % 61 - 30).dp
+    // 枠（タイトル下〜円の上、左右マージン16dp）に収まるよう、幅と高さの両方で上限をかける
+    val heightCap = if (charCount >= 8) 46f else 58f
+    val fitSize = minOf(baseFontSize, (screenWidthDp - 32f) / (longestRow * 1.18f), heightCap)
+    val lineOffsetX = ((baseSeed / 7) % 17 - 8).dp
+    val lineOffsetY = ((baseSeed / 11) % 21 - 10).dp
     // 退場は1本の時計（exitProgress）で全文字を駆動する。文字ごとのAnimatableだと
     // スケジューリングのブレでカクつくため、位相だけ文字ごとにずらす
     val exitProgress = remember { Animatable(0f) }
@@ -2300,7 +2302,7 @@ private fun PvLyricLine(
                 }
                 val chSize = (fitSize * (0.7f + (chSeed % 80) / 100f) * scriptFactor).sp
                 val chRot = ((chSeed / 3) % 29 - 14).toFloat()
-                val chYOffset = ((chSeed / 5) % 41 - 20).dp
+                val chYOffset = ((chSeed / 5) % 29 - 14).dp
                 val chAnim = remember(ci) { Animatable(0f) }
                 if (!exiting) {
                     LaunchedEffect(ci) {
