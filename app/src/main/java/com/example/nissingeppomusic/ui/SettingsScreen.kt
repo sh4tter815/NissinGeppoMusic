@@ -163,13 +163,13 @@ fun FontSelectionSection(
 ) {
     var expanded by remember { mutableStateOf(false) }
     val fontOptions = mapOf(
-        "default" to "デフォルトフォント (Default)",
+        "default" to "システムフォント",
         "receipt" to "レシートフォント (Receipt Font)",
         "denkichip" to "でんきチップ (DenkiChip)",
         "tsukuhou" to "築豊明朝 (Tsukuhou Mincho)",
         "custom" to "カスタムフォント (.ttf/.otf)"
     )
-    val currentLabel = fontOptions[currentFontChoice] ?: "デフォルトフォント (Default)"
+    val currentLabel = fontOptions[currentFontChoice] ?: "システムフォント"
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("フォント選択", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Normal)
@@ -214,20 +214,6 @@ fun FontSelectionSection(
             Text("フォントファイル (.ttf / .otf) をインポート", color = Color.White, fontWeight = FontWeight.Light)
         }
 
-        if (!customFontPath.isNullOrBlank()) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("カスタムフォントの利用", color = Color.White, fontSize = 13.sp)
-                Switch(
-                    checked = useCustomFont,
-                    onCheckedChange = onUseCustomFontChanged,
-                    colors = switchColors
-                )
-            }
-        }
     }
 }
 
@@ -345,8 +331,10 @@ fun SettingsScreen(
                     val path = destFile.absolutePath
                     repo.prefManager.setCustomFontPath(path)
                     repo.prefManager.setUseCustomFont(true)
+                    repo.prefManager.setFontChoice("custom")
                     customFontPath = path
                     useCustomFont = true
+                    currentFontChoice = "custom"
                     onChanged()
                     Toast.makeText(context, "カスタムフォントを読み込みました", Toast.LENGTH_SHORT).show()
                 }
@@ -852,7 +840,7 @@ fun SettingsScreen(
                                                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                                         Text("歌詞のフォント（全モード共通）", color = Color.White, fontSize = 14.sp)
                                                             listOf(
-                                                                "default" to "デフォルトフォント (Default)",
+                                                                "default" to "システムフォント",
                                                                 "receipt" to "レシートフォント (Receipt Font)",
                                                                 "denkichip" to "でんきチップ (DenkiChip)",
                                                                 "tsukuhou" to "築豊明朝 (Tsukuhou Mincho)",
@@ -956,6 +944,8 @@ fun SettingsScreen(
                                                         onFontSelected = { newChoice ->
                                                             currentFontChoice = newChoice
                                                             repo.prefManager.setFontChoice(newChoice)
+                                                            useCustomFont = newChoice == "custom"
+                                                            repo.prefManager.setUseCustomFont(newChoice == "custom")
                                                             onChanged()
                                                         },
                                                         onImportClick = { fontPickerLauncher.launch("*/*") },
