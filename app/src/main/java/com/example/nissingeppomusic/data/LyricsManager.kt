@@ -62,6 +62,11 @@ object LyricsManager {
 
 
     /** LRC形式テキストをパースする。タイムスタンプのない行は無視する */
+    // インスト曲のダミー歌詞や「歌詞なし」通知の断片（簡体字・繁体字・日本語表記のゆれをまとめて拾う）
+    private val PLACEHOLDER_LYRIC_MARKERS = listOf(
+        "纯音乐", "純音樂", "纯音樂", "請欣賞", "请欣赏", "暫無歌詞", "暂无歌词"
+    )
+
     fun parseLrc(lrcText: String): List<LyricLine> {
         val result = mutableListOf<LyricLine>()
         for (rawLine in lrcText.lineSequence()) {
@@ -71,6 +76,8 @@ object LyricsManager {
             if (matches.isEmpty()) continue
             val rawText = line.replace(timestampRegex, "").trim()
             if (rawText.isEmpty()) continue
+            // 中国ソースがインスト曲に付けるダミー行（「纯音乐，请欣赏」＝純音楽、ご鑑賞ください）は歌詞ではないので除外する
+            if (PLACEHOLDER_LYRIC_MARKERS.any { rawText.contains(it) }) continue
             // 中国ソース由来の簡体字・繁体字は日本の漢字にそろえる（詞：〜等のクレジット行は残す）
             val text = toJapaneseKanji(rawText)
             for (m in matches) {
