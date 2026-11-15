@@ -42,6 +42,21 @@ val LYRIC_ICON_EXCLUSIONS: Map<String, List<String>> = mapOf(
 )
 
 /** 行の中からアイコン対象の単語を探す。除外語の一部として現れる箇所は数えない */
+// 英語の単語→アイコン（単語境界＋大文字小文字なし。"rain" が "train" に当たらないように）
+val LYRIC_ICON_WORDS_EN: List<Pair<String, Int>> = listOf(
+    "umbrella" to LyricIcon.UMBRELLA, "rainbow" to LyricIcon.RAINBOW, "rain" to LyricIcon.RAIN,
+    "snow" to LyricIcon.SNOW, "star" to LyricIcon.STAR, "moon" to LyricIcon.MOON,
+    "sun" to LyricIcon.SUN, "cloud" to LyricIcon.CLOUD, "flower" to LyricIcon.FLOWER,
+    "sea" to LyricIcon.WAVES, "wave" to LyricIcon.WAVES, "heart" to LyricIcon.HEART,
+    "love" to LyricIcon.HEART, "night" to LyricIcon.MOON, "key" to LyricIcon.KEY,
+    "music" to LyricIcon.NOTE, "song" to LyricIcon.NOTE, "sound" to LyricIcon.NOTE,
+    "letter" to LyricIcon.ENVELOPE, "clock" to LyricIcon.CLOCK, "time" to LyricIcon.CLOCK,
+    "fire" to LyricIcon.FLAME, "flame" to LyricIcon.FLAME, "tear" to LyricIcon.DROP,
+    "thunder" to LyricIcon.LIGHTNING, "smile" to LyricIcon.SMILE, "fish" to LyricIcon.FISH,
+    "mountain" to LyricIcon.MOUNTAIN, "wind" to LyricIcon.WIND, "dream" to LyricIcon.BUBBLE,
+    "eye" to LyricIcon.EYE, "bone" to LyricIcon.BONE, "map" to LyricIcon.MAP,
+    "death" to LyricIcon.COFFIN
+)
 fun findIconWord(text: String): Pair<String, Int>? {
     for ((word, kind) in LYRIC_ICON_WORDS) {
         val exclusions = LYRIC_ICON_EXCLUSIONS[word] ?: emptyList()
@@ -55,6 +70,10 @@ fun findIconWord(text: String): Pair<String, Int>? {
             }
             return word to kind
         }
+    }
+    for ((word, kind) in LYRIC_ICON_WORDS_EN) {
+        val m = Regex("""(?i)(?<![A-Za-z])${Regex.escape(word)}(?![A-Za-z])""").find(text)
+        if (m != null) return m.value to kind
     }
     return null
 }
@@ -88,6 +107,20 @@ val COLOR_WORDS: List<Pair<String, Color>> = listOf(
     "cyan" to Color(0xFF4FD8E8), "magenta" to Color(0xFFFF4FD8), "crimson" to Color(0xFFE60033),
     "indigo" to Color(0xFF2B4C9B), "emerald" to Color(0xFF38B48B), "scarlet" to Color(0xFFE8383F),
     "amber" to Color(0xFFFFB000)
+)
+// 色名ではないけれど色を連想させる言葉 → 連想色で塗る（愛→ピンク、血→赤、夜→藍、月→金）
+val ASSOC_COLOR_WORDS: List<Pair<String, Color>> = listOf(
+    "愛" to Color(0xFFFF8FBF), "恋" to Color(0xFFFF8FBF), "好" to Color(0xFFFF8FBF), "心" to Color(0xFFFF8FBF), "桜" to Color(0xFFFF8FBF),
+    "血" to Color(0xFFFF4545),
+    "夜" to Color(0xFF2B4C9B), "海" to Color(0xFF3D7BFF), "嫌" to Color(0xFF3D7BFF), "悲" to Color(0xFF3D7BFF), "哀" to Color(0xFF3D7BFF),
+    "月" to Color(0xFFFFC94D), "星" to Color(0xFFFFC94D),
+    "涙" to Color(0xFF7FD4F2), "空" to Color(0xFF7FD4F2),
+    "炎" to Color(0xFFFF9A3D), "夢" to Color(0xFFB07FE8),
+    "love" to Color(0xFFFF8FBF), "heart" to Color(0xFFFF8FBF), "blood" to Color(0xFFFF4545),
+    "night" to Color(0xFF2B4C9B), "moon" to Color(0xFFFFC94D), "star" to Color(0xFFFFC94D),
+    "sea" to Color(0xFF3D7BFF), "hate" to Color(0xFF3D7BFF), "sad" to Color(0xFF3D7BFF),
+    "sky" to Color(0xFF7FD4F2), "tear" to Color(0xFF7FD4F2), "tears" to Color(0xFF7FD4F2),
+    "fire" to Color(0xFFFF9A3D), "dream" to Color(0xFFB07FE8)
 )
 val KATAKANA_EN = mapOf(
     "ハート" to "HEART", "ラブ" to "LOVE", "キス" to "KISS", "ドリーム" to "DREAM",
