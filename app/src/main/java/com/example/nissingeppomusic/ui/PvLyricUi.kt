@@ -696,6 +696,8 @@ fun PvLyricLine(
     val mosaicLine = text.contains("隠") || text.contains("モザイク")
     val sandLine = text.contains("砂") || text.contains("消")
     val rippleWord = text.contains("響")
+    // 否定の打ち消し線: 表示の早い段階で白い実線をびーっと引く
+    val strikeAnim = remember { Animatable(if (exiting) 1f else 0f) }
     if (exiting) {
         LaunchedEffect(Unit) {
             exitProgress.animateTo(1f, animationSpec = tween(durationMillis = 720, easing = LinearEasing))
@@ -725,6 +727,12 @@ fun PvLyricLine(
         }
         LaunchedEffect(Unit) {
             fxAnim.animateTo(1f, animationSpec = tween(durationMillis = 1000, easing = LinearEasing))
+        }
+        LaunchedEffect(Unit) {
+            if (negLine) {
+                delay(400)
+                strikeAnim.animateTo(1f, animationSpec = tween(durationMillis = 450, easing = LinearEasing))
+            }
         }
     }
     // 下線: 入場と同時に、左から右へ伸びて（イーズアウト）、すぐに左から右へ消える（イーズイン）
@@ -867,19 +875,15 @@ fun PvLyricLine(
                         }
                     }
                 }
+                if (negLine) {
+                    val sweep = strikeAnim.value
+                    if (sweep > 0f) {
+                        // 間違えた文字を消すように、白い実線で文字の上をびーっと消す
+                        drawLine(Color.White.copy(alpha = 0.92f), Offset(W * 0.02f, H * 0.55f), Offset(W * 0.02f + W * 0.96f * sweep, H * 0.45f), strokeWidth = 4.dp.toPx(), cap = StrokeCap.Round)
+                    }
+                }
                 val fp = exitProgress.value
                 if (exiting && fp > 0f) {
-                    if (negLine) {
-                        val sweep = (fp * 1.6f).coerceAtMost(1f)
-                        val paint = android.graphics.Paint().apply {
-                            color = android.graphics.Color.argb(235, 255, 90, 90)
-                            strokeWidth = 3.dp.toPx()
-                            style = android.graphics.Paint.Style.STROKE
-                            pathEffect = android.graphics.DashPathEffect(floatArrayOf(11f, 8f), 0f)
-                            isAntiAlias = true
-                        }
-                        drawContext.canvas.nativeCanvas.drawLine(W * 0.03f, H * 0.58f, W * 0.03f + W * 0.94f * sweep, H * 0.42f, paint)
-                    }
                     if (mosaicLine) {
                         val cell = 13.dp.toPx()
                         val cols = (W / cell).toInt() + 1
@@ -1078,7 +1082,7 @@ fun PvLyricUnit(
         }
     }
     // 色名の文字を、その色で左上から右下へ斜めに塗っていく
-    val colorHit = if (!exiting) COLOR_WORDS.firstOrNull { (word, _) ->
+    val colorHit = if (!exiting) (if (chunkColor != null) unitText to chunkColor else null) ?: COLOR_WORDS.firstOrNull { (word, _) ->
         if (word.all { it.code < 128 }) {
             // 英語の色名は単語単位で照合する（hundred の中の red などを拾わない）
             Regex("""(?i)(?<![A-Za-z])${Regex.escape(word)}(?![A-Za-z])""").containsMatchIn(unitText)
@@ -1091,7 +1095,7 @@ fun PvLyricUnit(
         } else {
             unitText.contains(word)
         }
-    } ?: (if (chunkColor != null) unitText to chunkColor else null) else null
+    } else null
     val wipeT = remember { Animatable(0f) }
     if (colorHit != null) {
         LaunchedEffect(staggerIndex) {
