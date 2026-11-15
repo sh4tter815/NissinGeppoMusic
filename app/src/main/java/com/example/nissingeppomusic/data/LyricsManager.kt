@@ -49,9 +49,30 @@ object LyricsManager {
     }
 
     private fun cacheKey(title: String, artist: String, album: String): String {
-        val raw = "$title|$artist|$album"
+        // v2: 照合ロジックを厳しくしたため、旧ロジックで保存された誤った歌詞キャッシュを使わない
+        val raw = "v2|$title|$artist|$album"
         val digest = MessageDigest.getInstance("MD5").digest(raw.toByteArray(Charsets.UTF_8))
         return digest.joinToString("") { "%02x".format(it) }
+    }
+
+    /** テキストに日本語（ひらがな・カタカナ・漢字）が含まれるか */
+    private fun containsJapanese(text: String): Boolean =
+        text.any { it in '\u3040'..'\u30FF' || it in '\u4E00'..'\u9FFF' }
+
+    /** 曲名照合用の正規化: 括弧内（ver.表記や feat. 等）を落とし、空白と中点を除いて小文字化する */
+    private fun normalizeTitleForMatch(raw: String): String =
+        raw.lowercase()
+            .replace(Regex("""\(.*?\)|（.*?）|\[.*?\]|【.*?】"""), "")
+            .replace(Regex("""\s+"""), "")
+            .replace("・", "")
+            .trim()
+
+    /** 候補の曲名が目的の曲名と一致するか（正規化後に完全一致 or 相互包含） */
+    private fun titleMatches(candidate: String, target: String): Boolean {
+        val a = normalizeTitleForMatch(candidate)
+        val b = normalizeTitleForMatch(target)
+        if (a.isBlank() || b.isBlank()) return false
+        return a == b || a.contains(b) || b.contains(a)
     }
 
     private fun cacheFile(context: Context, title: String, artist: String, album: String): File {
@@ -173,8 +194,10 @@ object LyricsManager {
         val getUrl = "https://lrclib.net/api/get?track_name=${enc(queryTitle)}&artist_name=${enc(artist)}" +
             "&album_name=${enc(album)}&duration=$durationSec"
         val getJson = httpGetJson(getUrl)
+        val wantJapanese = containsJapanese(title) || containsJapanese(artist)
         val synced = getJson?.optString("syncedLyrics", "")?.takeIf { it.isNotBlank() }
-        if (synced != null) {
+        // 日本語の曲なのに日本語を含まない歌詞（ローマ字・翻訳など）は別バージョンとみなして採用しない
+        if (synced != null && (!wantJapanese || containsJapanese(synced))) {
             val parsed = parseLrc(synced)
             if (parsed.isNotEmpty()) {
                 try {
@@ -195,7 +218,10 @@ object LyricsManager {
             for (i in 0 until results.length()) {
                 val item = results.optJSONObject(i) ?: continue
                 val candidate = item.optString("syncedLyrics", "").takeIf { it.isNotBlank() } ?: continue
+                if (wantJapanese && !containsJapanese(candidate)) continue
                 val candDurSec = item.optLong("duration", 0L)
+                // 長さが大きく違う候補（別バージョン・別録音）は採用しない
+                if (durationSec > 0 && candDurSec > 0 && kotlin.math.abs(candDurSec - durationSec) > 10) continue
                 val diff = if (durationSec > 0 && candDurSec > 0) {
                     kotlin.math.abs(candDurSec - durationSec)
                 } else {
@@ -283,22 +309,27 @@ object LyricsManager {
             null
         } ?: return null
 
-        // 曲の長さが近い候補を最大3件まで試す
-        val candidateIds = mutableListOf<Long>()
-        var fallbackId = -1L
+        // 曲名が一致する候補だけを対象に、長さが近い順に最大3件まで試す。
+        // 以前は「長さが近いだけ」で選び、無ければ先頭の結果を無条件に使っていたため、
+        // 同じアーティストの別曲の歌詞を掴む事故が起きていた
+        val wantJapanese = containsJapanese(title) || containsJapanese(artist)
+        val matched = mutableListOf<Pair<Long, Long>>()
         for (i in 0 until songs.length()) {
             val song = songs.optJSONObject(i) ?: continue
             val id = song.optLong("id", -1L)
             if (id <= 0) continue
-            if (fallbackId < 0) fallbackId = id
+            if (!titleMatches(song.optString("name", ""), title)) continue
             val songDurMs = song.optLong("duration", 0L)
-            if (durationMs > 0 && songDurMs > 0 && kotlin.math.abs(songDurMs - durationMs) <= 4000) {
-                candidateIds.add(id)
+            val diff = if (durationMs > 0 && songDurMs > 0) {
+                kotlin.math.abs(songDurMs - durationMs)
+            } else {
+                Long.MAX_VALUE - 1
             }
+            matched.add(id to diff)
         }
-        if (candidateIds.isEmpty() && fallbackId > 0) candidateIds.add(fallbackId)
+        matched.sortBy { it.second }
 
-        for (id in candidateIds.take(3)) {
+        for ((id, _) in matched.take(3)) {
             val lyricUrl = "https://music.163.com/api/song/lyric?id=$id&lv=1&tv=1&rv=1"
             val lyricText = httpGetText(lyricUrl, desktopUa, "https://music.163.com/") ?: continue
             val lrc = try {
@@ -306,7 +337,9 @@ object LyricsManager {
             } catch (e: Exception) {
                 null
             }
-            if (!lrc.isNullOrBlank() && parseLrc(lrc).isNotEmpty()) return lrc
+            if (!lrc.isNullOrBlank() && parseLrc(lrc).isNotEmpty() &&
+                (!wantJapanese || containsJapanese(lrc))
+            ) return lrc
         }
         return null
     }
@@ -324,12 +357,16 @@ object LyricsManager {
             null
         } ?: return null
 
-        // 曲の長さが近い候補を優先して最大3件まで試す
+        // 曲名が一致する候補だけを対象に、長さが近い順に最大3件まで試す（別曲の歌詞を掴まないため）
+        val wantJapanese = containsJapanese(title) || containsJapanese(artist)
         val hashes = mutableListOf<Pair<String, Long>>()
         for (i in 0 until infos.length()) {
             val info = infos.optJSONObject(i) ?: continue
             val hash = info.optString("hash", "")
             if (hash.isBlank()) continue
+            val songName = info.optString("songname", "")
+                .ifBlank { info.optString("filename", "").substringAfterLast(" - ") }
+            if (!titleMatches(songName, title)) continue
             val durSec = info.optLong("duration", 0L)
             hashes.add(hash to durSec)
         }
@@ -350,7 +387,15 @@ object LyricsManager {
                 null
             } ?: continue
             if (candidates.length() == 0) continue
-            val first = candidates.optJSONObject(0) ?: continue
+            // 歌詞候補も曲名が一致するものを優先する（無ければ先頭）
+            var first = candidates.optJSONObject(0) ?: continue
+            for (j in 0 until candidates.length()) {
+                val cand = candidates.optJSONObject(j) ?: continue
+                if (titleMatches(cand.optString("song", ""), title)) {
+                    first = cand
+                    break
+                }
+            }
             val candId = first.optString("id", "")
             val accessKey = first.optString("accesskey", "")
             if (candId.isBlank() || accessKey.isBlank()) continue
@@ -368,7 +413,9 @@ object LyricsManager {
             } catch (e: Exception) {
                 null
             }
-            if (!lrc.isNullOrBlank() && parseLrc(lrc).isNotEmpty()) return lrc
+            if (!lrc.isNullOrBlank() && parseLrc(lrc).isNotEmpty() &&
+                (!wantJapanese || containsJapanese(lrc))
+            ) return lrc
         }
         return null
     }
