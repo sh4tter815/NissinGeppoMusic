@@ -746,7 +746,8 @@ fun MainLauncherScreen() {
                 isHome = (currentLauncherPage == 1),
                 currentAlbumArt = musicPlayerManager.currentAlbumArt,
                 dynamicBackground = if (matchArtwork) artworkBackground else null,
-                liquidEnabled = liquidBackground
+                liquidEnabled = liquidBackground,
+                liquidAccent = accentColor
             )
 
             // 文字PV風レイヤー: 背景のすぐ上（他の要素の奥）に、行ごとに大きさ・傾き・位置を変えて大きく表示
