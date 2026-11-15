@@ -8,7 +8,15 @@ import android.provider.MediaStore
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -296,6 +304,8 @@ fun MainLauncherScreen() {
     var homeDiscLayout by remember { mutableStateOf(repo.prefManager.getHomeDiscLayout()) }
     var liquidBackground by remember { mutableStateOf(repo.prefManager.isLiquidBackgroundEnabled()) }
     var lyricsPvMode by remember { mutableStateOf(repo.prefManager.isLyricsPvMode()) }
+    var lyricsPvFont by remember { mutableStateOf(repo.prefManager.getLyricsPvFont()) }
+    var lyricsRefreshTick by remember { mutableStateOf(0) }
     var artworkAccent by remember { mutableStateOf<Color?>(null) }
     var artworkBackground by remember { mutableStateOf<Color?>(null) }
     LaunchedEffect(musicPlayerManager.currentAlbumArt, matchArtwork) {
@@ -383,7 +393,7 @@ fun MainLauncherScreen() {
     var lyricsSongUri by remember { mutableStateOf<String?>(null) }
     var lyricsLoading by remember { mutableStateOf(false) }
     var lyricsNotFound by remember { mutableStateOf(false) }
-    LaunchedEffect(showLyrics, musicPlayerManager.currentSongUri) {
+    LaunchedEffect(showLyrics, musicPlayerManager.currentSongUri, lyricsRefreshTick) {
         val uri = musicPlayerManager.currentSongUri
         if (showLyrics && uri != null && uri != lyricsSongUri) {
             lyricsLoading = true
@@ -421,6 +431,7 @@ fun MainLauncherScreen() {
         homeDiscLayout = repo.prefManager.getHomeDiscLayout()
         liquidBackground = repo.prefManager.isLiquidBackgroundEnabled()
         lyricsPvMode = repo.prefManager.isLyricsPvMode()
+        lyricsPvFont = repo.prefManager.getLyricsPvFont()
         if (currentLauncherPage == 1) {
             if (!repo.prefManager.isFirstWelcomeTutorialShown()) {
                 showWelcomeTutorial = true
@@ -659,6 +670,58 @@ fun MainLauncherScreen() {
                 dynamicBackground = if (matchArtwork) artworkBackground else null,
                 liquidEnabled = liquidBackground
             )
+
+            // 文字PV風レイヤー: 背景のすぐ上（他の要素の奥）に、行ごとに大きさ・傾き・位置を変えて大きく表示
+            if (lyricsPvMode && showLyrics && currentLauncherPage == 1 && !isLyricsBrowsing) {
+                val pvLines = lyricsLines
+                if (pvLines != null) {
+                    val pvIndex = pvLines.indexOfLast { it.timeMs <= musicPlayerManager.currentPosition }
+                    if (pvIndex >= 0) {
+                        val pvTextNow = pvLines[pvIndex].text
+                        val pvSeed = Math.floorMod(pvIndex * 31 + pvTextNow.hashCode(), 997)
+                        val pvFontSize = (26 + (pvSeed % 4) * 7).sp
+                        val pvRotationTarget = ((pvSeed / 4) % 29 - 14).toFloat()
+                        val pvOffsetX = ((pvSeed / 7) % 81 - 40).dp
+                        val pvOffsetY = ((pvSeed / 11) % 101 - 50).dp
+                        val pvFontFamily = parseFontFamily(lyricsPvFont, if (lyricsPvFont == "custom") customFontPath else null)
+                        val pvRotation = remember { Animatable(0f) }
+                        LaunchedEffect(pvIndex) {
+                            pvRotation.snapTo(pvRotationTarget - 7f)
+                            pvRotation.animateTo(pvRotationTarget, animationSpec = tween(durationMillis = 550, easing = FastOutSlowInEasing))
+                        }
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            AnimatedContent(
+                                targetState = pvIndex,
+                                transitionSpec = {
+                                    (fadeIn(animationSpec = tween(450, easing = FastOutSlowInEasing)) +
+                                        scaleIn(initialScale = 0.8f, animationSpec = tween(450, easing = FastOutSlowInEasing)) +
+                                        slideInVertically(animationSpec = tween(450, easing = FastOutSlowInEasing)) { it / 5 }) togetherWith
+                                        fadeOut(animationSpec = tween(160))
+                                },
+                                label = "lyricPv"
+                            ) { idx ->
+                                Text(
+                                    text = pvLines[idx].text,
+                                    color = Color.White.copy(alpha = 0.92f),
+                                    fontSize = pvFontSize,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.5.sp,
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = (pvFontSize.value * 1.35f).sp,
+                                    modifier = Modifier
+                                        .offset(x = pvOffsetX, y = pvOffsetY)
+                                        .graphicsLayer { rotationZ = pvRotation.value }
+                                        .padding(horizontal = 24.dp),
+                                    style = LocalTextStyle.current.copy(
+                                        fontFamily = pvFontFamily,
+                                        shadow = Shadow(color = accentColor.copy(alpha = 0.85f), blurRadius = 22f)
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            }
 
             // --- メインコンテンツ描画 (0: 設定, 1: ホーム, 2: アプリ一覧, 3: フォルダ) ---
             Box(
@@ -1163,40 +1226,6 @@ fun MainLauncherScreen() {
             }
         }
 
-        // 文字PV風: 歌詞を画面の中央に大きく表示（ホームで歌詞表示ON＋PV設定ONのとき）
-        if (lyricsPvMode && showLyrics && currentLauncherPage == 1 && !isRackShown && !isLyricsBrowsing) {
-            val pvLines = lyricsLines
-            if (pvLines != null) {
-                val pvIndex = pvLines.indexOfLast { it.timeMs <= musicPlayerManager.currentPosition }
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Crossfade(
-                        targetState = pvIndex,
-                        animationSpec = tween(durationMillis = 350),
-                        label = "lyricPvFade"
-                    ) { idx ->
-                        if (idx >= 0) {
-                            Text(
-                                text = pvLines[idx].text,
-                                color = Color.White.copy(alpha = 0.95f),
-                                fontSize = 34.sp,
-                                fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.5.sp,
-                                textAlign = TextAlign.Center,
-                                lineHeight = 46.sp,
-                                modifier = Modifier.padding(horizontal = 24.dp),
-                                style = LocalTextStyle.current.copy(
-                                    shadow = Shadow(color = accentColor.copy(alpha = 0.9f), blurRadius = 24f)
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
                 // --- 画面下部 ページ切り替え (ボタン式 / ダイヤル式を設定で切替、ラック表示中は隠す) ---
         if (!isRackShown && !isLyricsBrowsing) {
         if (repo.prefManager.getPageSwitchStyle() == "dial") {
@@ -1334,9 +1363,22 @@ fun MainLauncherScreen() {
                         .offset(x = dx.dp, y = dy.dp)
                         .size(40.dp)
                         .zIndex(260f)
-                        .clickable {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            showLyrics = !showLyrics
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onTap = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    showLyrics = !showLyrics
+                                },
+                                onLongPress = {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    // 歌詞の再取得（誤った歌詞を掴んだとき用）: キャッシュを消して取り直す
+                                    LyricsManager.invalidateCache(context, musicPlayerManager.currentTitle, musicPlayerManager.currentArtist, musicPlayerManager.currentAlbum)
+                                    lyricsSongUri = null
+                                    lyricsLines = null
+                                    lyricsRefreshTick++
+                                    showLyrics = true
+                                }
+                            )
                         },
                     contentAlignment = Alignment.Center
                 ) {
