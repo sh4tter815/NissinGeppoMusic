@@ -2496,6 +2496,8 @@ private fun PvLyricLine(
         ) {
         var globalIndex = 0
         rows.forEachIndexed { rowIdx, rowChunks ->
+        val unitsInRow = rowChunks.sumOf { renderUnitsOf(it).size }
+        var rowUnitIdx = 0
         Row(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
@@ -2507,6 +2509,9 @@ private fun PvLyricLine(
                 }
                 for (ru in renderUnitsOf(chunk)) {
                     val gi = globalIndex++
+                    val rIdx = rowUnitIdx++
+                    // 文字同士がほんの少し被るくらいに、行の中心へ向けて詰める（画面外へのはみ出しは増やさない）
+                    val uXShift = ((unitsInRow - 1) / 2f - rIdx) * fitSize * 0.05f
                     val uSeed = Math.floorMod(baseSeed * 7 + gi * 131, 997)
                     val charFactor = when {
                         ru.length > 1 && ru.all { it in '゠'..'ヿ' } -> 1.05f // カタカナ単語
@@ -2522,6 +2527,7 @@ private fun PvLyricLine(
                         uSize = (fitSize * (0.92f + (uSeed % 22) / 100f) * charFactor).coerceIn(fitSize * 0.55f, fitSize * 1.35f).sp,
                         uRot = ((uSeed / 3) % 29 - 14).toFloat(),
                         uYOffset = ((uSeed / 5) % 17 - 8).dp,
+                        uXShiftDp = uXShift,
                         staggerIndex = gi,
                         exiting = exiting,
                         exitProgressValue = exitProgress.value,
@@ -2544,6 +2550,7 @@ private fun PvLyricUnit(
     uSize: androidx.compose.ui.unit.TextUnit,
     uRot: Float,
     uYOffset: androidx.compose.ui.unit.Dp,
+    uXShiftDp: Float = 0f,
     staggerIndex: Int,
     exiting: Boolean,
     exitProgressValue: Float,
@@ -2584,7 +2591,7 @@ private fun PvLyricUnit(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .width(IntrinsicSize.Max)
-            .offset(y = uYOffset)
+            .offset(x = uXShiftDp.dp, y = uYOffset)
             .graphicsLayer {
                 if (exiting) {
                     val localX = ((exitProgressValue * 720f - exitDelayMs) / 320f).coerceIn(0f, 1f)
