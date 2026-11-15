@@ -687,7 +687,7 @@ object LyricsManager {
         album: String,
         lines: List<LyricLine>
     ): List<String> = withContext(Dispatchers.IO) {
-        val cache = File(cacheFile(context, title, artist, album).absolutePath + ".ja")
+        val cache = File(cacheFile(context, title, artist, album).absolutePath + ".ja2")
         if (cache.exists()) {
             try {
                 val cached = cache.readText(Charsets.UTF_8).split("\n")
@@ -698,7 +698,9 @@ object LyricsManager {
         }
         val result = MutableList(lines.size) { "" }
         val targets = lines.mapIndexedNotNull { i, l ->
-            if (l.text.isBlank() || containsJapanese(l.text)) null else i to l.text
+            // かなを含む行は日本語として翻訳しない。漢字だけの行は中国語の
+            // 可能性があるので対象にする（日本語なら訳が原文と一致して消える）
+            if (l.text.isBlank() || l.text.any { it in '\u3040'..'\u30FF' }) null else i to l.text
         }
         if (targets.isEmpty()) return@withContext result
         var idx = 0
@@ -715,12 +717,18 @@ object LyricsManager {
             val translated = translateTextGoogle(joined)
             val parts = translated?.split("\n")
             if (parts != null && parts.size == chunk.size) {
-                chunk.forEachIndexed { k, (lineIdx, _) -> result[lineIdx] = parts[k].trim() }
+                chunk.forEachIndexed { k, (lineIdx, src) ->
+                    val tr = parts[k].trim()
+                    result[lineIdx] = if (tr == src.trim()) "" else tr
+                }
             } else {
                 // 行数がずれた場合は1行ずつ翻訳し直す
                 for ((lineIdx, text) in chunk) {
                     val one = translateTextGoogle(text)
-                    if (one != null) result[lineIdx] = one.trim()
+                    if (one != null) {
+                        val tr = one.trim()
+                        result[lineIdx] = if (tr == text.trim()) "" else tr
+                    }
                 }
             }
         }
