@@ -49,6 +49,8 @@ import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.foundation.text.BasicTextField
@@ -409,6 +411,26 @@ fun MainLauncherScreen() {
     // アプリ内アップデート: 起動時に新ビルドを確認する（6時間に1回まで）
     var updateInfo by remember { mutableStateOf<UpdateChecker.LatestRelease?>(null) }
     var showUpdateDialog by remember { mutableStateOf(false) }
+    var showLyricSearch by remember { mutableStateOf(false) }
+    // 歌詞の対訳（洋楽向け）: 歌詞ブラウズ内のボタンでON/OFFする
+    var lyricTranslations by remember { mutableStateOf<List<String>?>(null) }
+    var translationEnabled by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        translationEnabled = repo.prefManager.isLyricTranslationEnabled()
+    }
+    LaunchedEffect(lyricsLines, translationEnabled) {
+        lyricTranslations = null
+        val lines = lyricsLines
+        if (translationEnabled && lines != null && lines.isNotEmpty()) {
+            lyricTranslations = LyricsManager.translateToJapanese(
+                context,
+                musicPlayerManager.currentTitle,
+                musicPlayerManager.currentArtist,
+                musicPlayerManager.currentAlbum,
+                lines
+            )
+        }
+    }
     LaunchedEffect(Unit) {
         val info = UpdateChecker.checkIfDue(context)
         if (info != null) {
@@ -852,6 +874,29 @@ fun MainLauncherScreen() {
                         }
                         if (pvDisplayIndex == -2) {
                             PvInterludeArt(accentColor = accentColor, modifier = Modifier.fillMaxWidth().padding(top = 175.dp).height(230.dp))
+                        }
+                        // 対訳: PVの3行目として、現在の行の日本語訳を小さく出す
+                        if (translationEnabled && pvDisplayIndex >= 0) {
+                            val translation = lyricTranslations?.getOrNull(pvDisplayIndex)
+                            if (!translation.isNullOrBlank()) {
+                                Box(
+                                    modifier = Modifier.fillMaxWidth().padding(top = 448.dp, start = 32.dp, end = 32.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = translation,
+                                        color = Color.White.copy(alpha = 0.85f),
+                                        fontSize = 13.sp,
+                                        fontFamily = lyricsFontFamily,
+                                        textAlign = TextAlign.Center,
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis,
+                                        style = LocalTextStyle.current.copy(
+                                            shadow = Shadow(color = accentColor.copy(alpha = 0.6f), blurRadius = 10f)
+                                        )
+                                    )
+                                }
+                            }
                         }
                         pvCurrent?.let { (_, curText) ->
                             val ambKind = when {
@@ -1386,6 +1431,17 @@ fun MainLauncherScreen() {
                                 ) {
                                     Icon(Icons.Default.Refresh, contentDescription = "歌詞を再取得", tint = Color.White, modifier = Modifier.size(24.dp))
                                 }
+                                // タグを指定して検索（間違った歌詞を掴んだとき用）
+                                Box(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF263238))
+                                        .clickable { showLyricSearch = true },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.Search, contentDescription = "タグを指定して検索", tint = Color.White, modifier = Modifier.size(24.dp))
+                                }
                                 // 中央: フォーカス行へ移動
                                 Box(
                                     modifier = Modifier
@@ -1414,6 +1470,20 @@ fun MainLauncherScreen() {
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(Icons.Default.Timer, contentDescription = "タイミング調整", tint = Color.White, modifier = Modifier.size(24.dp))
+                                }
+                                // 翻訳ON/OFF（洋楽の対訳をPVの下に出す）
+                                Box(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(CircleShape)
+                                        .background(if (translationEnabled) accentColor else Color(0xFF263238))
+                                        .clickable {
+                                            translationEnabled = !translationEnabled
+                                            repo.prefManager.setLyricTranslationEnabled(translationEnabled)
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(Icons.Default.Translate, contentDescription = "翻訳", tint = Color.White, modifier = Modifier.size(24.dp))
                                 }
                             }
                         }
@@ -1792,8 +1862,8 @@ fun MainLauncherScreen() {
             }
         }
 
-        // 歌詞ボタン: 曲名と同じ高さ、画面右側。タップで歌詞全文表示、長押しで歌詞を再取得
-        if (currentLauncherPage == 1 && !isRackShown && !isLyricsBrowsing && lyricsLines != null) {
+        // 歌詞ボタン: 曲名と同じ高さ、画面右側。タップで歌詞全文表示（歌詞が無いときはタグ検索）、長押しで歌詞を再取得
+        if (currentLauncherPage == 1 && !isRackShown && !isLyricsBrowsing && musicPlayerManager.currentSongUri != null) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -1804,7 +1874,10 @@ fun MainLauncherScreen() {
                         detectTapGestures(
                             onTap = {
                                 val lines = lyricsLines
-                                if (lines != null) {
+                                if (lines == null) {
+                                    // 歌詞が取得できていないときは、タグを指定して手動検索できるようにする
+                                    showLyricSearch = true
+                                } else {
                                     lyricsBrowseFollow = true
                                     lyricsBrowseStartIndex = lines.indexOfLast {
                                         it.timeMs <= musicPlayerManager.currentPosition + lyricOffsetMs
@@ -2728,6 +2801,22 @@ fun MainLauncherScreen() {
         }
 
 
+
+        // タグ指定で歌詞を検索するダイアログ
+        if (showLyricSearch) {
+            LyricTagSearchDialog(
+                currentTitle = musicPlayerManager.currentTitle,
+                currentArtist = musicPlayerManager.currentArtist,
+                currentAlbum = musicPlayerManager.currentAlbum,
+                onApply = { applied ->
+                    lyricsLines = applied
+                    lyricsSongUri = musicPlayerManager.currentSongUri
+                    if (lyricsDisabledUri == musicPlayerManager.currentSongUri) lyricsDisabledUri = null
+                    showLyrics = true
+                },
+                onDismiss = { showLyricSearch = false }
+            )
+        }
 
         // アップデート通知ダイアログ
         if (showUpdateDialog && updateInfo != null) {
