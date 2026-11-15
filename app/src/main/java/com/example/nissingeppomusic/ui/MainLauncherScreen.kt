@@ -60,6 +60,9 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -703,7 +706,7 @@ fun MainLauncherScreen() {
                     val pvInterlude = when {
                         pvCurLine == null -> false
                         pvNextLine == null -> (pvPos - pvCurLine.timeMs) > 8000
-                        else -> (pvNextLine.timeMs - pvCurLine.timeMs) > 6000 && (pvPos - pvCurLine.timeMs) > 3000 // 行間が長い間奏だけ。次の行が近づいたら前の行に戻る、をしない
+                        else -> (pvNextLine.timeMs - pvCurLine.timeMs) > 15000 && (pvPos - pvCurLine.timeMs) > 5000 // 行間が長い間奏だけ。次の行が近づいたら前の行に戻る、をしない
                     }
                     val pvDisplayIndex = if (pvInterlude) -2 else pvIndex
                     if (pvIndex >= 0) {
@@ -775,7 +778,7 @@ fun MainLauncherScreen() {
                     val mInterlude = when {
                         mCur == null -> true
                         mNext == null -> (mPos - mCur.timeMs) > 8000
-                        else -> (mNext.timeMs - mCur.timeMs) > 6000 && (mPos - mCur.timeMs) > 3000
+                        else -> (mNext.timeMs - mCur.timeMs) > 15000 && (mPos - mCur.timeMs) > 5000
                     }
                     Crossfade(targetState = mRaw, animationSpec = tween(250), label = "multiLyrics") { rawIdx ->
                         Column(
@@ -947,9 +950,9 @@ fun MainLauncherScreen() {
                                     val curLine = lines.getOrNull(currentLyricIndex)
                                     val nextLine = lines.getOrNull(currentLyricIndex + 1)
                                     val inInterlude = when {
-                                        curLine == null -> nextLine != null && (nextLine.timeMs - posNow) > 3000
+                                        curLine == null -> nextLine != null && (nextLine.timeMs - posNow) > 5000
                                         nextLine == null -> (posNow - curLine.timeMs) > 8000
-                                        else -> (nextLine.timeMs - curLine.timeMs) > 6000 && (posNow - curLine.timeMs) > 3000 // 行間が長い間奏だけ。次の行が近づいたら前の行に戻る、をしない
+                                        else -> (nextLine.timeMs - curLine.timeMs) > 15000 && (posNow - curLine.timeMs) > 5000 // 行間が長い間奏だけ。次の行が近づいたら前の行に戻る、をしない
                                     }
                                     Crossfade(
                                         targetState = if (inInterlude) -2 else currentLyricIndex,
@@ -2246,24 +2249,46 @@ private fun PvLyricLine(
     modifier: Modifier = Modifier
 ) {
     val pvEaseIn = CubicBezierEasing(0.42f, 0f, 1f, 1f)
+    // 英語は単語ごと、日本語は1文字ごとにバラバラにする（文字単位だと英単語が読めなくなるため）
+    val units = remember(text) { splitLyricUnits(text) }
+    if (units.isEmpty()) return
+    val unitCount = units.size
+    // 横幅の見積もり（em換算）: ラテン文字は1文字0.6em、日本語は1.0em、単語の間は0.32em
+    fun unitEm(u: String): Float = u.fold(0f) { acc, ch -> acc + if (ch.code < 0x300) 0.6f else 1.0f }
+    val latinDominant = text.count { it.code in 0x41..0x7A } > text.count { it.code >= 0x300 }
+    val gapEm = if (latinDominant) 0.32f else 0f
+    // 2段に分ける場合は em 数が均等になる位置で割る
+    val splitIdx = if (unitCount >= 6) {
+        val totalEm = units.sumOf { unitEm(it).toDouble() }.toFloat() + gapEm * (unitCount - 1)
+        var acc = 0f
+        var best = unitCount / 2
+        var bestDiff = Float.MAX_VALUE
+        for (idx in 2..(unitCount - 2)) {
+            acc += unitEm(units[idx - 1]) + gapEm
+            val diff = kotlin.math.abs(totalEm / 2f - acc)
+            if (diff < bestDiff) { bestDiff = diff; best = idx }
+        }
+        best
+    } else unitCount
+    val rows: List<List<Int>> = if (splitIdx >= unitCount) listOf(units.indices.toList())
+        else listOf((0 until splitIdx).toList(), (splitIdx until unitCount).toList())
+    fun rowEm(row: List<Int>): Float = row.sumOf { unitEm(units[it]).toDouble() }.toFloat() + gapEm * (row.size - 1).coerceAtLeast(0)
+    val longestRowEm = rows.maxOf { rowEm(it) }.coerceAtLeast(1f)
     val baseFontSize = (40 + (baseSeed % 4) * 10).toFloat()
-    val charCount = text.length.coerceAtLeast(1)
-    // 画面の横幅ギリギリまで大きくする
-    val longestRow = if (charCount >= 8) maxOf(charCount / 2 + 1, charCount - charCount / 2 + 1) else charCount
     // 枠（タイトル下〜円の上、左右マージン16dp）に収まるよう、幅と高さの両方で上限をかける
-    val heightCap = if (charCount >= 8) 46f else 58f
-    val fitSize = minOf(baseFontSize, (screenWidthDp - 32f) / (longestRow * 1.18f), heightCap)
+    val heightCap = if (rows.size >= 2) 46f else 58f
+    val fitSize = minOf(baseFontSize, (screenWidthDp - 32f) / (longestRowEm * 1.12f), heightCap)
     val lineOffsetX = ((baseSeed / 7) % 17 - 8).dp
     val lineOffsetY = ((baseSeed / 11) % 21 - 10).dp
-    // 退場は1本の時計（exitProgress）で全文字を駆動する。文字ごとのAnimatableだと
-    // スケジューリングのブレでカクつくため、位相だけ文字ごとにずらす
+    val row2Indent = ((baseSeed / 13) % 5 * 18).dp
+    // 退場は1本の時計（exitProgress）で全ユニットを駆動する（位相だけユニットごとにずらす）
     val exitProgress = remember { Animatable(0f) }
     if (exiting) {
         LaunchedEffect(Unit) {
             exitProgress.animateTo(1f, animationSpec = tween(durationMillis = 720, easing = LinearEasing))
         }
     }
-    // 下線: 文字の入場と同時に、左から右へ伸びて（イーズアウト）、すぐに左から右へ消える（イーズイン）
+    // 下線: 入場と同時に、左から右へ伸びて（イーズアウト）、すぐに左から右へ消える（イーズイン）
     val underline = remember { Animatable(0f) }
     if (!exiting) {
         LaunchedEffect(Unit) {
@@ -2271,11 +2296,6 @@ private fun PvLyricLine(
             underline.animateTo(2f, animationSpec = tween(durationMillis = 320, easing = pvEaseIn))
         }
     }
-    // 長い行は途中で折り返して2段に散らす（リリックスピーカー風の配置）
-    val splitIdx = if (charCount >= 8) (charCount / 2 + (baseSeed % 3) - 1).coerceIn(3, charCount - 3) else charCount
-    val rowIndices: List<List<Int>> = if (splitIdx >= charCount) listOf(text.indices.toList())
-        else listOf((0 until splitIdx).toList(), (splitIdx until charCount).toList())
-    val row2Indent = ((baseSeed / 13) % 5 * 18).dp
     Box(
         modifier = modifier
             .offset(x = lineOffsetX, y = lineOffsetY)
@@ -2285,42 +2305,57 @@ private fun PvLyricLine(
             }
     ) {
         Column(horizontalAlignment = Alignment.Start) {
-        rowIndices.forEach { rowIdxList ->
+        rows.forEach { rowUnits ->
         Row(
             horizontalArrangement = Arrangement.Start,
             verticalAlignment = Alignment.CenterVertically,
-            modifier = if (rowIdxList.first() > 0) Modifier.padding(start = row2Indent, top = 6.dp) else Modifier
+            modifier = if (rowUnits.first() > 0) Modifier.padding(start = row2Indent, top = 6.dp) else Modifier
         ) {
-            rowIdxList.forEach { ci ->
-                val ch = text[ci]
-                val chSeed = Math.floorMod(baseSeed * 7 + ci * 131, 997)
-                val scriptFactor = when (ch) {
-                    in '一'..'鿿', '々', '〆', 'ヶ' -> 1.12f
-                    in 'ぁ'..'ゟ' -> 0.88f
-                    in '゠'..'ヿ' -> 1.0f
+            rowUnits.forEachIndexed { posInRow, ui ->
+                val unit = units[ui]
+                if (posInRow > 0 && latinDominant) {
+                    Spacer(Modifier.width((fitSize * 0.32f).dp))
+                }
+                val uSeed = Math.floorMod(baseSeed * 7 + ui * 131, 997)
+                val scriptFactor = when {
+                    unit.length > 1 || unit[0].code < 0x300 -> 0.98f
+                    unit[0] in '一'..'鿿' || unit[0] == '々' || unit[0] == '〆' || unit[0] == 'ヶ' -> 1.12f
+                    unit[0] in 'ぁ'..'ゟ' -> 0.88f
+                    unit[0] in '゠'..'ヿ' -> 1.0f
                     else -> 0.95f
                 }
-                val chSize = (fitSize * (0.7f + (chSeed % 80) / 100f) * scriptFactor).sp
-                val chRot = ((chSeed / 3) % 29 - 14).toFloat()
-                val chYOffset = ((chSeed / 5) % 29 - 14).dp
-                val chAnim = remember(ci) { Animatable(0f) }
+                val uSize = (fitSize * (0.7f + (uSeed % 80) / 100f) * scriptFactor).sp
+                val uRot = ((uSeed / 3) % 29 - 14).toFloat()
+                val uYOffset = ((uSeed / 5) % 29 - 14).dp
+                val uAnim = remember(ui) { Animatable(0f) }
                 if (!exiting) {
-                    LaunchedEffect(ci) {
-                        delay(ci * 45L)
-                        chAnim.animateTo(1f, animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing))
+                    LaunchedEffect(ui) {
+                        delay(ui * 45L)
+                        uAnim.animateTo(1f, animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing))
                     }
                 }
-                // 退場の文字ごとの遅延（ミリ秒換算）。位相は exitProgress から計算する
-                val exitDelayMs = (chSeed % 5) * 35f + ci * 12f
+                // 退場のユニットごとの遅延（ミリ秒換算）。位相は exitProgress から計算する
+                val exitDelayMs = (uSeed % 5) * 35f + ui * 12f
+                val unitText = remember(unit, uSize) {
+                    buildAnnotatedString {
+                        for (ch in unit) {
+                            if (ch in "ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ") {
+                                withStyle(SpanStyle(fontSize = uSize * 0.6f)) { append(ch) }
+                            } else {
+                                append(ch)
+                            }
+                        }
+                    }
+                }
                 Text(
-                    text = ch.toString(),
+                    text = unitText,
                     color = Color.White.copy(alpha = 0.92f),
-                    fontSize = chSize,
+                    fontSize = uSize,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
                     overflow = TextOverflow.Visible,
                     modifier = Modifier
-                        .offset(y = chYOffset)
+                        .offset(y = uYOffset)
                         .graphicsLayer {
                             if (exiting) {
                                 val localX = ((exitProgress.value * 720f - exitDelayMs) / 320f).coerceIn(0f, 1f)
@@ -2329,17 +2364,17 @@ private fun PvLyricLine(
                                 val es = 0.5f + 0.5f * a
                                 scaleX = es
                                 scaleY = es
-                                rotationZ = chRot * (2f - a)
+                                rotationZ = uRot * (2f - a)
                                 translationY = (1f - a) * 30f
                             } else {
-                                val a = chAnim.value
+                                val a = uAnim.value
                                 alpha = a
                                 val ns = 0.6f + 0.4f * a
                                 scaleX = ns
                                 scaleY = ns
-                                rotationZ = chRot * a
-                                // 入場は文字ごとにバラバラの方向（8方向）から飛んでくる
-                                val dir = PV_ENTRY_DIRS[chSeed % 8]
+                                rotationZ = uRot * a
+                                // 入場はユニットごとにバラバラの方向（8方向）から飛んでくる
+                                val dir = PV_ENTRY_DIRS[uSeed % 8]
                                 translationX = dir.first * 52f * (1f - a)
                                 translationY = dir.second * 52f * (1f - a)
                             }
@@ -2370,4 +2405,102 @@ private fun PvLyricLine(
         }
         }
     }
+}
+
+/** 歌詞を行の表示ユニットに割る。ラテン文字の連続は単語としてまとめ、日本語は文節っぽい塊に切る */
+private fun splitLyricUnits(text: String): List<String> {
+    val units = mutableListOf<String>()
+    val latin = StringBuilder()
+    val jp = StringBuilder()
+    fun flushLatin() {
+        if (latin.isNotEmpty()) {
+            units.add(latin.toString())
+            latin.clear()
+        }
+    }
+    fun flushJp() {
+        if (jp.isNotEmpty()) {
+            units.addAll(chunkJapanese(jp.toString()))
+            jp.clear()
+        }
+    }
+    for (ch in text) {
+        when {
+            ch == ' ' || ch == '　' -> {
+                flushLatin(); flushJp()
+            }
+            ch.code < 0x300 && (ch.isLetterOrDigit() || ch == '\'' || ch == '’' || ch == '-') -> {
+                flushJp(); latin.append(ch)
+            }
+            else -> {
+                flushLatin(); jp.append(ch)
+            }
+        }
+    }
+    flushLatin(); flushJp()
+    return units
+}
+
+/**
+ * 日本語の文字列を文節っぽい塊に切る軽量ヒューリスティクス。
+ * 内容語（漢字・カタカナ・ひらがな語）に後ろのひらがな（送り仮名・助詞・活用語尾）をくっつけ、
+ * ひらがな部分が助詞で始まって後ろに内容が続く場合は、助詞の後ろで次の塊に分ける。
+ */
+private fun chunkJapanese(span: String): List<String> {
+    fun typeOf(ch: Char): Int = when (ch) {
+        in '一'..'鿿', '々', '〆', 'ヶ' -> 1 // 漢字
+        in 'ぁ'..'ゟ' -> 2 // ひらがな
+        in '゠'..'ヿ' -> 3 // カタカナ（ー含む）
+        else -> 0
+    }
+    // 同種の連続に分ける
+    val runs = mutableListOf<String>()
+    val sb = StringBuilder()
+    var prevType = -1
+    for (ch in span) {
+        val t = typeOf(ch)
+        if (t != prevType && sb.isNotEmpty()) {
+            runs.add(sb.toString())
+            sb.clear()
+        }
+        sb.append(ch)
+        prevType = t
+    }
+    if (sb.isNotEmpty()) runs.add(sb.toString())
+
+    val particles = "はがをにへとやのもでからまでよりばねよわ"
+    val chunks = mutableListOf<String>()
+    val cur = StringBuilder()
+    fun closeChunk() {
+        if (cur.isNotEmpty()) {
+            chunks.add(cur.toString())
+            cur.clear()
+        }
+    }
+    for (run in runs) {
+        val t = typeOf(run[0])
+        when {
+            t == 2 && cur.isNotEmpty() -> {
+                // ひらがな部分: 先頭の助詞（最大2文字）の後ろに2文字以上残るなら、助詞までを今の塊に付けて次へ
+                var pLen = 0
+                while (pLen < run.length && pLen < 2 && run[pLen] in particles) pLen++
+                if (pLen >= 1 && run.length - pLen >= 2) {
+                    cur.append(run.substring(0, pLen))
+                    closeChunk()
+                    cur.append(run.substring(pLen))
+                } else {
+                    cur.append(run)
+                }
+            }
+            t == 2 -> cur.append(run) // 行頭のひらがなはそのまま塊の始まり
+            t == 0 -> cur.append(run) // 句読点などは前の塊に付ける
+            else -> {
+                // 漢字・カタカナは新しい塊の始まり
+                closeChunk()
+                cur.append(run)
+            }
+        }
+    }
+    closeChunk()
+    return chunks
 }
