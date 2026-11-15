@@ -18,6 +18,8 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -59,6 +61,7 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
@@ -423,6 +426,7 @@ fun MainLauncherScreen() {
         val uri = musicPlayerManager.currentSongUri
         if (showLyrics && uri != null && uri != lyricsSongUri) {
             lyricsLoading = true
+            lyricsLines = null // 前の曲の歌詞が残らないよう、取得開始で即クリア
             lyricsNotFound = false
             val song = allApps.firstOrNull { it.packageName == uri }
             // 選曲直後は「前の曲の長さ」が残っていて、それを使うと別曲・別バージョンの歌詞を
@@ -783,6 +787,24 @@ fun MainLauncherScreen() {
                 }
             }
 
+            // 歌詞の取得中は、PV／複数行モードでも前の曲の歌詞を残さず読み込み表示を出す
+            if (showLyrics && currentLauncherPage == 1 && !isLyricsBrowsing && lyricsLoading && lyricsLines == null && lyricsDisplayMode != "line") {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(top = 215.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        CircularProgressIndicator(color = accentColor, modifier = Modifier.size(20.dp), strokeWidth = 2.5.dp)
+                        Text(
+                            text = "取得中…",
+                            color = Color.White.copy(alpha = 0.8f),
+                            fontSize = 15.sp,
+                            style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily)
+                        )
+                    }
+                }
+            }
+
             // 複数行モード: 円を下げてできた上の空白に、前・今・次の3行を表示（今の行が大きめ）
             if (lyricsDisplayMode == "multi" && showLyrics && currentLauncherPage == 1 && !isLyricsBrowsing) {
                 val multiLines = lyricsLines
@@ -911,13 +933,17 @@ fun MainLauncherScreen() {
                             val lines = lyricsLines
                             when {
                                 lyricsLoading -> {
-                                    Text(
-                                        text = "歌詞を取得中…",
-                                        color = Color.White.copy(alpha = 0.45f),
-                                        fontSize = 12.sp,
-                                        letterSpacing = 1.0.sp,
-                                        textAlign = TextAlign.Start
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        CircularProgressIndicator(color = accentColor, modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                                        Text(
+                                            text = "取得中…",
+                                            color = Color.White.copy(alpha = 0.6f),
+                                            fontSize = 12.sp,
+                                            letterSpacing = 1.0.sp,
+                                            textAlign = TextAlign.Start,
+                                            style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily)
+                                        )
+                                    }
                                 }
                                 lines != null -> {
                                     // 同期歌詞の現在の1行を、行の切り替わりにフェードをかけて表示
@@ -2473,6 +2499,16 @@ private fun PvLyricLine(
             exitProgress.animateTo(1f, animationSpec = tween(durationMillis = 720, easing = LinearEasing))
         }
     }
+    // 装飾エフェクトは行ごとにランダム: 0=下線スイープ / 1=波紋 / 2=黒塗りバー
+    val effectKind = Math.floorMod(baseSeed, 3)
+    val barAnim = remember { Animatable(0f) }
+    val rippleAnim = remember { Animatable(0f) }
+    if (!exiting) {
+        LaunchedEffect(Unit) {
+            barAnim.animateTo(1f, animationSpec = tween(durationMillis = 520, easing = FastOutSlowInEasing))
+            rippleAnim.animateTo(1f, animationSpec = tween(durationMillis = 1150, easing = LinearEasing))
+        }
+    }
     // 下線: 入場と同時に、左から右へ伸びて（イーズアウト）、すぐに左から右へ消える（イーズイン）
     val underline = remember { Animatable(0f) }
     if (!exiting) {
@@ -2490,6 +2526,26 @@ private fun PvLyricLine(
                 alpha = if (exiting) 1f - ((exitProgress.value - 0.6f) / 0.4f).coerceIn(0f, 1f) else 1f
             }
     ) {
+        if (effectKind == 1) {
+            Canvas(modifier = Modifier.matchParentSize()) {
+                val t = rippleAnim.value
+                if (t > 0f && t < 1f) {
+                    for (k in 0 until 3) {
+                        val local = (t * 1.35f - k * 0.16f).coerceIn(0f, 1f)
+                        if (local > 0f) {
+                            val cx = size.width * (0.24f + 0.26f * k) + ((baseSeed / (k + 3)) % 40 - 20).toFloat()
+                            val cy = size.height * (0.32f + 0.18f * ((baseSeed / (k + 5)) % 3))
+                            drawCircle(
+                                color = accentColor.copy(alpha = (1f - local) * 0.45f),
+                                radius = local * size.height * 0.95f,
+                                center = Offset(cx, cy),
+                                style = Stroke(width = 2.5f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth()
@@ -2498,6 +2554,17 @@ private fun PvLyricLine(
         rows.forEachIndexed { rowIdx, rowChunks ->
         val unitsInRow = rowChunks.sumOf { renderUnitsOf(it).size }
         var rowUnitIdx = 0
+        Box {
+            if (effectKind == 2) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .fillMaxWidth(barAnim.value.coerceIn(0f, 1f))
+                        .height((fitSize * 1.32f).dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(Color.Black.copy(alpha = 0.5f * (if (exiting) 1f - exitProgress.value else 1f)))
+                )
+            }
         Row(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
@@ -2533,10 +2600,12 @@ private fun PvLyricLine(
                         exitProgressValue = exitProgress.value,
                         exitDelayMs = (uSeed % 5) * 35f + gi * 12f,
                         fontFamily = fontFamily,
-                        accentColor = accentColor
+                        accentColor = accentColor,
+                        effectKind = effectKind
                     )
                 }
             }
+        }
         }
         }
         }
@@ -2556,15 +2625,27 @@ private fun PvLyricUnit(
     exitProgressValue: Float,
     exitDelayMs: Float,
     fontFamily: FontFamily?,
-    accentColor: Color
+    accentColor: Color,
+    effectKind: Int = 0
 ) {
     val pvEaseIn = CubicBezierEasing(0.42f, 0f, 1f, 1f)
     val uSeed = staggerIndex
     val uAnim = remember(staggerIndex) { Animatable(0f) }
+    // 表示中ずっと、位置がごく小さくぐらぐら揺れる（角度は変えない）
+    val sway = remember(staggerIndex) { Animatable(0f) }
     if (!exiting) {
         LaunchedEffect(staggerIndex) {
             delay(staggerIndex * 45L)
             uAnim.animateTo(1f, animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing))
+        }
+        LaunchedEffect(staggerIndex) {
+            sway.animateTo(
+                1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 1300 + (uSeed % 5) * 230, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse
+                )
+            )
         }
     }
     val annotatedUnit = remember(unitText, uSize) {
@@ -2611,8 +2692,10 @@ private fun PvLyricUnit(
                     rotationZ = uRot * a
                     // 入場は単位ごとにバラバラの方向（8方向）から飛んでくる
                     val dir = PV_ENTRY_DIRS[Math.floorMod(uSeed * 131 + 7, 8)]
-                    translationX = dir.first * 52f * (1f - a)
-                    translationY = dir.second * 52f * (1f - a)
+                    val swx = (sway.value - 0.5f) * 3.2f
+                    val swy = (0.5f - sway.value) * 2.6f
+                    translationX = dir.first * 52f * (1f - a) + swx * a
+                    translationY = dir.second * 52f * (1f - a) + swy * a
                 }
             }
     ) {
@@ -2629,7 +2712,7 @@ private fun PvLyricUnit(
                 shadow = Shadow(color = accentColor.copy(alpha = 0.85f), blurRadius = 22f)
             )
         )
-        if (!exiting) {
+        if (!exiting && effectKind == 0) {
             Spacer(modifier = Modifier.height(3.dp))
             val ulv = ulAnim.value
             Canvas(modifier = Modifier.fillMaxWidth().height(2.5.dp)) {
