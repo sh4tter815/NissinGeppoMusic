@@ -2249,39 +2249,39 @@ private fun PvLyricLine(
     modifier: Modifier = Modifier
 ) {
     val pvEaseIn = CubicBezierEasing(0.42f, 0f, 1f, 1f)
-    // 英語は単語ごと、日本語は1文字ごとにバラバラにする（文字単位だと英単語が読めなくなるため）
-    val units = remember(text) { splitLyricUnits(text) }
-    if (units.isEmpty()) return
-    val unitCount = units.size
-    // 横幅の見積もり（em換算）: ラテン文字は1文字0.6em、日本語は1.0em、単語の間は0.32em
-    fun unitEm(u: String): Float = u.fold(0f) { acc, ch -> acc + if (ch.code < 0x300) 0.6f else 1.0f }
+    // 改行位置は塊（文節・英単語）の境界で決める。描画とアニメーションは文字ごと（英単語だけ単語ごと）
+    val chunks = remember(text) { splitLyricUnits(text) }
+    if (chunks.isEmpty()) return
+    fun isLatinWord(c: String): Boolean = c.isNotEmpty() && c.all { it.code < 0x300 }
+    fun chunkEm(c: String): Float = c.fold(0f) { acc, ch -> acc + if (ch.code < 0x300) 0.6f else 1.0f }
     val latinDominant = text.count { it.code in 0x41..0x7A } > text.count { it.code >= 0x300 }
     val gapEm = if (latinDominant) 0.32f else 0f
-    // 2段に分ける場合は em 数が均等になる位置で割る
-    val splitIdx = if (unitCount >= 6) {
-        val totalEm = units.sumOf { unitEm(it).toDouble() }.toFloat() + gapEm * (unitCount - 1)
+    // 基本2行構成: 塊の境界の中で、左右のemが一番均等になる位置で割る
+    val totalChars = text.count { it != ' ' && it != '　' }
+    val splitIdx = if (chunks.size >= 2 && totalChars >= 6) {
+        val totalEm = chunks.sumOf { chunkEm(it).toDouble() }.toFloat() + gapEm * (chunks.size - 1)
         var acc = 0f
-        var best = unitCount / 2
+        var best = 1
         var bestDiff = Float.MAX_VALUE
-        for (idx in 2..(unitCount - 2)) {
-            acc += unitEm(units[idx - 1]) + gapEm
+        for (idx in 1 until chunks.size) {
+            acc += chunkEm(chunks[idx - 1]) + gapEm
             val diff = kotlin.math.abs(totalEm / 2f - acc)
             if (diff < bestDiff) { bestDiff = diff; best = idx }
         }
         best
-    } else unitCount
-    val rows: List<List<Int>> = if (splitIdx >= unitCount) listOf(units.indices.toList())
-        else listOf((0 until splitIdx).toList(), (splitIdx until unitCount).toList())
-    fun rowEm(row: List<Int>): Float = row.sumOf { unitEm(units[it]).toDouble() }.toFloat() + gapEm * (row.size - 1).coerceAtLeast(0)
+    } else chunks.size
+    val rows: List<List<String>> = if (splitIdx >= chunks.size) listOf(chunks)
+        else listOf(chunks.subList(0, splitIdx), chunks.subList(splitIdx, chunks.size))
+    fun rowEm(row: List<String>): Float = row.sumOf { chunkEm(it).toDouble() }.toFloat() + gapEm * (row.size - 1).coerceAtLeast(0)
     val longestRowEm = rows.maxOf { rowEm(it) }.coerceAtLeast(1f)
     val baseFontSize = (40 + (baseSeed % 4) * 10).toFloat()
-    // 枠（タイトル下〜円の上、左右マージン16dp）に収まるよう、幅と高さの両方で上限をかける
-    val heightCap = if (rows.size >= 2) 46f else 58f
-    val fitSize = minOf(baseFontSize, (screenWidthDp - 32f) / (longestRowEm * 1.12f), heightCap)
+    // 横は余白ギリギリまで、縦は円に被らない範囲で最大化
+    val heightCap = if (rows.size >= 2) 52f else 64f
+    val fitSize = minOf(baseFontSize, (screenWidthDp - 8f) / (longestRowEm * 1.04f), heightCap)
     val lineOffsetX = ((baseSeed / 7) % 17 - 8).dp
     val lineOffsetY = ((baseSeed / 11) % 21 - 10).dp
-    val row2Indent = ((baseSeed / 13) % 5 * 18).dp
-    // 退場は1本の時計（exitProgress）で全ユニットを駆動する（位相だけユニットごとにずらす）
+    val row2Indent = ((baseSeed / 13) % 4 * 14).dp
+    // 退場は1本の時計（exitProgress）で全文字を駆動する（位相だけ文字ごとにずらす）
     val exitProgress = remember { Animatable(0f) }
     if (exiting) {
         LaunchedEffect(Unit) {
@@ -2309,99 +2309,136 @@ private fun PvLyricLine(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth()
         ) {
-        rows.forEach { rowUnits ->
+        var globalIndex = 0
+        rows.forEachIndexed { rowIdx, rowChunks ->
         Row(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
-            modifier = if (rowUnits.first() > 0) Modifier.padding(start = row2Indent, top = 6.dp) else Modifier
+            modifier = if (rowIdx > 0) Modifier.padding(start = row2Indent, top = 8.dp) else Modifier
         ) {
-            rowUnits.forEachIndexed { posInRow, ui ->
-                val unit = units[ui]
+            rowChunks.forEachIndexed { posInRow, chunk ->
                 if (posInRow > 0 && latinDominant) {
                     Spacer(Modifier.width((fitSize * 0.32f).dp))
                 }
-                val uSeed = Math.floorMod(baseSeed * 7 + ui * 131, 997)
-                val scriptFactor = when {
-                    unit.length > 1 || unit[0].code < 0x300 -> 0.98f
-                    unit[0] in '一'..'鿿' || unit[0] == '々' || unit[0] == '〆' || unit[0] == 'ヶ' -> 1.25f
-                    unit[0] in 'ぁ'..'ゟ' -> 0.82f
-                    unit[0] in '゠'..'ヿ' -> 1.05f
-                    else -> 0.95f
-                }
-                val uSize = (fitSize * (0.85f + (uSeed % 40) / 100f) * scriptFactor).sp
-                val uRot = ((uSeed / 3) % 29 - 14).toFloat()
-                val uYOffset = ((uSeed / 5) % 29 - 14).dp
-                val uAnim = remember(ui) { Animatable(0f) }
-                if (!exiting) {
-                    LaunchedEffect(ui) {
-                        delay(ui * 45L)
-                        uAnim.animateTo(1f, animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing))
+                for (ru in renderUnitsOf(chunk)) {
+                    val gi = globalIndex++
+                    val uSeed = Math.floorMod(baseSeed * 7 + gi * 131, 997)
+                    val charFactor = when {
+                        ru.length > 1 && ru.all { it in '゠'..'ヿ' } -> 1.05f // カタカナ単語
+                        ru.length > 1 -> 0.98f // 英単語
+                        ru[0] in "ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ" -> 0.6f
+                        ru[0] in '一'..'鿿' || ru[0] == '々' || ru[0] == '〆' || ru[0] == 'ヶ' -> 1.25f
+                        ru[0] in 'ぁ'..'ゟ' -> 0.82f
+                        ru[0] in '゠'..'ヿ' -> 1.05f
+                        else -> 0.98f
                     }
-                }
-                // 退場のユニットごとの遅延（ミリ秒換算）。位相は exitProgress から計算する
-                val exitDelayMs = (uSeed % 5) * 35f + ui * 12f
-                val unitText = remember(unit, uSize) {
-                    buildAnnotatedString {
-                        for (ch in unit) {
-                            val charFactor = when {
-                                ch in "ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ" -> 0.6f
-                                ch in '一'..'鿿' || ch == '々' || ch == '〆' || ch == 'ヶ' -> 1.18f
-                                ch in 'ぁ'..'ゟ' -> 0.94f
-                                ch in '゠'..'ヿ' -> 1.02f
-                                else -> 1.0f
-                            }
-                            if (charFactor != 1.0f) {
-                                withStyle(SpanStyle(fontSize = uSize * charFactor)) { append(ch) }
-                            } else {
-                                append(ch)
-                            }
-                        }
-                    }
-                }
-                Text(
-                    text = unitText,
-                    color = Color.White.copy(alpha = 0.92f),
-                    fontSize = uSize,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                    overflow = TextOverflow.Visible,
-                    modifier = Modifier
-                        .offset(y = uYOffset)
-                        .graphicsLayer {
-                            if (exiting) {
-                                val localX = ((exitProgress.value * 720f - exitDelayMs) / 320f).coerceIn(0f, 1f)
-                                val a = 1f - pvEaseIn.transform(localX)
-                                alpha = a
-                                val es = 0.5f + 0.5f * a
-                                scaleX = es
-                                scaleY = es
-                                rotationZ = uRot * (2f - a)
-                                translationY = (1f - a) * 30f
-                            } else {
-                                val a = uAnim.value
-                                alpha = a
-                                val ns = 0.6f + 0.4f * a
-                                scaleX = ns
-                                scaleY = ns
-                                rotationZ = uRot * a
-                                // 入場はユニットごとにバラバラの方向（8方向）から飛んでくる
-                                val dir = PV_ENTRY_DIRS[uSeed % 8]
-                                translationX = dir.first * 52f * (1f - a)
-                                translationY = dir.second * 52f * (1f - a)
-                            }
-                        },
-                    style = LocalTextStyle.current.copy(
+                    PvLyricUnit(
+                        unitText = ru,
+                        uSize = (fitSize * (0.85f + (uSeed % 40) / 100f) * charFactor).sp,
+                        uRot = ((uSeed / 3) % 29 - 14).toFloat(),
+                        uYOffset = ((uSeed / 5) % 29 - 14).dp,
+                        staggerIndex = gi,
+                        exiting = exiting,
+                        exitProgressValue = exitProgress.value,
+                        exitDelayMs = (uSeed % 5) * 35f + gi * 12f,
                         fontFamily = fontFamily,
-                        shadow = Shadow(color = accentColor.copy(alpha = 0.85f), blurRadius = 22f)
+                        accentColor = accentColor
                     )
-                )
+                }
             }
         }
         }
+        }
+    }
+}
+
+/** PVの1描画単位（1文字または英単語）。入場はスタッガード、退場は共通の時計から位相計算する */
+@Composable
+private fun PvLyricUnit(
+    unitText: String,
+    uSize: androidx.compose.ui.unit.TextUnit,
+    uRot: Float,
+    uYOffset: androidx.compose.ui.unit.Dp,
+    staggerIndex: Int,
+    exiting: Boolean,
+    exitProgressValue: Float,
+    exitDelayMs: Float,
+    fontFamily: FontFamily?,
+    accentColor: Color
+) {
+    val pvEaseIn = CubicBezierEasing(0.42f, 0f, 1f, 1f)
+    val uSeed = staggerIndex
+    val uAnim = remember(staggerIndex) { Animatable(0f) }
+    if (!exiting) {
+        LaunchedEffect(staggerIndex) {
+            delay(staggerIndex * 45L)
+            uAnim.animateTo(1f, animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing))
+        }
+    }
+    val annotatedUnit = remember(unitText, uSize) {
+        buildAnnotatedString {
+            for (ch in unitText) {
+                if (ch in "ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ") {
+                    withStyle(SpanStyle(fontSize = uSize * 0.6f)) { append(ch) }
+                } else {
+                    append(ch)
+                }
+            }
+        }
+    }
+    // ユニットごとの下線: 入場に合わせて左から伸びて、左から消える
+    val ulAnim = remember(staggerIndex) { Animatable(0f) }
+    if (!exiting) {
+        LaunchedEffect(staggerIndex) {
+            delay(staggerIndex * 45L)
+            ulAnim.animateTo(1f, animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing))
+            ulAnim.animateTo(2f, animationSpec = tween(durationMillis = 260, easing = pvEaseIn))
+        }
+    }
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .offset(y = uYOffset)
+            .graphicsLayer {
+                if (exiting) {
+                    val localX = ((exitProgressValue * 720f - exitDelayMs) / 320f).coerceIn(0f, 1f)
+                    val a = 1f - pvEaseIn.transform(localX)
+                    alpha = a
+                    val es = 0.5f + 0.5f * a
+                    scaleX = es
+                    scaleY = es
+                    rotationZ = uRot * (2f - a)
+                    translationY = (1f - a) * 30f
+                } else {
+                    val a = uAnim.value
+                    alpha = a
+                    val ns = 0.6f + 0.4f * a
+                    scaleX = ns
+                    scaleY = ns
+                    rotationZ = uRot * a
+                    // 入場は単位ごとにバラバラの方向（8方向）から飛んでくる
+                    val dir = PV_ENTRY_DIRS[Math.floorMod(uSeed * 131 + 7, 8)]
+                    translationX = dir.first * 52f * (1f - a)
+                    translationY = dir.second * 52f * (1f - a)
+                }
+            }
+    ) {
+        Text(
+            text = annotatedUnit,
+            color = Color.White.copy(alpha = 0.92f),
+            fontSize = uSize,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            overflow = TextOverflow.Visible,
+            style = LocalTextStyle.current.copy(
+                fontFamily = fontFamily,
+                shadow = Shadow(color = accentColor.copy(alpha = 0.85f), blurRadius = 22f)
+            )
+        )
         if (!exiting) {
-            Spacer(modifier = Modifier.height(7.dp))
-            val ulv = underline.value
-            Canvas(modifier = Modifier.fillMaxWidth().height(3.dp)) {
+            Spacer(modifier = Modifier.height(3.dp))
+            val ulv = ulAnim.value
+            Canvas(modifier = Modifier.fillMaxWidth().height(2.5.dp)) {
                 val startFrac = if (ulv <= 1f) 0f else ulv - 1f
                 val endFrac = if (ulv <= 1f) ulv else 1f
                 if (endFrac > startFrac) {
@@ -2414,8 +2451,29 @@ private fun PvLyricLine(
                 }
             }
         }
+    }
+}
+
+/** 塊を描画単位に分ける。カタカナの連続とラテン文字の連続はひとまとめ、それ以外は1文字ずつ */
+private fun renderUnitsOf(chunk: String): List<String> {
+    val out = mutableListOf<String>()
+    val sb = StringBuilder()
+    fun flush() {
+        if (sb.isNotEmpty()) {
+            out.add(sb.toString())
+            sb.clear()
         }
     }
+    for (ch in chunk) {
+        if (ch in '゠'..'ヿ' || ch.code < 0x300) {
+            sb.append(ch)
+        } else {
+            flush()
+            out.add(ch.toString())
+        }
+    }
+    flush()
+    return out
 }
 
 /** 歌詞を行の表示ユニットに割る。ラテン文字の連続は単語としてまとめ、日本語は文節っぽい塊に切る */
