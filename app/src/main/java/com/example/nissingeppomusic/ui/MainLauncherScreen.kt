@@ -56,6 +56,9 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
@@ -390,6 +393,7 @@ fun MainLauncherScreen() {
         )
     }
     var lyricsBrowseStartIndex by remember { mutableIntStateOf(0) }
+    var lyricsBrowseFollow by remember { mutableStateOf(true) }
     var lyricsTargetOffset by remember { mutableIntStateOf(0) }
     var lyricsStepAnimRunning by remember { mutableStateOf(false) }
     val lyricsScrollAnim = remember { Animatable(0f) }
@@ -802,7 +806,7 @@ fun MainLauncherScreen() {
                             val curText = multiLines.getOrNull(rawIdx)?.text
                             val nextText = multiLines.getOrNull(rawIdx + 1)?.text
                             if (prevText != null) {
-                                Text(prevText, color = Color.White.copy(alpha = 0.45f), fontSize = 18.sp, letterSpacing = 2.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily))
+                                Text(prevText, color = Color.White.copy(alpha = 0.45f), fontSize = 18.sp, letterSpacing = 2.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily), modifier = Modifier.padding(start = 0.dp))
                             } else {
                                 Spacer(Modifier.height(24.dp))
                             }
@@ -815,11 +819,12 @@ fun MainLauncherScreen() {
                                 letterSpacing = 3.sp,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily, shadow = Shadow(color = accentColor.copy(alpha = 0.8f), blurRadius = 16f))
+                                style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily, shadow = Shadow(color = accentColor.copy(alpha = 0.8f), blurRadius = 16f)),
+                                modifier = Modifier.padding(start = 28.dp)
                             )
                             Spacer(Modifier.height(16.dp))
                             if (nextText != null) {
-                                Text(nextText, color = Color.White.copy(alpha = 0.45f), fontSize = 18.sp, letterSpacing = 2.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily))
+                                Text(nextText, color = Color.White.copy(alpha = 0.45f), fontSize = 18.sp, letterSpacing = 2.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily), modifier = Modifier.padding(start = 56.dp))
                             }
                         }
                     }
@@ -1022,9 +1027,29 @@ fun MainLauncherScreen() {
                     if (isLyricsBrowsing && lyricsLines != null) {
                         val lines = lyricsLines!!
                         val virtualPos = lyricsBrowseStartIndex + lyricsScrollAnim.value
+                        // 同期モード中は再生中の行へ自動で追従する
+                        val browsePlayingIdx = lines.indexOfLast { it.timeMs <= musicPlayerManager.currentPosition + lyricOffsetMs }
+                        LaunchedEffect(browsePlayingIdx, lyricsBrowseFollow) {
+                            if (lyricsBrowseFollow && browsePlayingIdx >= 0 && browsePlayingIdx != lyricsBrowseStartIndex + lyricsTargetOffset) {
+                                lyricsTargetOffset = browsePlayingIdx - lyricsBrowseStartIndex
+                                runLyricsSteps()
+                            }
+                        }
                         BoxWithConstraints(
                             modifier = Modifier
                                 .fillMaxSize()
+                                .drawWithContent {
+                                    drawContent()
+                                    drawRect(
+                                        brush = Brush.verticalGradient(
+                                            0f to Color.Transparent,
+                                            0.30f to Color.Black,
+                                            0.86f to Color.Black,
+                                            1f to Color.Transparent
+                                        ),
+                                        blendMode = BlendMode.DstIn
+                                    )
+                                }
                                 .zIndex(90f)
                                 .pointerInput(Unit) {
                                     awaitPointerEventScope {
@@ -1049,6 +1074,7 @@ fun MainLauncherScreen() {
                                                         val newTarget = lyricsTargetOffset + dir
                                                         if (lyricsBrowseStartIndex + newTarget in dragLines.indices) {
                                                             lyricsTargetOffset = newTarget
+                                                            lyricsBrowseFollow = false
                                                             runLyricsSteps()
                                                             haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                                         }
@@ -1071,7 +1097,7 @@ fun MainLauncherScreen() {
                                 Text(
                                     text = lines[idx].text,
                                     color = if (isFocusedLine) accentColor else Color.White.copy(alpha = 0.75f * fade),
-                                    fontSize = 15.sp,
+                                    fontSize = if (isFocusedLine) 26.sp else 15.sp,
                                     fontWeight = if (isFocusedLine) FontWeight.Bold else FontWeight.Normal,
                                     letterSpacing = 1.0.sp,
                                     textAlign = TextAlign.Start,
@@ -1084,7 +1110,7 @@ fun MainLauncherScreen() {
                                     modifier = Modifier
                                         .offset(
                                             x = (40f + relPos * 5f).dp,
-                                            y = (centerYDp + relPos * 46f - 11f).dp
+                                            y = (centerYDp + relPos * 46f - (if (isFocusedLine) 17f else 11f)).dp
                                         )
                                         .fillMaxWidth(0.85f)
                                 )
@@ -1095,8 +1121,8 @@ fun MainLauncherScreen() {
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .padding(top = 54.dp, end = 20.dp)
-                                .size(40.dp)
+                                .padding(top = topPaddingDp + 48.dp, end = 22.dp)
+                                .size(44.dp)
                                 .zIndex(95f)
                                 .clickable {
                                     showLyricOffsetPanel = false
@@ -1110,9 +1136,21 @@ fun MainLauncherScreen() {
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
-                                .padding(bottom = 150.dp)
+                                .padding(bottom = 44.dp)
                                 .zIndex(95f)
                         ) {
+                            if (!lyricsBrowseFollow) {
+                                Box(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(Color(0xFF263238))
+                                        .clickable { lyricsBrowseFollow = true }
+                                        .padding(horizontal = 18.dp, vertical = 10.dp)
+                                ) {
+                                    Text("同期", color = accentColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Spacer(modifier = Modifier.height(10.dp))
+                            }
                             if (showLyricOffsetPanel) {
                                 Text(
                                     text = "タイミング調整: " + when {
@@ -1519,9 +1557,9 @@ fun MainLauncherScreen() {
         if (currentLauncherPage == 1 && !isRackShown && !isDialPressed && !isLyricsBrowsing) {
             val dialRadiusForButtons = 192f
             val dialCenterBelowBand = 99f
-            // リピート（円周の -54° の位置）
+            // リピート（円周の -141° の位置。旧歌詞ボタンがあった左下）
             run {
-                val rad = -54f * (PI.toFloat() / 180f)
+                val rad = -141f * (PI.toFloat() / 180f)
                 val dx = dialRadiusForButtons * cos(rad)
                 val dy = dialCenterBelowBand + dialRadiusForButtons * sin(rad) + 20f
                 Box(
@@ -1602,6 +1640,7 @@ fun MainLauncherScreen() {
                             onTap = {
                                 val lines = lyricsLines
                                 if (lines != null) {
+                                    lyricsBrowseFollow = true
                                     lyricsBrowseStartIndex = lines.indexOfLast {
                                         it.timeMs <= musicPlayerManager.currentPosition + lyricOffsetMs
                                     }.coerceAtLeast(0)
