@@ -25,11 +25,16 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
 import android.view.HapticFeedbackConstants
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.drag
@@ -40,6 +45,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Lyrics
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Timer
@@ -55,6 +62,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
@@ -394,6 +402,16 @@ fun MainLauncherScreen() {
 
     // 歌詞ブラウズ（画面上部を長押し→歌詞全文をラック式にステップスクロール→離すとその行へジャンプ）
     var isLyricsBrowsing by remember { mutableStateOf(false) }
+    // 歌詞フルスクリーン（横画面）: PVモードではPVだけ、1行/複数行モードでは曲名などと一緒に表示
+    var pvFullscreen by remember { mutableStateOf(false) }
+    val pvActivity = LocalContext.current as? android.app.Activity
+    LaunchedEffect(pvFullscreen) {
+        pvActivity?.requestedOrientation = if (pvFullscreen) {
+            android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+        } else {
+            android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        }
+    }
     // 曲ごとの歌詞タイミング補正（ミリ秒）と、その調整パネルの表示状態
     var lyricOffsetMs by remember { mutableStateOf(0L) }
     var showLyricOffsetPanel by remember { mutableStateOf(false) }
@@ -799,6 +817,17 @@ fun MainLauncherScreen() {
                                         modifier = Modifier.padding(top = 195.dp)
                                     )
                                 }
+                            }
+                        }
+                        pvCurrent?.let { (_, curText) ->
+                            val ambKind = when {
+                                curText.contains("桜") -> 2
+                                curText.contains("雨") -> 0
+                                curText.contains("雪") -> 1
+                                else -> -1
+                            }
+                            if (ambKind >= 0) {
+                                PvAmbientEffect(kind = ambKind, modifier = Modifier.fillMaxSize())
                             }
                         }
                     }
@@ -1753,6 +1782,199 @@ fun MainLauncherScreen() {
                     tint = accentColor,
                     modifier = Modifier.size(24.dp)
                 )
+            }
+        }
+
+        // フルスクリーンボタン: 歌詞ボタンの下。押すと横画面で歌詞だけの画面になる
+        if (currentLauncherPage == 1 && !isRackShown && !isLyricsBrowsing && lyricsLines != null && showLyrics) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = topPaddingDp + 100.dp, end = 22.dp)
+                    .size(44.dp)
+                    .zIndex(95f)
+                    .clickable { pvFullscreen = true },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Fullscreen,
+                    contentDescription = "歌詞を全画面表示",
+                    tint = accentColor,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+        }
+
+        // 歌詞フルスクリーン（横画面）: PVモードならPVだけ、1行/複数行モードなら曲名・アーティストと一緒に歌詞を表示
+        if (pvFullscreen && currentLauncherPage == 1 && showLyrics && lyricsLines != null) {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize().zIndex(96f)) {
+                val fsLines = lyricsLines!!
+                if (musicPlayerManager.currentAlbumArt != null) {
+                    Image(
+                        bitmap = musicPlayerManager.currentAlbumArt!!.asImageBitmap(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize().blur(64.dp)
+                    )
+                    Box(Modifier.fillMaxSize().background((artworkBackground ?: Color(0xFF0B101D)).copy(alpha = 0.55f)))
+                } else {
+                    Box(Modifier.fillMaxSize().background(Color.Black))
+                }
+                val fsPos = musicPlayerManager.currentPosition + lyricOffsetMs
+                val fsIndex = fsLines.indexOfLast { it.timeMs <= fsPos }
+                val fsCurLine = fsLines.getOrNull(fsIndex)
+                val fsNextLine = fsLines.getOrNull(fsIndex + 1)
+                val fsInterlude = when {
+                    fsCurLine == null -> false
+                    fsNextLine == null -> (fsPos - fsCurLine.timeMs) > 8000
+                    else -> (fsNextLine.timeMs - fsCurLine.timeMs) > 15000 && (fsPos - fsCurLine.timeMs) > 5000
+                }
+                if (lyricsDisplayMode == "video") {
+                    // PVだけを中央に
+                    val fsDisplayIndex = if (fsInterlude) -2 else fsIndex
+                    if (fsIndex >= 0) {
+                        var fsCurrent by remember { mutableStateOf<Pair<Int, String>?>(null) }
+                        var fsExiting by remember { mutableStateOf<Pair<Int, String>?>(null) }
+                        LaunchedEffect(lyricsLines) { fsCurrent = null; fsExiting = null }
+                        LaunchedEffect(fsDisplayIndex) {
+                            if (fsDisplayIndex >= 0) {
+                                if (fsCurrent?.first != fsDisplayIndex) {
+                                    fsCurrent?.let { fsExiting = it }
+                                    if (fsExiting?.first == fsDisplayIndex) fsExiting = null
+                                    fsCurrent = fsDisplayIndex to fsLines[fsDisplayIndex].text
+                                }
+                            } else if (fsDisplayIndex == -2) {
+                                fsCurrent?.let { fsExiting = it }
+                                fsCurrent = null
+                            }
+                            if (fsExiting != null) { delay(750); fsExiting = null }
+                        }
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            fsExiting?.let { (exIdx, exText) ->
+                                key("fsexit$exIdx") {
+                                    PvLyricLine(
+                                        text = exText,
+                                        baseSeed = Math.floorMod(exIdx * 31 + exText.hashCode(), 997),
+                                        fontFamily = lyricsFontFamily,
+                                        accentColor = accentColor,
+                                        screenWidthDp = maxWidth.value,
+                                        exiting = true,
+                                        modifier = Modifier
+                                    )
+                                }
+                            }
+                            fsCurrent?.let { (curIdx, curText) ->
+                                key("fscur$curIdx") {
+                                    PvLyricLine(
+                                        text = curText,
+                                        baseSeed = Math.floorMod(curIdx * 31 + curText.hashCode(), 997),
+                                        fontFamily = lyricsFontFamily,
+                                        accentColor = accentColor,
+                                        screenWidthDp = maxWidth.value,
+                                        exiting = false,
+                                        modifier = Modifier
+                                    )
+                                }
+                            }
+                        }
+                        fsCurrent?.let { (_, curText) ->
+                            val ambKind = when {
+                                curText.contains("桜") -> 2
+                                curText.contains("雨") -> 0
+                                curText.contains("雪") -> 1
+                                else -> -1
+                            }
+                            if (ambKind >= 0) PvAmbientEffect(kind = ambKind, modifier = Modifier.fillMaxSize())
+                        }
+                    }
+                } else {
+                    // 曲名・アーティスト・アルバムと一緒に歌詞（1行 or 複数行）を横画面レイアウトで
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(
+                            modifier = Modifier.widthIn(max = 600.dp).padding(horizontal = 32.dp),
+                            horizontalAlignment = Alignment.Start
+                        ) {
+                            Text(
+                                text = musicPlayerManager.currentTitle,
+                                color = Color.White,
+                                fontSize = 30.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = LocalTextStyle.current.copy(shadow = Shadow(color = accentColor.copy(alpha = 0.7f), blurRadius = 16f))
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                text = listOf(musicPlayerManager.currentArtist, musicPlayerManager.currentAlbum).filter { it.isNotBlank() }.joinToString(" ・ "),
+                                color = Color.White.copy(alpha = 0.75f),
+                                fontSize = 16.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(Modifier.height(30.dp))
+                            if (lyricsDisplayMode == "multi") {
+                                val prevText = if (fsIndex > 0) fsLines.getOrNull(fsIndex - 1)?.text ?: "" else ""
+                                val curText = if (fsInterlude) "♪" else (fsCurLine?.text ?: "")
+                                val nextText = fsNextLine?.text ?: ""
+                                if (prevText.isNotEmpty()) {
+                                    Text(prevText, color = Color.White.copy(alpha = 0.45f), fontSize = 18.sp, letterSpacing = 2.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily))
+                                    Spacer(Modifier.height(14.dp))
+                                }
+                                if (curText.isNotEmpty()) {
+                                    Text(
+                                        curText,
+                                        color = Color.White,
+                                        fontSize = 30.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 3.sp,
+                                        maxLines = 3,
+                                        style = LocalTextStyle.current.copy(
+                                            fontFamily = lyricsFontFamily,
+                                            shadow = Shadow(color = Color.White.copy(alpha = 0.85f), blurRadius = 18f)
+                                        ),
+                                        modifier = Modifier.padding(start = 28.dp)
+                                    )
+                                }
+                                if (nextText.isNotEmpty()) {
+                                    Spacer(Modifier.height(14.dp))
+                                    Text(nextText, color = Color.White.copy(alpha = 0.45f), fontSize = 18.sp, letterSpacing = 2.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily), modifier = Modifier.padding(start = 56.dp))
+                                }
+                            } else {
+                                val lineText = if (fsIndex < 0) "" else if (fsInterlude) "♪" else (fsCurLine?.text ?: "")
+                                if (lineText.isNotEmpty()) {
+                                    Text(
+                                        lineText,
+                                        color = Color.White,
+                                        fontSize = 26.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        letterSpacing = 2.sp,
+                                        maxLines = 3,
+                                        style = LocalTextStyle.current.copy(
+                                            fontFamily = lyricsFontFamily,
+                                            shadow = Shadow(color = Color.White.copy(alpha = 0.85f), blurRadius = 18f)
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                // 終了ボタン: もう一度押すと縦画面に戻る
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 18.dp, end = 22.dp)
+                        .size(44.dp)
+                        .clickable { pvFullscreen = false },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.FullscreenExit,
+                        contentDescription = "全画面を終了",
+                        tint = Color.White.copy(alpha = 0.85f),
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
             }
         }
 
@@ -2711,6 +2933,79 @@ private fun DrawScope.drawLyricIcon(kind: Int) {
     }
 }
 
+/** 4方向に尖ったキラキラ（スパークル）を塗りで描く */
+private fun DrawScope.drawSparkle(cx: Float, cy: Float, r: Float, color: Color, alpha: Float) {
+    val path = Path().apply {
+        moveTo(cx, cy - r)
+        quadraticBezierTo(cx, cy, cx + r, cy)
+        quadraticBezierTo(cx, cy, cx, cy + r)
+        quadraticBezierTo(cx, cy, cx - r, cy)
+        quadraticBezierTo(cx, cy, cx, cy - r)
+        close()
+    }
+    drawPath(path, color.copy(alpha = alpha))
+}
+
+/** 歌詞の単語に反応する全画面エフェクト（0=雨、1=雪、2=桜）。PVレイヤーの上に重ねる */
+@Composable
+private fun PvAmbientEffect(kind: Int, modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "pvambient")
+    val duration = when (kind) { 0 -> 1100; 1 -> 9000; else -> 12000 }
+    val t by transition.animateFloat(
+        initialValue = 0f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(duration, easing = LinearEasing), RepeatMode.Restart),
+        label = "pvambientT"
+    )
+    Canvas(modifier = modifier) {
+        val w = size.width
+        val h = size.height
+        fun frac(v: Float) = v - floor(v)
+        when (kind) {
+            0 -> {
+                // 雨: 細い線がたくさん斜めに落ちてくる
+                val col = Color.White.copy(alpha = 0.30f)
+                for (i in 0 until 46) {
+                    val speed = 0.85f + frac(i * 0.371f) * 0.8f
+                    val x = frac(i * 0.618034f) * w + frac(i * 0.113f) * 30f
+                    val y = frac(frac(i * 0.529f) + t * speed) * (h + 160f) - 80f
+                    val len = 46f + frac(i * 0.77f) * 54f
+                    drawLine(col, Offset(x, y), Offset(x - len * 0.16f, y + len), strokeWidth = 2.4f, cap = StrokeCap.Round)
+                }
+            }
+            1 -> {
+                // 雪: 白い点がゆっくり舞い落ちる
+                val col = Color.White.copy(alpha = 0.55f)
+                for (i in 0 until 30) {
+                    val speed = 0.55f + frac(i * 0.371f) * 0.6f
+                    val x = frac(i * 0.618034f) * w + sin(t * 6.2832f + i * 1.7f) * 16f
+                    val y = frac(frac(i * 0.529f) + t * speed) * (h + 80f) - 40f
+                    drawCircle(col, radius = 2.2f + frac(i * 0.77f) * 3.4f, center = Offset(x, y))
+                }
+            }
+            else -> {
+                // 桜: 花びらがひらひら回りながら落ちてくる
+                val col = Color(0xFFF7B7C8)
+                for (i in 0 until 14) {
+                    val speed = 0.5f + frac(i * 0.371f) * 0.55f
+                    val x = frac(i * 0.618034f) * w + sin(t * 6.2832f + i * 2.3f) * 34f
+                    val y = frac(frac(i * 0.529f) + t * speed) * (h + 120f) - 60f
+                    val petal = 9f + frac(i * 0.77f) * 7f
+                    val rot = t * 360f * (if (i % 2 == 0) 1f else -1f) + i * 47f
+                    withTransform({ translate(x, y); rotate(rot, Offset.Zero) }) {
+                        val path = Path().apply {
+                            moveTo(0f, -petal)
+                            quadraticBezierTo(petal * 0.95f, -petal * 0.15f, 0f, petal)
+                            quadraticBezierTo(-petal * 0.95f, -petal * 0.15f, 0f, -petal)
+                            close()
+                        }
+                        drawPath(path, col.copy(alpha = 0.8f))
+                    }
+                }
+            }
+        }
+    }
+}
+
 /** PV入場の8方向（上・右上・右・右下・下・左下・左・左上） */
 /** PVでカタカナ語の下に小さく添える英単語（歌詞でよく出る語だけの内蔵対応表） */
 private val KATAKANA_EN = mapOf(
@@ -3029,8 +3324,9 @@ private fun PvLyricUnit(
                 }
             }
     ) {
-        Text(
-            text = annotatedUnit,
+        Box {
+            Text(
+                text = annotatedUnit,
             color = Color.White.copy(alpha = 0.92f),
             fontSize = uSize,
             fontWeight = FontWeight.Bold,
@@ -3039,9 +3335,23 @@ private fun PvLyricUnit(
             style = LocalTextStyle.current.copy(
                 fontFamily = fontFamily,
                 lineHeight = uSize * 1.02f,
-                shadow = Shadow(color = accentColor.copy(alpha = 0.85f), blurRadius = 22f)
+                    shadow = Shadow(color = accentColor.copy(alpha = 0.85f), blurRadius = 22f)
+                )
             )
-        )
+            if (!exiting && (unitText.contains("光") || unitText.contains("輝"))) {
+                // 「光」「輝」はコーティングが反射するみたいにキラキラさせる
+                Canvas(modifier = Modifier.matchParentSize()) {
+                    val phBase = sway.value * 6.2832f
+                    val sparkleCol = Color(0xFFFFF2B0)
+                    val positions = listOf(0.10f to 0.02f, 0.90f to 0.22f, 0.58f to -0.06f)
+                    positions.forEachIndexed { i, (fx, fy) ->
+                        val tw = 0.5f + 0.5f * sin(phBase * 2f + i * 2.1f + uSeed)
+                        val r = size.height * (0.15f + 0.14f * tw)
+                        drawSparkle(size.width * fx, size.height * fy, r, sparkleCol, 0.30f + 0.65f * tw)
+                    }
+                }
+            }
+        }
         val enCaption = if (!exiting && unitText.length > 1 && unitText.all { it in 'ァ'..'ヶ' || it == 'ー' || it == '・' }) KATAKANA_EN[unitText] else null
         if (!exiting && effectKind == 0) {
             Spacer(modifier = Modifier.height(3.dp))
