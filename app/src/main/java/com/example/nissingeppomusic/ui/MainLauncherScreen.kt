@@ -99,6 +99,7 @@ import com.example.nissingeppomusic.data.AppRepository
 import com.example.nissingeppomusic.data.LyricLine
 import com.example.nissingeppomusic.data.LyricsManager
 import com.example.nissingeppomusic.data.MusicPlayerManager
+import com.example.nissingeppomusic.data.UpdateChecker
 import com.example.nissingeppomusic.ui.components.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -404,6 +405,17 @@ fun MainLauncherScreen() {
     var isLyricsBrowsing by remember { mutableStateOf(false) }
     // 歌詞フルスクリーン（横画面）: PVモードではPVだけ、1行/複数行モードでは曲名などと一緒に表示
     var pvFullscreen by remember { mutableStateOf(false) }
+
+    // アプリ内アップデート: 起動時に新ビルドを確認する（6時間に1回まで）
+    var updateInfo by remember { mutableStateOf<UpdateChecker.LatestRelease?>(null) }
+    var showUpdateDialog by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        val info = UpdateChecker.checkIfDue(context)
+        if (info != null) {
+            updateInfo = info
+            showUpdateDialog = true
+        }
+    }
     val pvActivity = LocalContext.current as? android.app.Activity
     LaunchedEffect(pvFullscreen) {
         pvActivity?.requestedOrientation = if (pvFullscreen) {
@@ -2716,6 +2728,17 @@ fun MainLauncherScreen() {
         }
 
 
+
+        // アップデート通知ダイアログ
+        if (showUpdateDialog && updateInfo != null) {
+            UpdateDialog(
+                info = updateInfo!!,
+                onDismiss = {
+                    showUpdateDialog = false
+                    UpdateChecker.markDismissed(context, updateInfo!!.buildNumber)
+                }
+            )
+        }
 
         // 3. フォルダ削除確認ダイアログ
         if (showDeleteFolderDialog && selectedFolderId != null) {
