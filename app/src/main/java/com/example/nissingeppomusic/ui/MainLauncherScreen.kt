@@ -768,6 +768,16 @@ fun MainLauncherScreen() {
                     if (pvIndex >= 0) {
                         val pvFontFamily = lyricsFontFamily
                         // 前の行は残像にせず、文字ごとにバラバラの遅延で退場アニメーションをかけて消す
+                        // エフェクトは行ごとにランダム。ただし前の行と同じ種類は避ける
+                        val pvKindMap = remember { mutableStateMapOf<Int, Int>() }
+                        fun pvKindFor(idx: Int, text: String): Int {
+                            pvKindMap[idx]?.let { return it }
+                            val raw = Math.floorMod(Math.floorMod(idx * 31 + text.hashCode(), 997), 8)
+                            val prev = pvKindMap[idx - 1]
+                            val kind = if (prev != null && raw == prev) (raw + 1) % 8 else raw
+                            pvKindMap[idx] = kind
+                            return kind
+                        }
                         var pvCurrent by remember { mutableStateOf<Pair<Int, String>?>(null) }
                         var pvExiting by remember { mutableStateOf<Pair<Int, String>?>(null) }
                         LaunchedEffect(lyricsLines) {
@@ -801,6 +811,7 @@ fun MainLauncherScreen() {
                                         accentColor = accentColor,
                                         screenWidthDp = screenWidthDp,
                                         exiting = true,
+                                        effectKind = pvKindFor(exIdx, exText),
                                         modifier = Modifier.padding(top = 195.dp)
                                     )
                                 }
@@ -814,6 +825,7 @@ fun MainLauncherScreen() {
                                         accentColor = accentColor,
                                         screenWidthDp = screenWidthDp,
                                         exiting = false,
+                                        effectKind = pvKindFor(curIdx, curText),
                                         modifier = Modifier.padding(top = 195.dp)
                                     )
                                 }
@@ -1808,6 +1820,7 @@ fun MainLauncherScreen() {
         // 歌詞フルスクリーン（横画面）: PVモードならPVだけ、1行/複数行モードなら曲名・アーティストと一緒に歌詞を表示
         if (pvFullscreen && currentLauncherPage == 1 && showLyrics && lyricsLines != null) {
             BoxWithConstraints(modifier = Modifier.fillMaxSize().zIndex(96f)) {
+                val fsWidth = maxWidth.value
                 val fsLines = lyricsLines!!
                 if (musicPlayerManager.currentAlbumArt != null) {
                     Image(
@@ -1857,8 +1870,9 @@ fun MainLauncherScreen() {
                                         baseSeed = Math.floorMod(exIdx * 31 + exText.hashCode(), 997),
                                         fontFamily = lyricsFontFamily,
                                         accentColor = accentColor,
-                                        screenWidthDp = maxWidth.value,
+                                        screenWidthDp = fsWidth,
                                         exiting = true,
+                                        effectKind = Math.floorMod(Math.floorMod(exIdx * 31 + exText.hashCode(), 997), 8),
                                         modifier = Modifier
                                     )
                                 }
@@ -1870,8 +1884,9 @@ fun MainLauncherScreen() {
                                         baseSeed = Math.floorMod(curIdx * 31 + curText.hashCode(), 997),
                                         fontFamily = lyricsFontFamily,
                                         accentColor = accentColor,
-                                        screenWidthDp = maxWidth.value,
+                                        screenWidthDp = fsWidth,
                                         exiting = false,
+                                        effectKind = Math.floorMod(Math.floorMod(curIdx * 31 + curText.hashCode(), 997), 8),
                                         modifier = Modifier
                                     )
                                 }
@@ -2991,19 +3006,48 @@ private fun PvAmbientEffect(kind: Int, modifier: Modifier = Modifier) {
                     val y = frac(frac(i * 0.529f) + t * speed) * (h + 120f) - 60f
                     val petal = 9f + frac(i * 0.77f) * 7f
                     val rot = t * 360f * (if (i % 2 == 0) 1f else -1f) + i * 47f
-                    withTransform({ translate(x, y); rotate(rot, Offset.Zero) }) {
-                        val path = Path().apply {
-                            moveTo(0f, -petal)
-                            quadraticBezierTo(petal * 0.95f, -petal * 0.15f, 0f, petal)
-                            quadraticBezierTo(-petal * 0.95f, -petal * 0.15f, 0f, -petal)
-                            close()
-                        }
-                        drawPath(path, col.copy(alpha = 0.8f))
+                    val rad = Math.toRadians(rot.toDouble())
+                    val cs = kotlin.math.cos(rad).toFloat()
+                    val sn = kotlin.math.sin(rad).toFloat()
+                    fun rp(lx: Float, ly: Float) = Offset(x + lx * cs - ly * sn, y + lx * sn + ly * cs)
+                    val p0 = rp(0f, -petal)
+                    val p1 = rp(petal * 0.95f, -petal * 0.15f)
+                    val p2 = rp(0f, petal)
+                    val p3 = rp(-petal * 0.95f, -petal * 0.15f)
+                    val path = Path().apply {
+                        moveTo(p0.x, p0.y)
+                        quadraticBezierTo(p1.x, p1.y, p2.x, p2.y)
+                        quadraticBezierTo(p3.x, p3.y, p0.x, p0.y)
+                        close()
                     }
+                    drawPath(path, col.copy(alpha = 0.8f))
                 }
             }
         }
     }
+}
+
+/** アイコン対象から外す複合語（「心配」の「心」でハートが出ないように） */
+private val LYRIC_ICON_EXCLUSIONS: Map<String, List<String>> = mapOf(
+    "心" to listOf("心配")
+)
+
+/** 行の中からアイコン対象の単語を探す。除外語の一部として現れる箇所は数えない */
+private fun findIconWord(text: String): Pair<String, Int>? {
+    for ((word, kind) in LYRIC_ICON_WORDS) {
+        val exclusions = LYRIC_ICON_EXCLUSIONS[word] ?: emptyList()
+        var from = 0
+        while (true) {
+            val i = text.indexOf(word, from)
+            if (i < 0) break
+            if (exclusions.any { text.startsWith(it, i) }) {
+                from = i + 1
+                continue
+            }
+            return word to kind
+        }
+    }
+    return null
 }
 
 /** PV入場の8方向（上・右上・右・右下・下・左下・左・左上） */
@@ -3048,13 +3092,14 @@ private fun PvLyricLine(
     baseSeed: Int,
     fontFamily: FontFamily?,
     accentColor: Color,
+    effectKind: Int = 0,
     screenWidthDp: Float,
     exiting: Boolean,
     modifier: Modifier = Modifier
 ) {
     val pvEaseIn = CubicBezierEasing(0.42f, 0f, 1f, 1f)
     // 改行位置は塊（文節・英単語）の境界で決める。描画とアニメーションは文字ごと（英単語だけ単語ごと）
-    val lineIconKind = LYRIC_ICON_WORDS.firstOrNull { text.contains(it.first) }?.second
+    val iconWord = findIconWord(text)
     val chunks = remember(text) { splitLyricUnits(text) }
     if (chunks.isEmpty()) return
     fun isLatinWord(c: String): Boolean = c.isNotEmpty() && c.all { it.code < 0x300 }
@@ -3100,16 +3145,20 @@ private fun PvLyricLine(
             exitProgress.animateTo(1f, animationSpec = tween(durationMillis = 720, easing = LinearEasing))
         }
     }
-    // 装飾エフェクトは行ごとにランダム: 0=下線スイープ / 1=波紋 / 2=黒塗りバー
-    val effectKind = Math.floorMod(baseSeed, 3)
+    // 装飾エフェクト（親から渡される。前の行と被らないランダム）:
+    // 0=下線スイープ / 1=波紋 / 2=白スワイプ / 3=点滅 / 4=グリッチ / 5=枠線 / 6=粒子バースト / 7=波打ち登場
     val barAnim = remember { Animatable(0f) }
     val rippleAnim = remember { Animatable(0f) }
+    val fxAnim = remember { Animatable(0f) }
     if (!exiting) {
         LaunchedEffect(Unit) {
-            barAnim.animateTo(1f, animationSpec = tween(durationMillis = 340, easing = FastOutSlowInEasing))
-            delay(130)
-            barAnim.animateTo(2f, animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing))
+            barAnim.animateTo(1f, animationSpec = tween(durationMillis = 190, easing = FastOutSlowInEasing))
+            delay(60)
+            barAnim.animateTo(2f, animationSpec = tween(durationMillis = 220, easing = FastOutSlowInEasing))
             rippleAnim.animateTo(1f, animationSpec = tween(durationMillis = 1150, easing = LinearEasing))
+        }
+        LaunchedEffect(Unit) {
+            fxAnim.animateTo(1f, animationSpec = tween(durationMillis = 1000, easing = LinearEasing))
         }
     }
     // 下線: 入場と同時に、左から右へ伸びて（イーズアウト）、すぐに左から右へ消える（イーズイン）
@@ -3139,11 +3188,50 @@ private fun PvLyricLine(
                             val cx = size.width * (0.24f + 0.26f * k) + ((baseSeed / (k + 3)) % 40 - 20).toFloat()
                             val cy = size.height * (0.32f + 0.18f * ((baseSeed / (k + 5)) % 3))
                             drawCircle(
-                                color = accentColor.copy(alpha = (1f - local) * 0.45f),
-                                radius = local * size.height * 0.95f,
+                                color = accentColor.copy(alpha = (1f - local) * 0.28f),
+                                radius = local * size.height * 1.45f,
                                 center = Offset(cx, cy),
-                                style = Stroke(width = 2.5f)
+                                style = Stroke(width = 3.5f)
                             )
+                        }
+                    }
+                }
+            }
+        }
+        if (effectKind == 5 && !exiting) {
+            // 枠線: 行を囲む角丸の枠がふわっと現れて消える
+            val ft = fxAnim.value
+            if (ft > 0f && ft < 1f) {
+                Canvas(modifier = Modifier.matchParentSize()) {
+                    val inset = (1f - ft) * size.width * 0.06f + 6f
+                    drawRoundRect(
+                        color = accentColor.copy(alpha = sin(ft * 3.14159f) * 0.5f),
+                        topLeft = Offset(inset, inset * 0.6f),
+                        size = Size(size.width - inset * 2f, size.height - inset * 1.2f),
+                        cornerRadius = CornerRadius(12.dp.toPx(), 12.dp.toPx()),
+                        style = Stroke(width = 3f)
+                    )
+                }
+            }
+        }
+        if (effectKind == 6 && !exiting) {
+            // 粒子バースト: 行の中心からキラキラと粒が飛び散る
+            val ft = fxAnim.value
+            if (ft > 0f && ft < 1f) {
+                Canvas(modifier = Modifier.matchParentSize()) {
+                    val pe = 1f - (1f - ft) * (1f - ft) * (1f - ft)
+                    val bcx = size.width / 2f
+                    val bcy = size.height / 2f
+                    for (i in 0 until 12) {
+                        val ang = (i * 137.5f + baseSeed * 7f) * 0.0174533f
+                        val dist = pe * size.width * (0.16f + (i % 4) * 0.05f)
+                        val px = bcx + kotlin.math.cos(ang.toDouble()).toFloat() * dist
+                        val py = bcy + kotlin.math.sin(ang.toDouble()).toFloat() * dist * 0.6f
+                        val pa = (1f - ft) * 0.8f
+                        if (i % 3 == 0) {
+                            drawSparkle(px, py, (1f - ft * 0.5f) * 13f, accentColor, pa)
+                        } else {
+                            drawCircle(color = accentColor.copy(alpha = pa), radius = 3.2f, center = Offset(px, py))
                         }
                     }
                 }
@@ -3154,6 +3242,7 @@ private fun PvLyricLine(
             modifier = Modifier.fillMaxWidth()
         ) {
         var globalIndex = 0
+        var iconPlaced = false
         rows.forEachIndexed { rowIdx, rowChunks ->
         val unitsInRow = rowChunks.sumOf { renderUnitsOf(it).size }
         var rowUnitIdx = 0
@@ -3167,8 +3256,13 @@ private fun PvLyricLine(
                 if (posInRow > 0 && latinDominant) {
                     Spacer(Modifier.width((fitSize * 0.32f).dp))
                 }
+                val chunkIconKind = if (!iconPlaced && iconWord != null && chunk.contains(iconWord.first)) iconWord.second else null
+                var unitIdxInChunk = 0
                 for (ru in renderUnitsOf(chunk)) {
                     val gi = globalIndex++
+                    val thisUnitIcon = if (chunkIconKind != null && unitIdxInChunk == 0) chunkIconKind else null
+                    if (thisUnitIcon != null) iconPlaced = true
+                    unitIdxInChunk++
                     val rIdx = rowUnitIdx++
                     // 文字同士がほんの少し被るくらいに、行の中心へ向けて詰める（画面外へのはみ出しは増やさない）
                     val uXShift = ((unitsInRow - 1) / 2f - rIdx) * fitSize * 0.05f
@@ -3194,21 +3288,9 @@ private fun PvLyricLine(
                         exitDelayMs = (uSeed % 5) * 35f + gi * 12f,
                         fontFamily = fontFamily,
                         accentColor = accentColor,
-                        effectKind = effectKind
+                        effectKind = effectKind,
+                        iconKind = thisUnitIcon
                     )
-                }
-            }
-            if (rowIdx == rows.lastIndex && !exiting && lineIconKind != null) {
-                Spacer(Modifier.width((fitSize * 0.20f).dp))
-                Canvas(
-                    modifier = Modifier
-                        .size((fitSize * 0.52f).dp)
-                        .graphicsLayer {
-                            alpha = underline.value.coerceIn(0f, 1f)
-                            rotationZ = -9f
-                        }
-                ) {
-                    drawLyricIcon(lineIconKind)
                 }
             }
         }
@@ -3219,9 +3301,9 @@ private fun PvLyricLine(
                     Canvas(modifier = Modifier.matchParentSize()) {
                         val frac = if (bv <= 1f) bv else 2f - bv
                         val xOff = if (bv <= 1f) 0f else (bv - 1f) * size.width
-                        val barH = size.height * 0.96f
+                        val barH = size.height * 1.18f
                         drawRoundRect(
-                            color = Color.White.copy(alpha = 0.92f),
+                            color = Color.White.copy(alpha = 0.55f),
                             topLeft = Offset(xOff, (size.height - barH) / 2f),
                             size = Size(frac * size.width, barH),
                             cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
@@ -3249,7 +3331,8 @@ private fun PvLyricUnit(
     exitDelayMs: Float,
     fontFamily: FontFamily?,
     accentColor: Color,
-    effectKind: Int = 0
+    effectKind: Int = 0,
+    iconKind: Int? = null
 ) {
     val pvEaseIn = CubicBezierEasing(0.42f, 0f, 1f, 1f)
     val uSeed = staggerIndex
@@ -3291,8 +3374,15 @@ private fun PvLyricUnit(
             ulAnim.animateTo(2f, animationSpec = tween(durationMillis = 260, easing = pvEaseIn))
         }
     }
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
+    // 点滅(3)とグリッチ(4)用の進行度
+    val fxT = remember { Animatable(0f) }
+    if (!exiting && (effectKind == 3 || effectKind == 4)) {
+        LaunchedEffect(staggerIndex) {
+            delay(staggerIndex * 45L)
+            fxT.animateTo(1f, animationSpec = tween(durationMillis = if (effectKind == 3) 1500 else 800, easing = LinearEasing))
+        }
+    }
+    Box(
         modifier = Modifier
             .width(IntrinsicSize.Max)
             .offset(x = uXShiftDp.dp, y = uYOffset)
@@ -3308,7 +3398,10 @@ private fun PvLyricUnit(
                     translationY = (1f - a) * 30f
                 } else {
                     val a = uAnim.value
-                    alpha = a
+                    val blinkF = if (effectKind == 3 && fxT.value < 1f) {
+                        if (sin(fxT.value * 21.99f + uSeed * 1.3f) > -0.2f) 1f else 0.12f
+                    } else 1f
+                    alpha = a * blinkF
                     val ns = 0.6f + 0.4f * a
                     scaleX = ns
                     scaleY = ns
@@ -3319,12 +3412,36 @@ private fun PvLyricUnit(
                     val ph = sway.value * 6.2832f + (uSeed % 7) * 0.9f
                     val swx = sin(ph) * 3.4f
                     val swy = sin(ph + 1.3f) * 2.6f
-                    translationX = dir.first * 52f * (1f - a) + swx * a
-                    translationY = dir.second * 52f * (1f - a) + swy * a
+                    translationX = dir.first * 52f * (1f - a) + swx * a + if (effectKind == 4 && fxT.value < 1f) sin(fxT.value * 55f + uSeed * 2.7f) * 5f * (1f - fxT.value) else 0f
+                    translationY = dir.second * 52f * (1f - a) + swy * a + if (effectKind == 7) sin(a * 6.2832f + uSeed * 0.8f) * 15f * (1f - a) else 0f
                 }
             }
     ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box {
+            if (!exiting && effectKind == 4 && fxT.value < 1f) {
+                val flick = (0.35f + 0.3f * sin(fxT.value * 47f + uSeed * 3.1f)).coerceIn(0.1f, 0.65f)
+                Text(
+                    text = annotatedUnit,
+                    color = Color(0xFFFF3B30).copy(alpha = flick),
+                    fontSize = uSize,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    overflow = TextOverflow.Visible,
+                    style = LocalTextStyle.current.copy(fontFamily = fontFamily, lineHeight = uSize * 1.02f),
+                    modifier = Modifier.offset(x = 3.5.dp)
+                )
+                Text(
+                    text = annotatedUnit,
+                    color = Color(0xFF64D2FF).copy(alpha = flick),
+                    fontSize = uSize,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    overflow = TextOverflow.Visible,
+                    style = LocalTextStyle.current.copy(fontFamily = fontFamily, lineHeight = uSize * 1.02f),
+                    modifier = Modifier.offset(x = (-3.5).dp)
+                )
+            }
             Text(
                 text = annotatedUnit,
             color = Color.White.copy(alpha = 0.92f),
@@ -3356,12 +3473,12 @@ private fun PvLyricUnit(
         if (!exiting && effectKind == 0) {
             Spacer(modifier = Modifier.height(3.dp))
             val ulv = ulAnim.value
-            Canvas(modifier = Modifier.fillMaxWidth().height(2.5.dp)) {
+            Canvas(modifier = Modifier.fillMaxWidth().height(3.5.dp)) {
                 val startFrac = if (ulv <= 1f) 0f else ulv - 1f
                 val endFrac = if (ulv <= 1f) ulv else 1f
                 if (endFrac > startFrac) {
                     drawRoundRect(
-                        color = accentColor.copy(alpha = 0.9f),
+                        color = accentColor.copy(alpha = 0.6f),
                         topLeft = Offset(size.width * startFrac, 0f),
                         size = Size(size.width * (endFrac - startFrac), size.height),
                         cornerRadius = CornerRadius(size.height / 2f, size.height / 2f)
@@ -3380,6 +3497,22 @@ private fun PvLyricUnit(
                 style = LocalTextStyle.current.copy(fontFamily = fontFamily),
                 modifier = Modifier.padding(top = 2.dp)
             )
+        }
+        }
+        if (!exiting && iconKind != null) {
+            // アイコンはその単語の右肩に小さく重ねる
+            Canvas(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 12.dp, y = (-12).dp)
+                    .size((uSize.value * 0.55f).dp)
+                    .graphicsLayer {
+                        alpha = ulAnim.value.coerceIn(0f, 1f)
+                        rotationZ = -9f
+                    }
+            ) {
+                drawLyricIcon(iconKind)
+            }
         }
     }
 }
