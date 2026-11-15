@@ -251,6 +251,7 @@ fun SettingsScreen(
     var backgroundPath by remember { mutableStateOf(repo.prefManager.getCustomBackgroundPath()) }
     var homeDiscLayout by remember { mutableStateOf(repo.prefManager.getHomeDiscLayout()) }
     var liquidBackground by remember { mutableStateOf(repo.prefManager.isLiquidBackgroundEnabled()) }
+    var lyricsPvMode by remember { mutableStateOf(repo.prefManager.isLyricsPvMode()) }
     var wallpaperAlpha by remember { mutableFloatStateOf(repo.prefManager.getHomeWallpaperAlpha()) }
     var showPasscodeChangeDialog by remember { mutableStateOf(false) }
     var newPasscodeField by remember { mutableStateOf(repo.prefManager.getPasscode()) }
@@ -790,13 +791,31 @@ fun SettingsScreen(
                                                     ) {
                                                         Column(modifier = Modifier.weight(1f)) {
                                                             Text("液体グラデーション背景", color = Color.White, fontSize = 14.sp)
-                                                            Text("未選択のとき背景でグラデーションがゆっくり動きます。再生中（配色連動ON時）はアートワーク背景の下にも薄く重なります", color = Color.Gray, fontSize = 12.sp)
+                                                            Text("未選択のとき背景でグラデーションがゆっくり動きます。再生中（配色連動ON時）はアートワーク背景の上にも重なります", color = Color.Gray, fontSize = 12.sp)
                                                         }
                                                         Switch(
                                                             checked = liquidBackground,
                                                             onCheckedChange = {
                                                                 liquidBackground = it
                                                                 repo.prefManager.setLiquidBackgroundEnabled(it)
+                                                                onChanged()
+                                                            },
+                                                            colors = switchColors
+                                                        )
+                                                    }
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Column(modifier = Modifier.weight(1f)) {
+                                                            Text("歌詞を背景に大きく表示（文字PV風）", color = Color.White, fontSize = 14.sp)
+                                                            Text("歌詞表示ONのとき、再生中の歌詞を画面の中央に大きく表示します", color = Color.Gray, fontSize = 12.sp)
+                                                        }
+                                                        Switch(
+                                                            checked = lyricsPvMode,
+                                                            onCheckedChange = {
+                                                                lyricsPvMode = it
+                                                                repo.prefManager.setLyricsPvMode(it)
                                                                 onChanged()
                                                             },
                                                             colors = switchColors
