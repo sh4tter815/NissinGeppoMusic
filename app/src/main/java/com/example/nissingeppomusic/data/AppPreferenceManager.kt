@@ -207,6 +207,8 @@ class AppPreferenceManager(private val context: Context) {
     fun setLiquidBackgroundEnabled(enabled: Boolean) { prefs.edit().putBoolean("liquid_background", enabled).apply() }
     fun isLyricsPvMode(): Boolean = prefs.getBoolean("lyrics_pv_mode", false)
     fun setLyricsPvMode(enabled: Boolean) { prefs.edit().putBoolean("lyrics_pv_mode", enabled).apply() }
+    fun getLyricsPvFont(): String = prefs.getString("lyrics_pv_font", "default") ?: "default"
+    fun setLyricsPvFont(value: String) { prefs.edit().putString("lyrics_pv_font", value).apply() }
     fun getHomeDiscLayout(): String = prefs.getString("home_disc_layout", "artwork") ?: "artwork"
     fun setHomeDiscLayout(layout: String) { prefs.edit().putString("home_disc_layout", layout).apply() }
     fun getHomeWallpaperAlpha(): Float = prefs.getFloat("home_wallpaper_alpha", 0.35f)
