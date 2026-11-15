@@ -666,6 +666,11 @@ fun PvLyricLine(
     val exitProgress = remember { Animatable(0f) }
     // 「落」を含む行は、退場のときに文字をバラさず行ごと画面下へ落下させる
     val fallLine = text.contains("落")
+    // 単語で発火する入場・退場エフェクトの対象判定
+    val negLine = text.contains("なかった") || text.contains("無い") || text.contains("ない") || text.contains("なくて") || text.contains("なくな")
+    val mosaicLine = text.contains("隠") || text.contains("モザイク")
+    val sandLine = text.contains("砂") || text.contains("消")
+    val rippleWord = text.contains("響")
     if (exiting) {
         LaunchedEffect(Unit) {
             exitProgress.animateTo(1f, animationSpec = tween(durationMillis = 720, easing = LinearEasing))
@@ -826,6 +831,64 @@ fun PvLyricLine(
                 }
             }
         }
+        // 単語で発火する入場・退場エフェクト: 響=波紋たくさん / 否定=破線で打ち消し / 隠・モザイク=モザイク化 / 砂・消=粒子化して吹き飛ぶ
+        if (negLine || mosaicLine || sandLine || rippleWord) {
+            Canvas(modifier = Modifier.matchParentSize().zIndex(5f)) {
+                val W = size.width
+                val H = size.height
+                if (rippleWord && !exiting) {
+                    val ft = fxAnim.value
+                    if (ft > 0f && ft < 1f) {
+                        for (i in 0 until 6) {
+                            val p = (ft * 1.5f - i * 0.13f).coerceIn(0f, 1f)
+                            if (p <= 0f || p >= 1f) continue
+                            val cx = W * (0.5f + ((baseSeed + i * 37) % 13 - 6) * 0.03f)
+                            drawCircle(color = accentColor.copy(alpha = (1f - p) * 0.5f), radius = p * W * 0.34f, center = Offset(cx, H * 0.5f), style = Stroke(width = 1.6.dp.toPx()))
+                        }
+                    }
+                }
+                val fp = exitProgress.value
+                if (exiting && fp > 0f) {
+                    if (negLine) {
+                        val sweep = (fp * 1.6f).coerceAtMost(1f)
+                        val paint = android.graphics.Paint().apply {
+                            color = android.graphics.Color.argb(235, 255, 90, 90)
+                            strokeWidth = 3.dp.toPx()
+                            style = android.graphics.Paint.Style.STROKE
+                            pathEffect = android.graphics.DashPathEffect(floatArrayOf(11f, 8f), 0f)
+                            isAntiAlias = true
+                        }
+                        drawContext.canvas.nativeCanvas.drawLine(W * 0.03f, H * 0.58f, W * 0.03f + W * 0.94f * sweep, H * 0.42f, paint)
+                    }
+                    if (mosaicLine) {
+                        val cell = 13.dp.toPx()
+                        val cols = (W / cell).toInt() + 1
+                        val rowsN = (H / cell).toInt() + 1
+                        for (gx in 0 until cols) for (gy in 0 until rowsN) {
+                            val h = (((gx * 73856093) ^ (gy * 19349663) ^ (baseSeed * 83492791)) and 0x7fffffff) % 100
+                            if (h < fp * 135f) {
+                                val c = when (h % 4) { 0 -> Color(0xFF9E9E9E); 1 -> accentColor; 2 -> Color(0xFF616161); else -> Color(0xFFBDBDBD) }
+                                drawRect(color = c.copy(alpha = 0.88f), topLeft = Offset(gx * cell, gy * cell), size = Size(cell, cell))
+                            }
+                        }
+                    }
+                    if (sandLine) {
+                        for (i in 0 until 240) {
+                            val h1 = ((i * 2654435761L) ^ (baseSeed * 97L)) and 0x7fffffffL
+                            val sx = (h1 % 1000) / 1000f
+                            val sy = ((h1 / 1000) % 1000) / 1000f
+                            val drift = fp * fp * (0.25f + (h1 % 50) / 100f) * W
+                            val rise = fp * ((h1 % 30) / 100f - 0.12f) * H
+                            val px = sx * W + drift
+                            val py = sy * H + rise + fp * fp * H * 0.25f
+                            val a = (1f - fp) * (0.35f + (h1 % 60) / 100f)
+                            val c = when ((h1 % 5).toInt()) { 0 -> accentColor; 1 -> Color(0xFFE8D8A8); else -> Color.White }
+                            drawCircle(color = c.copy(alpha = a.coerceIn(0f, 1f)), radius = (1.1f + (h1 % 20) / 10f).dp.toPx() * 0.55f, center = Offset(px, py))
+                        }
+                    }
+                }
+            }
+        }
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier.fillMaxWidth()
@@ -879,7 +942,7 @@ fun PvLyricLine(
                         uXShiftDp = uXShift,
                         staggerIndex = gi,
                         exiting = exiting,
-                        exitProgressValue = if (fallLine) 0f else exitProgress.value,
+                        exitProgressValue = if (fallLine) 0f else if (sandLine) (exitProgress.value * 1.6f).coerceAtMost(1f) else exitProgress.value,
                         exitDelayMs = (uSeed % 5) * 35f + gi * 12f,
                         fontFamily = fontFamily,
                         accentColor = accentColor,
