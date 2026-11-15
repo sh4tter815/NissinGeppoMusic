@@ -2177,6 +2177,12 @@ fun MainLauncherScreen() {
  * 前の行（residual）: イーズインで小さく・薄く・ぼんやりしながら上へ移動して残る。
  * 漢字は大きめ、ひらがなは小さめにするとバランスが良い。
  */
+/** PV入場の8方向（上・右上・右・右下・下・左下・左・左上） */
+private val PV_ENTRY_DIRS = listOf(
+    0f to -1f, 0.72f to -0.72f, 1f to 0f, 0.72f to 0.72f,
+    0f to 1f, -0.72f to 0.72f, -1f to 0f, -0.72f to -0.72f
+)
+
 @Composable
 private fun PvLyricLine(
     text: String,
@@ -2264,7 +2270,10 @@ private fun PvLyricLine(
                                 scaleX = ns
                                 scaleY = ns
                                 rotationZ = chRot * a
-                                translationY = (1f - a) * 22f
+                                // 入場は文字ごとにバラバラの方向（8方向）から飛んでくる
+                                val dir = PV_ENTRY_DIRS[chSeed % 8]
+                                translationX = dir.first * 52f * (1f - a)
+                                translationY = dir.second * 52f * (1f - a)
                             }
                         },
                     style = LocalTextStyle.current.copy(
