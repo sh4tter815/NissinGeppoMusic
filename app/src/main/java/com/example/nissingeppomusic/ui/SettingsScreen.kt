@@ -165,7 +165,8 @@ fun FontSelectionSection(
     val fontOptions = mapOf(
         "default" to "デフォルトフォント (Default)",
         "receipt" to "レシートフォント (Receipt Font)",
-        "denkichip" to "DenkiChip (x8y12pxDenkiChip)",
+        "denkichip" to "でんきチップ (DenkiChip)",
+        "tsukuhou" to "築豊明朝 (Tsukuhou Mincho)",
         "custom" to "カスタムフォント (.ttf/.otf)"
     )
     val currentLabel = fontOptions[currentFontChoice] ?: "デフォルトフォント (Default)"
@@ -853,7 +854,9 @@ fun SettingsScreen(
                                                             listOf(
                                                                 "default" to "デフォルトフォント (Default)",
                                                                 "receipt" to "レシートフォント (Receipt Font)",
-                                                                "denkichip" to "DenkiChip (x8y12pxDenkiChip)",
+                                                                "denkichip" to "でんきチップ (DenkiChip)",
+                                                                "tsukuhou" to "築豊明朝 (Tsukuhou Mincho)",
+        "tsukuhou" to "築豊明朝 (Tsukuhou Mincho)",
                                                                 "custom" to "カスタムフォント (.ttf/.otf)"
                                                             ).forEach { (key, label) ->
                                                                 Text(
