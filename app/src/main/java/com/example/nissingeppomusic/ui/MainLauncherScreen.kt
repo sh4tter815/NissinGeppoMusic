@@ -702,36 +702,40 @@ fun MainLauncherScreen() {
                     val pvDisplayIndex = if (pvInterlude) -2 else pvIndex
                     if (pvIndex >= 0) {
                         val pvFontFamily = parseFontFamily(lyricsPvFont, if (lyricsPvFont == "custom") customFontPath else null)
-                        // 前の行は消さずに、残像として小さく・薄く・ぼんやり上の方に残す
+                        // 前の行は残像にせず、文字ごとにバラバラの遅延で退場アニメーションをかけて消す
                         var pvCurrent by remember { mutableStateOf<Pair<Int, String>?>(null) }
-                        var pvPrevious by remember { mutableStateOf<Pair<Int, String>?>(null) }
+                        var pvExiting by remember { mutableStateOf<Pair<Int, String>?>(null) }
                         LaunchedEffect(lyricsLines) {
                             pvCurrent = null
-                            pvPrevious = null
+                            pvExiting = null
                         }
                         LaunchedEffect(pvDisplayIndex) {
                             if (pvDisplayIndex >= 0) {
                                 if (pvCurrent?.first != pvDisplayIndex) {
-                                    pvCurrent?.let { pvPrevious = it }
-                                    if (pvPrevious?.first == pvDisplayIndex) pvPrevious = null
+                                    pvCurrent?.let { pvExiting = it }
+                                    if (pvExiting?.first == pvDisplayIndex) pvExiting = null
                                     pvCurrent = pvDisplayIndex to pvLines[pvDisplayIndex].text
                                 }
                             } else if (pvDisplayIndex == -2) {
-                                // 間奏: 今の行は残像に回して、新しい行は出さない
-                                pvCurrent?.let { pvPrevious = it }
+                                // 間奏: 今の行は退場アニメーションで消して、新しい行は出さない
+                                pvCurrent?.let { pvExiting = it }
                                 pvCurrent = null
+                            }
+                            if (pvExiting != null) {
+                                delay(750)
+                                pvExiting = null
                             }
                         }
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                            pvPrevious?.let { (prevIdx, prevText) ->
-                                key("pvprev$prevIdx") {
+                            pvExiting?.let { (exIdx, exText) ->
+                                key("pvexit$exIdx") {
                                     PvLyricLine(
-                                        text = prevText,
-                                        baseSeed = Math.floorMod(prevIdx * 31 + prevText.hashCode(), 997),
+                                        text = exText,
+                                        baseSeed = Math.floorMod(exIdx * 31 + exText.hashCode(), 997),
                                         fontFamily = pvFontFamily,
                                         accentColor = accentColor,
                                         screenWidthDp = screenWidthDp,
-                                        residual = true,
+                                        exiting = true,
                                         modifier = Modifier.padding(top = 235.dp)
                                     )
                                 }
@@ -744,7 +748,7 @@ fun MainLauncherScreen() {
                                         fontFamily = pvFontFamily,
                                         accentColor = accentColor,
                                         screenWidthDp = screenWidthDp,
-                                        residual = false,
+                                        exiting = false,
                                         modifier = Modifier.padding(top = 235.dp)
                                     )
                                 }
@@ -2180,31 +2184,29 @@ private fun PvLyricLine(
     fontFamily: FontFamily?,
     accentColor: Color,
     screenWidthDp: Float,
-    residual: Boolean,
+    exiting: Boolean,
     modifier: Modifier = Modifier
 ) {
     val pvEaseIn = CubicBezierEasing(0.42f, 0f, 1f, 1f)
     val baseFontSize = (26 + (baseSeed % 4) * 7).toFloat()
     val charCount = text.length.coerceAtLeast(1)
-    val fitSize = minOf(baseFontSize, (screenWidthDp - 56f) / (charCount * 1.2f))
+    val fitSize = minOf(baseFontSize, (screenWidthDp - 56f) / (charCount * 1.15f))
     val lineOffsetX = ((baseSeed / 7) % 51 - 25).dp
     val lineOffsetY = ((baseSeed / 11) % 61 - 30).dp
     val rotationTarget = ((baseSeed / 4) % 29 - 14).toFloat()
     val lineRot = remember { Animatable(0f) }
-    val retire = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
-        if (residual) {
+        if (exiting) {
             lineRot.snapTo(rotationTarget)
-            retire.animateTo(1f, animationSpec = tween(durationMillis = 650, easing = pvEaseIn))
+            lineRot.animateTo(rotationTarget + 6f, animationSpec = tween(durationMillis = 500, easing = pvEaseIn))
         } else {
-            lineRot.snapTo(rotationTarget - 14f)
+            lineRot.snapTo(rotationTarget - 7f)
             lineRot.animateTo(rotationTarget, animationSpec = tween(durationMillis = 550, easing = FastOutSlowInEasing))
         }
     }
-    val r = retire.value
     // 下線: 文字の入場が完了したら、左から右へ伸びて（イーズアウト）、すぐに左から右へ消える（イーズイン）
     val underline = remember { Animatable(0f) }
-    if (!residual) {
+    if (!exiting) {
         LaunchedEffect(Unit) {
             delay((charCount - 1) * 45L + 380L)
             underline.animateTo(1f, animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing))
@@ -2213,33 +2215,29 @@ private fun PvLyricLine(
     }
     Box(
         modifier = modifier
-            .offset(x = lineOffsetX, y = lineOffsetY + (-85f * r).dp)
-            .blur((6f * r).dp)
-            .graphicsLayer {
-                rotationZ = lineRot.value
-                val lineScale = 1f - 0.45f * r
-                scaleX = lineScale
-                scaleY = lineScale
-                alpha = 1f - 0.62f * r
-            }
+            .offset(x = lineOffsetX, y = lineOffsetY)
+            .graphicsLayer { rotationZ = lineRot.value }
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             text.forEachIndexed { ci, ch ->
                 val chSeed = Math.floorMod(baseSeed * 7 + ci * 131, 997)
                 val scriptFactor = when (ch) {
-                    in '一'..'鿿', '々', '〆', 'ヶ' -> 1.18f
-                    in 'ぁ'..'ゟ' -> 0.82f
+                    in '一'..'鿿', '々', '〆', 'ヶ' -> 1.12f
+                    in 'ぁ'..'ゟ' -> 0.88f
                     in '゠'..'ヿ' -> 1.0f
                     else -> 0.95f
                 }
-                val chSize = (fitSize * (0.75f + (chSeed % 60) / 100f) * scriptFactor).sp
-                val chRot = ((chSeed / 3) % 33 - 16).toFloat()
-                val chYOffset = ((chSeed / 5) % 29 - 14).dp
-                val chXOffset = ((chSeed / 13) % 9 - 4).dp
-                val chAnim = remember(ci) { Animatable(if (residual) 1f else 0f) }
-                if (!residual) {
-                    LaunchedEffect(ci) {
+                val chSize = (fitSize * (0.85f + (chSeed % 30) / 100f) * scriptFactor).sp
+                val chRot = ((chSeed / 3) % 17 - 8).toFloat()
+                val chYOffset = ((chSeed / 5) % 13 - 6).dp
+                val chAnim = remember(ci) { Animatable(if (exiting) 1f else 0f) }
+                LaunchedEffect(ci) {
+                    if (exiting) {
+                        // 退場は文字ごとにバラバラの遅延（シード由来）で、イーズインで落ちながら消える
+                        delay((chSeed % 5) * 35L + ci * 12L)
+                        chAnim.animateTo(0f, animationSpec = tween(durationMillis = 300, easing = pvEaseIn))
+                    } else {
                         delay(ci * 45L)
                         chAnim.animateTo(1f, animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing))
                     }
@@ -2251,14 +2249,23 @@ private fun PvLyricLine(
                     fontSize = chSize,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
+                    overflow = TextOverflow.Visible,
                     modifier = Modifier
-                        .offset(x = chXOffset, y = chYOffset)
+                        .offset(y = chYOffset)
                         .graphicsLayer {
-                            val charScale = 0.4f + 0.6f * a
-                            scaleX = charScale
-                            scaleY = charScale
-                            rotationZ = chRot * (2.2f - 1.2f * a)
-                            translationY = (1f - a) * 38f
+                            if (exiting) {
+                                val es = 0.5f + 0.5f * a
+                                scaleX = es
+                                scaleY = es
+                                rotationZ = chRot * (2f - a)
+                                translationY = (1f - a) * 30f
+                            } else {
+                                val ns = 0.6f + 0.4f * a
+                                scaleX = ns
+                                scaleY = ns
+                                rotationZ = chRot * a
+                                translationY = (1f - a) * 22f
+                            }
                         },
                     style = LocalTextStyle.current.copy(
                         fontFamily = fontFamily,
@@ -2267,7 +2274,7 @@ private fun PvLyricLine(
                 )
             }
         }
-        if (!residual) {
+        if (!exiting) {
             Spacer(modifier = Modifier.height(7.dp))
             val ulv = underline.value
             Canvas(modifier = Modifier.fillMaxWidth().height(3.dp)) {
