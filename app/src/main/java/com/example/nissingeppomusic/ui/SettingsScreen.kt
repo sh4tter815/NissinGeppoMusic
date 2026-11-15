@@ -162,7 +162,6 @@ fun FontSelectionSection(
     onUseCustomFontChanged: (Boolean) -> Unit,
     switchColors: SwitchColors
 ) {
-    var expanded by remember { mutableStateOf(false) }
     val fontOptions = mapOf(
         "default" to "システムフォント",
         "receipt" to "レシートフォント (Receipt Font)",
@@ -170,45 +169,29 @@ fun FontSelectionSection(
         "tsukuhou" to "築豊明朝 (Tsukuhou Mincho)",
         "custom" to "カスタムフォント (.ttf/.otf)"
     )
-    val currentLabel = fontOptions[currentFontChoice] ?: "システムフォント"
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("フォント選択", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Normal)
 
-        Box(modifier = Modifier.fillMaxWidth()) {
-            OutlinedButton(
-                onClick = { expanded = true },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
-            ) {
+        Column {
+            fontOptions.forEach { (key, label) ->
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onFontSelected(key) }
+                        .padding(vertical = 2.dp)
                 ) {
-                    Text(currentLabel, fontSize = 15.sp, fontFamily = parseFontFamily(currentFontChoice, if (currentFontChoice == "custom") customFontPath else null))
-                    Text("▼", fontSize = 12.sp)
-                }
-            }
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-                modifier = Modifier.background(Color(0xFF141C2E))
-            ) {
-                fontOptions.forEach { (key, label) ->
-                    DropdownMenuItem(
-                        text = { Text(label, color = Color.White, fontSize = 15.sp, fontFamily = parseFontFamily(key, if (key == "custom") customFontPath else null)) },
-                        leadingIcon = {
-                            RadioButton(
-                                selected = key == currentFontChoice,
-                                onClick = null,
-                                colors = RadioButtonDefaults.colors(selectedColor = Color.White, unselectedColor = Color.Gray)
-                            )
-                        },
-                        onClick = {
-                            onFontSelected(key)
-                            expanded = false
-                        }
+                    RadioButton(
+                        selected = key == currentFontChoice,
+                        onClick = null,
+                        colors = RadioButtonDefaults.colors(selectedColor = Color.White, unselectedColor = Color.Gray)
+                    )
+                    Text(
+                        text = label,
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        fontFamily = parseFontFamily(key, if (key == "custom") customFontPath else null)
                     )
                 }
             }
@@ -250,6 +233,7 @@ fun SettingsScreen(
     var liquidBackground by remember { mutableStateOf(repo.prefManager.isLiquidBackgroundEnabled()) }
     var lyricsDisplayMode by remember { mutableStateOf(repo.prefManager.getLyricsDisplayMode()) }
     var lyricsPvFont by remember { mutableStateOf(repo.prefManager.getLyricsPvFont()) }
+    var lyricsBold by remember { mutableStateOf(repo.prefManager.isLyricsBold()) }
     var wallpaperAlpha by remember { mutableFloatStateOf(repo.prefManager.getHomeWallpaperAlpha()) }
     var showPasscodeChangeDialog by remember { mutableStateOf(false) }
     var newPasscodeField by remember { mutableStateOf(repo.prefManager.getPasscode()) }
@@ -405,6 +389,7 @@ fun SettingsScreen(
                         text = when (selectedCategory) {
                             "behavior" -> "動作設定"
                             "appearance" -> "外観設定"
+                            "lyrics" -> "歌詞設定"
                             "library" -> "ライブラリ"
                             "security" -> "セキュリティ"
                             "tutorial" -> "チュートリアル"
@@ -420,6 +405,7 @@ fun SettingsScreen(
             val categories = listOf(
                 Triple("behavior", "動作", "ダイヤルのスクロール方向や操作感の設定"),
                 Triple("appearance", "外観", "壁紙、配色、フォントなどの見た目のカスタマイズ"),
+                Triple("lyrics", "歌詞", "表示モード、フォント、太さの設定"),
                 Triple("library", "ライブラリ", "曲データの差分更新（追加・削除された曲の反映）"),
                 Triple("security", "セキュリティ", "非表示アプリ用のパスコード(PIN)設定"),
                 Triple("tutorial", "チュートリアル", "ガイドや使い方の再表示設定")
@@ -474,6 +460,117 @@ fun SettingsScreen(
                 } else {
                     // --- 2段階目: 各カテゴリの詳細設定 ---
                     when (selectedCategory) {
+                        "lyrics" -> {
+                            item {
+                                Surface(
+                                    color = Color(0x99101728),
+                                    shape = RoundedCornerShape(20.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(20.dp),
+                                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                                    ) {
+                                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                                        Text("歌詞の表示モード", color = Color.White, fontSize = 14.sp)
+                                                        Row(
+                                                            modifier = Modifier.fillMaxWidth(),
+                                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                                        ) {
+                                                            LyricsModePreviewCard(
+                                                                mode = "line",
+                                                                label = "現在の行",
+                                                                selected = lyricsDisplayMode == "line",
+                                                                accentColor = currentAccentColor,
+                                                                modifier = Modifier.weight(1f)
+                                                            ) {
+                                                                lyricsDisplayMode = "line"
+                                                                repo.prefManager.setLyricsDisplayMode("line")
+                                                                onChanged()
+                                                            }
+                                                            LyricsModePreviewCard(
+                                                                mode = "video",
+                                                                label = "リリックビデオ",
+                                                                selected = lyricsDisplayMode == "video",
+                                                                accentColor = currentAccentColor,
+                                                                modifier = Modifier.weight(1f)
+                                                            ) {
+                                                                lyricsDisplayMode = "video"
+                                                                repo.prefManager.setLyricsDisplayMode("video")
+                                                                onChanged()
+                                                            }
+                                                            LyricsModePreviewCard(
+                                                                mode = "multi",
+                                                                label = "複数行",
+                                                                selected = lyricsDisplayMode == "multi",
+                                                                accentColor = currentAccentColor,
+                                                                modifier = Modifier.weight(1f)
+                                                            ) {
+                                                                lyricsDisplayMode = "multi"
+                                                                repo.prefManager.setLyricsDisplayMode("multi")
+                                                                onChanged()
+                                                            }
+                                                        }
+                                                        Text("複数行は円を下げて、できた空白に前・今・次の3行を表示します", color = Color.Gray, fontSize = 12.sp)
+                                                    }
+                                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                        Text("歌詞のフォント（全モード共通）", color = Color.White, fontSize = 14.sp)
+                                                            listOf(
+                                                                "default" to "システムフォント",
+                                                                "receipt" to "レシートフォント (Receipt Font)",
+                                                                "denkichip" to "でんきチップ (DenkiChip)",
+                                                                "tsukuhou" to "築豊明朝 (Tsukuhou Mincho)",
+                                                                "custom" to "カスタムフォント (.ttf/.otf)"
+                                                            ).forEach { (key, label) ->
+                                                                Row(
+                                                                    verticalAlignment = Alignment.CenterVertically,
+                                                                    modifier = Modifier
+                                                                        .fillMaxWidth()
+                                                                        .clickable {
+                                                                            lyricsPvFont = key
+                                                                            repo.prefManager.setLyricsPvFont(key)
+                                                                            onChanged()
+                                                                        }
+                                                                        .padding(vertical = 2.dp)
+                                                                ) {
+                                                                    RadioButton(
+                                                                        selected = lyricsPvFont == key,
+                                                                        onClick = null,
+                                                                        colors = RadioButtonDefaults.colors(selectedColor = currentAccentColor, unselectedColor = Color.Gray)
+                                                                    )
+                                                                    Text(
+                                                                        text = label,
+                                                                        color = if (lyricsPvFont == key) currentAccentColor else Color.White.copy(alpha = 0.8f),
+                                                                        fontSize = 15.sp,
+                                                                        fontFamily = parseFontFamily(key, if (key == "custom") customFontPath else null)
+                                                                    )
+                                                                }
+                                                            }
+                                                            Text("「カスタムフォント」はフォント設定で選んだファイルを使います", color = Color.Gray, fontSize = 12.sp)
+                                                    }
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Column(modifier = Modifier.weight(1f)) {
+                                                            Text("歌詞を太字にする", color = Color.White, fontSize = 14.sp)
+                                                            Text("デフォルトは細字。築豊明朝は細字が映えます", color = Color.Gray, fontSize = 12.sp)
+                                                        }
+                                                        Switch(
+                                                            checked = lyricsBold,
+                                                            onCheckedChange = {
+                                                                lyricsBold = it
+                                                                repo.prefManager.setLyricsBold(it)
+                                                                onChanged()
+                                                            },
+                                                            colors = switchColors
+                                                        )
+                                                    }
+                                    }
+                                }
+                            }
+                        }
                         "behavior" -> {
                             item {
                                 Surface(
@@ -803,83 +900,7 @@ fun SettingsScreen(
                                                             colors = switchColors
                                                         )
                                                     }
-                                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                                        Text("歌詞の表示モード", color = Color.White, fontSize = 14.sp)
-                                                        Row(
-                                                            modifier = Modifier.fillMaxWidth(),
-                                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                                        ) {
-                                                            LyricsModePreviewCard(
-                                                                mode = "line",
-                                                                label = "現在の行",
-                                                                selected = lyricsDisplayMode == "line",
-                                                                accentColor = currentAccentColor,
-                                                                modifier = Modifier.weight(1f)
-                                                            ) {
-                                                                lyricsDisplayMode = "line"
-                                                                repo.prefManager.setLyricsDisplayMode("line")
-                                                                onChanged()
-                                                            }
-                                                            LyricsModePreviewCard(
-                                                                mode = "video",
-                                                                label = "リリックビデオ",
-                                                                selected = lyricsDisplayMode == "video",
-                                                                accentColor = currentAccentColor,
-                                                                modifier = Modifier.weight(1f)
-                                                            ) {
-                                                                lyricsDisplayMode = "video"
-                                                                repo.prefManager.setLyricsDisplayMode("video")
-                                                                onChanged()
-                                                            }
-                                                            LyricsModePreviewCard(
-                                                                mode = "multi",
-                                                                label = "複数行",
-                                                                selected = lyricsDisplayMode == "multi",
-                                                                accentColor = currentAccentColor,
-                                                                modifier = Modifier.weight(1f)
-                                                            ) {
-                                                                lyricsDisplayMode = "multi"
-                                                                repo.prefManager.setLyricsDisplayMode("multi")
-                                                                onChanged()
-                                                            }
-                                                        }
-                                                        Text("複数行は円を下げて、できた空白に前・今・次の3行を表示します", color = Color.Gray, fontSize = 12.sp)
-                                                    }
-                                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                        Text("歌詞のフォント（全モード共通）", color = Color.White, fontSize = 14.sp)
-                                                            listOf(
-                                                                "default" to "システムフォント",
-                                                                "receipt" to "レシートフォント (Receipt Font)",
-                                                                "denkichip" to "でんきチップ (DenkiChip)",
-                                                                "tsukuhou" to "築豊明朝 (Tsukuhou Mincho)",
-                                                                "custom" to "カスタムフォント (.ttf/.otf)"
-                                                            ).forEach { (key, label) ->
-                                                                Row(
-                                                                    verticalAlignment = Alignment.CenterVertically,
-                                                                    modifier = Modifier
-                                                                        .fillMaxWidth()
-                                                                        .clickable {
-                                                                            lyricsPvFont = key
-                                                                            repo.prefManager.setLyricsPvFont(key)
-                                                                            onChanged()
-                                                                        }
-                                                                        .padding(vertical = 2.dp)
-                                                                ) {
-                                                                    RadioButton(
-                                                                        selected = lyricsPvFont == key,
-                                                                        onClick = null,
-                                                                        colors = RadioButtonDefaults.colors(selectedColor = currentAccentColor, unselectedColor = Color.Gray)
-                                                                    )
-                                                                    Text(
-                                                                        text = label,
-                                                                        color = if (lyricsPvFont == key) currentAccentColor else Color.White.copy(alpha = 0.8f),
-                                                                        fontSize = 15.sp,
-                                                                        fontFamily = parseFontFamily(key, if (key == "custom") customFontPath else null)
-                                                                    )
-                                                                }
-                                                            }
-                                                            Text("「カスタムフォント」はフォント設定で選んだファイルを使います", color = Color.Gray, fontSize = 12.sp)
-                                                    }
+
                                                 }
                                             }
                                         }
