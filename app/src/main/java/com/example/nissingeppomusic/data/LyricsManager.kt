@@ -532,4 +532,207 @@ object LyricsManager {
         }
         return null
     }
+
+    // ===== タグ指定検索（手動で候補から選んで適用する用） =====
+
+    data class LyricCandidate(
+        val source: String,
+        val title: String,
+        val artist: String,
+        val durationSec: Int,
+        val syncedLyrics: String?,
+        val kugouHash: String?
+    )
+
+    /** 曲名・アーティスト名で歌詞候補を検索する（LRCLIBとKugouの両方を当たる） */
+    suspend fun searchCandidates(title: String, artist: String): List<LyricCandidate> =
+        withContext(Dispatchers.IO) {
+            val results = mutableListOf<LyricCandidate>()
+            fun enc(v: String) = URLEncoder.encode(v, "UTF-8")
+            try {
+                val url = "https://lrclib.net/api/search?track_name=${enc(title)}&artist_name=${enc(artist)}"
+                val arr = httpGetJsonArray(url)
+                if (arr != null) {
+                    for (i in 0 until arr.length()) {
+                        val item = arr.optJSONObject(i) ?: continue
+                        val synced = item.optString("syncedLyrics", "").takeIf { it.isNotBlank() } ?: continue
+                        results.add(
+                            LyricCandidate(
+                                source = "LRCLIB",
+                                title = item.optString("trackName", ""),
+                                artist = item.optString("artistName", ""),
+                                durationSec = item.optInt("duration", 0),
+                                syncedLyrics = synced,
+                                kugouHash = null
+                            )
+                        )
+                        if (results.size >= 15) break
+                    }
+                }
+            } catch (e: Exception) {
+                // 片方のソースが失敗しても、もう片方の結果は返す
+            }
+            try {
+                val keyword = if (artist.isBlank()) title else "$title $artist"
+                val url = "http://mobilecdn.kugou.com/api/v3/search/song?format=json" +
+                    "&keyword=${enc(keyword)}&page=1&pagesize=20&showtype=1"
+                val text = httpGetText(url, desktopUa)
+                val infos = try {
+                    JSONObject(text ?: "").optJSONObject("data")?.optJSONArray("info")
+                } catch (e: Exception) {
+                    null
+                }
+                if (infos != null) {
+                    var added = 0
+                    for (i in 0 until infos.length()) {
+                        val info = infos.optJSONObject(i) ?: continue
+                        val hash = info.optString("hash", "")
+                        if (hash.isBlank()) continue
+                        val songName = info.optString("songname", "")
+                            .ifBlank { info.optString("filename", "").substringAfterLast(" - ") }
+                        results.add(
+                            LyricCandidate(
+                                source = "Kugou",
+                                title = songName,
+                                artist = info.optString("singername", ""),
+                                durationSec = info.optInt("duration", 0),
+                                syncedLyrics = null,
+                                kugouHash = hash
+                            )
+                        )
+                        added++
+                        if (added >= 15) break
+                    }
+                }
+            } catch (e: Exception) {
+                // 同上
+            }
+            results
+        }
+
+    /** 候補の歌詞本文（LRC）を取得する */
+    suspend fun fetchCandidateLrc(candidate: LyricCandidate): String? = withContext(Dispatchers.IO) {
+        if (candidate.source == "LRCLIB") {
+            return@withContext candidate.syncedLyrics?.takeIf { parseLrc(it).isNotEmpty() }
+        }
+        val hash = candidate.kugouHash ?: return@withContext null
+        fun enc(v: String) = URLEncoder.encode(v, "UTF-8")
+        val durMs = if (candidate.durationSec > 0) candidate.durationSec * 1000L else 0L
+        val candUrl = "https://lyrics.kugou.com/search?ver=1&man=yes&client=pc" +
+            "&keyword=${enc(candidate.title)}&duration=$durMs&hash=$hash"
+        val candText = httpGetText(candUrl, desktopUa) ?: return@withContext null
+        val candidates = try {
+            JSONObject(candText).optJSONArray("candidates")
+        } catch (e: Exception) {
+            null
+        } ?: return@withContext null
+        if (candidates.length() == 0) return@withContext null
+        var first = candidates.optJSONObject(0) ?: return@withContext null
+        for (j in 0 until candidates.length()) {
+            val cand = candidates.optJSONObject(j) ?: continue
+            if (titleMatches(cand.optString("song", ""), candidate.title)) {
+                first = cand
+                break
+            }
+        }
+        val candId = first.optString("id", "")
+        val accessKey = first.optString("accesskey", "")
+        if (candId.isBlank() || accessKey.isBlank()) return@withContext null
+        val dlUrl = "https://lyrics.kugou.com/download?ver=1&client=pc&id=$candId" +
+            "&accesskey=$accessKey&fmt=lrc&charset=utf8"
+        val dlText = httpGetText(dlUrl, desktopUa) ?: return@withContext null
+        val contentB64 = try {
+            JSONObject(dlText).optString("content", "")
+        } catch (e: Exception) {
+            ""
+        }
+        if (contentB64.isBlank()) return@withContext null
+        val lrc = try {
+            String(android.util.Base64.decode(contentB64, android.util.Base64.DEFAULT), Charsets.UTF_8)
+        } catch (e: Exception) {
+            null
+        }
+        lrc?.takeIf { parseLrc(it).isNotEmpty() }
+    }
+
+    /** 手動で選んだ歌詞を、その曲のキャッシュとして保存する（次回から自動でこれが出る） */
+    fun saveLyricsOverride(context: Context, title: String, artist: String, album: String, lrcText: String) {
+        try {
+            cacheFile(context, title, artist, album).writeText(lrcText, Charsets.UTF_8)
+        } catch (e: Exception) {
+            // 保存に失敗しても、表示への適用は呼び出し側で行う
+        }
+    }
+
+    /** 歌詞の各行を日本語へ翻訳する（日本語を含む行は空文字＝訳なし）。結果はキャッシュする */
+    suspend fun translateToJapanese(
+        context: Context,
+        title: String,
+        artist: String,
+        album: String,
+        lines: List<LyricLine>
+    ): List<String> = withContext(Dispatchers.IO) {
+        val cache = File(cacheFile(context, title, artist, album).absolutePath + ".ja")
+        if (cache.exists()) {
+            try {
+                val cached = cache.readText(Charsets.UTF_8).split("\n")
+                if (cached.size == lines.size) return@withContext cached
+            } catch (e: Exception) {
+                // キャッシュが読めなければ翻訳し直す
+            }
+        }
+        val result = MutableList(lines.size) { "" }
+        val targets = lines.mapIndexedNotNull { i, l ->
+            if (l.text.isBlank() || containsJapanese(l.text)) null else i to l.text
+        }
+        if (targets.isEmpty()) return@withContext result
+        var idx = 0
+        while (idx < targets.size) {
+            val chunk = mutableListOf<Pair<Int, String>>()
+            var len = 0
+            while (idx < targets.size && len < 1200) {
+                val t = targets[idx]
+                chunk.add(t)
+                len += t.second.length + 1
+                idx++
+            }
+            val joined = chunk.joinToString("\n") { it.second }
+            val translated = translateTextGoogle(joined)
+            val parts = translated?.split("\n")
+            if (parts != null && parts.size == chunk.size) {
+                chunk.forEachIndexed { k, (lineIdx, _) -> result[lineIdx] = parts[k].trim() }
+            } else {
+                // 行数がずれた場合は1行ずつ翻訳し直す
+                for ((lineIdx, text) in chunk) {
+                    val one = translateTextGoogle(text)
+                    if (one != null) result[lineIdx] = one.trim()
+                }
+            }
+        }
+        try {
+            cache.writeText(result.joinToString("\n"), Charsets.UTF_8)
+        } catch (e: Exception) {
+            // キャッシュ保存失敗は無視する
+        }
+        result
+    }
+
+    /** Google翻訳の非公式エンドポイントでテキストを日本語に翻訳する */
+    private fun translateTextGoogle(text: String): String? {
+        return try {
+            val url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=ja&dt=t&q=" +
+                URLEncoder.encode(text, "UTF-8")
+            val body = httpGetText(url, desktopUa) ?: return null
+            val root = org.json.JSONArray(body)
+            val segments = root.optJSONArray(0) ?: return null
+            val sb = StringBuilder()
+            for (i in 0 until segments.length()) {
+                sb.append(segments.optJSONArray(i)?.optString(0, "") ?: "")
+            }
+            sb.toString()
+        } catch (e: Exception) {
+            null
+        }
+    }
 }
+

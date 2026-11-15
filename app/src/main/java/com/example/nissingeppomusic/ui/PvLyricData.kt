@@ -70,10 +70,24 @@ fun isChorusWord(text: String): Boolean {
 val COLOR_WORDS: List<Pair<String, Color>> = listOf(
     "水色" to Color(0xFF7FD4F2), "ピンク" to Color(0xFFFF8FBF), "オレンジ" to Color(0xFFFF9A3D),
     "グレー" to Color(0xFF9AA0A6),
+    // 古い言い回しの伝統色（複合語は単字より先に置く）
+    "群青" to Color(0xFF3A5FCD), "瑠璃" to Color(0xFF1F4788), "翡翠" to Color(0xFF38B48B),
+    "琥珀" to Color(0xFFFFB000), "山吹" to Color(0xFFF8A500), "萌葱" to Color(0xFF2E9E6B),
+    "紅" to Color(0xFFE60033), "藍" to Color(0xFF2B4C9B), "朱" to Color(0xFFFF4D2E),
+    "緋" to Color(0xFFE8383F), "茜" to Color(0xFFB7282E), "藤" to Color(0xFFA58FCE),
     "青" to Color(0xFF3D7BFF), "赤" to Color(0xFFFF4545), "白" to Color(0xFFF2F3F5),
     "黒" to Color(0xFF26262C), "紫" to Color(0xFFB07FE8), "緑" to Color(0xFF4FC96B),
     "黄" to Color(0xFFFFD94D), "金" to Color(0xFFFFC94D), "銀" to Color(0xFFC9CED6),
-    "茶" to Color(0xFFB07B4F), "灰" to Color(0xFF9AA0A6)
+    "茶" to Color(0xFFB07B4F), "灰" to Color(0xFF9AA0A6),
+    // 英語の色名（照合は単語単位・大文字小文字なし。PvLyricUnit側で境界判定する）
+    "red" to Color(0xFFFF4545), "blue" to Color(0xFF3D7BFF), "green" to Color(0xFF4FC96B),
+    "yellow" to Color(0xFFFFD94D), "pink" to Color(0xFFFF8FBF), "purple" to Color(0xFFB07FE8),
+    "violet" to Color(0xFF8A6FE8), "black" to Color(0xFF26262C), "white" to Color(0xFFF2F3F5),
+    "orange" to Color(0xFFFF9A3D), "gray" to Color(0xFF9AA0A6), "grey" to Color(0xFF9AA0A6),
+    "brown" to Color(0xFFB07B4F), "gold" to Color(0xFFFFC94D), "silver" to Color(0xFFC9CED6),
+    "cyan" to Color(0xFF4FD8E8), "magenta" to Color(0xFFFF4FD8), "crimson" to Color(0xFFE60033),
+    "indigo" to Color(0xFF2B4C9B), "emerald" to Color(0xFF38B48B), "scarlet" to Color(0xFFE8383F),
+    "amber" to Color(0xFFFFB000)
 )
 val KATAKANA_EN = mapOf(
     "ハート" to "HEART", "ラブ" to "LOVE", "キス" to "KISS", "ドリーム" to "DREAM",

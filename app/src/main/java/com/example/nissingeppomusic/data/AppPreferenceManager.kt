@@ -227,6 +227,9 @@ class AppPreferenceManager(private val context: Context) {
     fun setLyricsPvFont(value: String) { prefs.edit().putString("lyrics_pv_font", value).apply() }
     fun isLyricsBold(): Boolean = prefs.getBoolean("lyrics_bold", false)
     fun setLyricsBold(value: Boolean) { prefs.edit().putBoolean("lyrics_bold", value).apply() }
+
+    fun isLyricTranslationEnabled(): Boolean = prefs.getBoolean("lyric_translation", false)
+    fun setLyricTranslationEnabled(value: Boolean) { prefs.edit().putBoolean("lyric_translation", value).apply() }
     /** 歌詞の表示モード: "line"=現在の行のみ / "video"=リリックビデオ（文字PV） / "multi"=複数行 */
     fun getLyricsDisplayMode(): String {
         val saved = prefs.getString("lyrics_display_mode", null)

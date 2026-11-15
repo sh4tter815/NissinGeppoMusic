@@ -151,11 +151,11 @@ fun DrawScope.drawLyricIcon(kind: Int) {
             drawPath(path, col, style = st)
         }
         LyricIcon.MOON -> {
-            // 三日月: 外周と内側の食い込みをベジェで結んだ輪郭
+            // 三日月: 左に膨らんだ外周と、右から食い込む内周（中心基準で描く）
             val path = Path().apply {
-                moveTo(14f * u, -22f * u)
-                cubicTo(26f * u, -6f * u, 26f * u, 8f * u, 12f * u, 22f * u)
-                cubicTo(-8f * u, 12f * u, -8f * u, -10f * u, 14f * u, -22f * u)
+                moveTo(cx + 12f * u, cy - 24f * u)
+                cubicTo(cx - 26f * u, cy - 13f * u, cx - 26f * u, cy + 13f * u, cx + 12f * u, cy + 24f * u)
+                cubicTo(cx - 3f * u, cy + 12f * u, cx - 3f * u, cy - 12f * u, cx + 12f * u, cy - 24f * u)
                 close()
             }
             drawPath(path, col, style = st)
@@ -312,29 +312,31 @@ fun DrawScope.drawLyricIcon(kind: Int) {
             drawCircle(col, radius = 26f * u, center = pt(0f, 0f), style = st)
         }
         LyricIcon.COFFIN -> {
-            // 棺: 肩が広がった六角形
+            // 棺: 頭側は狭く、肩で広がって足へ絞る六角形＋十字（中心基準で描く）
             val path = Path().apply {
-                moveTo(-13f * u, -30f * u)
-                lineTo(13f * u, -30f * u)
-                lineTo(25f * u, -6f * u)
-                lineTo(14f * u, 30f * u)
-                lineTo(-14f * u, 30f * u)
-                lineTo(-25f * u, -6f * u)
+                moveTo(cx - 10f * u, cy - 30f * u)
+                lineTo(cx + 10f * u, cy - 30f * u)
+                lineTo(cx + 24f * u, cy - 8f * u)
+                lineTo(cx + 12f * u, cy + 30f * u)
+                lineTo(cx - 12f * u, cy + 30f * u)
+                lineTo(cx - 24f * u, cy - 8f * u)
                 close()
             }
             drawPath(path, col, style = st)
+            drawLine(col, pt(0f, -21f), pt(0f, -3f), strokeWidth = 2.6f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(-6f, -15f), pt(6f, -15f), strokeWidth = 2.6f * u, cap = StrokeCap.Round)
         }
         LyricIcon.EYE -> {
-            // 目: アーモンド型の輪郭に虹彩
+            // 目: アーモンド型の輪郭に虹彩（中心基準で描く）
             val path = Path().apply {
-                moveTo(-30f * u, 0f)
-                quadraticTo(0f, -27f * u, 30f * u, 0f)
-                quadraticTo(0f, 27f * u, -30f * u, 0f)
+                moveTo(cx - 30f * u, cy)
+                quadraticTo(cx, cy - 38f * u, cx + 30f * u, cy)
+                quadraticTo(cx, cy + 38f * u, cx - 30f * u, cy)
                 close()
             }
             drawPath(path, col, style = st)
-            drawCircle(col, radius = 10f * u, center = pt(0f, 0f), style = st)
-            drawCircle(col, radius = 3.2f * u, center = pt(0f, 0f))
+            drawCircle(col, radius = 9f * u, center = pt(0f, 0f), style = st)
+            drawCircle(col, radius = 3f * u, center = pt(0f, 0f))
         }
         LyricIcon.PLUS -> {
             drawLine(col, pt(-17f, 0f), pt(17f, 0f), strokeWidth = 3.9f * u, cap = StrokeCap.Round)
@@ -344,16 +346,16 @@ fun DrawScope.drawLyricIcon(kind: Int) {
             drawLine(col, pt(-17f, 0f), pt(17f, 0f), strokeWidth = 3.9f * u, cap = StrokeCap.Round)
         }
         LyricIcon.MAP -> {
-            // 折れた地図: 三つ折りの面と折り目
+            // 折れた地図: 三つ折りの面と折り目（中心基準で描く）
             val path = Path().apply {
-                moveTo(-28f * u, -17f * u)
-                lineTo(-10f * u, -23f * u)
-                lineTo(10f * u, -17f * u)
-                lineTo(28f * u, -23f * u)
-                lineTo(28f * u, 17f * u)
-                lineTo(10f * u, 23f * u)
-                lineTo(-10f * u, 17f * u)
-                lineTo(-28f * u, 23f * u)
+                moveTo(cx - 28f * u, cy - 17f * u)
+                lineTo(cx - 10f * u, cy - 23f * u)
+                lineTo(cx + 10f * u, cy - 17f * u)
+                lineTo(cx + 28f * u, cy - 23f * u)
+                lineTo(cx + 28f * u, cy + 17f * u)
+                lineTo(cx + 10f * u, cy + 23f * u)
+                lineTo(cx - 10f * u, cy + 17f * u)
+                lineTo(cx - 28f * u, cy + 23f * u)
                 close()
             }
             drawPath(path, col, style = st)
@@ -952,7 +954,14 @@ fun PvLyricUnit(
         }
     }
     // 色名の文字を、その色で左上から右下へ斜めに塗っていく
-    val colorHit = if (!exiting) COLOR_WORDS.firstOrNull { unitText.contains(it.first) } else null
+    val colorHit = if (!exiting) COLOR_WORDS.firstOrNull { (word, _) ->
+        if (word.all { it.code < 128 }) {
+            // 英語の色名は単語単位で照合する（hundred の中の red などを拾わない）
+            Regex("""(?i)(?<![A-Za-z])${Regex.escape(word)}(?![A-Za-z])""").containsMatchIn(unitText)
+        } else {
+            unitText.contains(word)
+        }
+    } else null
     val wipeT = remember { Animatable(0f) }
     if (colorHit != null) {
         LaunchedEffect(staggerIndex) {
@@ -1050,7 +1059,7 @@ fun PvLyricUnit(
                     green = (base.green * 0.55f + accentColor.green * 0.45f) * 0.55f + 0.45f,
                     blue = (base.blue * 0.55f + accentColor.blue * 0.45f) * 0.55f + 0.45f
                 )
-                val cStart = unitText.indexOf(cWord)
+                val cStart = unitText.indexOf(cWord, ignoreCase = true)
                 val wp = wipeT.value.coerceIn(0f, 1f)
                 val wipeBrush = Brush.linearGradient(
                     colorStops = arrayOf(
@@ -1160,7 +1169,7 @@ fun renderUnitsOf(chunk: String): List<String> {
         }
     }
     for (ch in chunk) {
-        if (ch in '゠'..'ヿ' || ch.code < 0x300) {
+        if (ch.code < 0x300) {
             sb.append(ch)
         } else {
             flush()
@@ -1347,4 +1356,127 @@ fun LyricsModePreviewCard(
         Text(label, color = if (selected) accentColor else Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
         Text(if (selected) "●" else "○", color = if (selected) accentColor else Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
     }
+}
+
+/** タグ（曲名・アーティスト名）を指定して歌詞候補を検索し、選んで適用するダイアログ */
+@Composable
+fun LyricTagSearchDialog(
+    currentTitle: String,
+    currentArtist: String,
+    currentAlbum: String,
+    onApply: (List<LyricLine>) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var title by remember {
+        mutableStateOf(currentTitle.replace(Regex("""^\s*\d{1,3}\s*[.．、:：_\-]\s*"""), ""))
+    }
+    var artist by remember { mutableStateOf(currentArtist) }
+    var searching by remember { mutableStateOf(false) }
+    var candidates by remember { mutableStateOf<List<LyricsManager.LyricCandidate>>(emptyList()) }
+    var searched by remember { mutableStateOf(false) }
+    var applyingIndex by remember { mutableIntStateOf(-1) }
+    var message by remember { mutableStateOf<String?>(null) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("タグを指定して検索") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = title,
+                    onValueChange = { title = it },
+                    label = { Text("曲名") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = artist,
+                    onValueChange = { artist = it },
+                    label = { Text("アーティスト名") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(12.dp))
+                Button(
+                    enabled = !searching && title.isNotBlank(),
+                    onClick = {
+                        searching = true
+                        message = null
+                        scope.launch {
+                            candidates = LyricsManager.searchCandidates(title.trim(), artist.trim())
+                            searching = false
+                            searched = true
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(if (searching) "検索中…" else "検索") }
+                message?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text(it, color = MaterialTheme.colorScheme.error)
+                }
+                if (searched && !searching && candidates.isEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("候補が見つかりませんでした")
+                }
+                if (candidates.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    LazyColumn(modifier = Modifier.heightIn(max = 280.dp)) {
+                        items(candidates.size) { idx ->
+                            val cand = candidates[idx]
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable(enabled = applyingIndex < 0) {
+                                        applyingIndex = idx
+                                        scope.launch {
+                                            val lrc = LyricsManager.fetchCandidateLrc(cand)
+                                            applyingIndex = -1
+                                            if (lrc != null) {
+                                                LyricsManager.saveLyricsOverride(
+                                                    context, currentTitle, currentArtist, currentAlbum, lrc
+                                                )
+                                                onApply(LyricsManager.parseLrc(lrc))
+                                                onDismiss()
+                                            } else {
+                                                message = "その候補の歌詞を取得できませんでした"
+                                            }
+                                        }
+                                    }
+                                    .padding(vertical = 8.dp)
+                            ) {
+                                Text(
+                                    text = if (applyingIndex == idx) "取得中…" else cand.title.ifBlank { "(タイトルなし)" },
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                val dur = if (cand.durationSec > 0) {
+                                    " ・ ${cand.durationSec / 60}:${(cand.durationSec % 60).toString().padStart(2, '0')}"
+                                } else ""
+                                Text(
+                                    text = "${cand.artist}$dur ・ ${cand.source}",
+                                    color = Color.Gray,
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(1.dp)
+                                    .background(Color.White.copy(alpha = 0.08f))
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("閉じる") }
+        }
+    )
 }
