@@ -388,6 +388,12 @@ fun MainLauncherScreen() {
             lyricsLoading = true
             lyricsNotFound = false
             val song = allApps.firstOrNull { it.packageName == uri }
+            // 曲の長さがまだ分からないと歌詞の照合精度が落ちるため、最大2秒だけ待つ
+            var waitedMs = 0
+            while (musicPlayerManager.duration <= 0L && waitedMs < 2000) {
+                delay(100)
+                waitedMs += 100
+            }
             val result = LyricsManager.getSyncedLyrics(
                 context = context,
                 title = musicPlayerManager.currentTitle,
