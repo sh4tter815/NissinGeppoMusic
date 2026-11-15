@@ -19,6 +19,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -309,7 +310,8 @@ fun MainLauncherScreen() {
     var matchArtwork by remember { mutableStateOf(repo.prefManager.isMatchArtworkColor()) }
     var homeDiscLayout by remember { mutableStateOf(repo.prefManager.getHomeDiscLayout()) }
     var liquidBackground by remember { mutableStateOf(repo.prefManager.isLiquidBackgroundEnabled()) }
-    var lyricsPvMode by remember { mutableStateOf(repo.prefManager.isLyricsPvMode()) }
+    var lyricsDisplayMode by remember { mutableStateOf(repo.prefManager.getLyricsDisplayMode()) }
+    val lyricsPvMode = lyricsDisplayMode == "video"
     var lyricsPvFont by remember { mutableStateOf(repo.prefManager.getLyricsPvFont()) }
     var lyricsRefreshTick by remember { mutableStateOf(0) }
     var artworkAccent by remember { mutableStateOf<Color?>(null) }
@@ -438,7 +440,7 @@ fun MainLauncherScreen() {
         matchArtwork = repo.prefManager.isMatchArtworkColor()
         homeDiscLayout = repo.prefManager.getHomeDiscLayout()
         liquidBackground = repo.prefManager.isLiquidBackgroundEnabled()
-        lyricsPvMode = repo.prefManager.isLyricsPvMode()
+        lyricsDisplayMode = repo.prefManager.getLyricsDisplayMode()
         lyricsPvFont = repo.prefManager.getLyricsPvFont()
         if (currentLauncherPage == 1) {
             if (!repo.prefManager.isFirstWelcomeTutorialShown()) {
@@ -546,7 +548,11 @@ fun MainLauncherScreen() {
     val activeDisc1CenterX = if (isBigDiscLayout) disc1CenterXHome else disc1CenterXNormal
     // PV表示中は左右の円盤を少し下げて、上の歌詞文字と被らないようにする
     val pvDiscShiftY by animateFloatAsState(
-        targetValue = if (lyricsPvMode && showLyrics && currentLauncherPage == 1 && !isLyricsBrowsing && lyricsLines != null) 64f else 0f,
+        targetValue = when {
+            lyricsDisplayMode == "multi" && showLyrics && currentLauncherPage == 1 && !isLyricsBrowsing && lyricsLines != null -> 120f
+            lyricsPvMode && showLyrics && currentLauncherPage == 1 && !isLyricsBrowsing && lyricsLines != null -> 64f
+            else -> 0f
+        },
         animationSpec = tween(durationMillis = 450, easing = FastOutSlowInEasing),
         label = "pvDiscShiftY"
     )
@@ -697,7 +703,7 @@ fun MainLauncherScreen() {
                     val pvInterlude = when {
                         pvCurLine == null -> false
                         pvNextLine == null -> (pvPos - pvCurLine.timeMs) > 8000
-                        else -> (pvNextLine.timeMs - pvPos) > 4000 && (pvPos - pvCurLine.timeMs) > 3000
+                        else -> (pvNextLine.timeMs - pvCurLine.timeMs) > 6000 && (pvPos - pvCurLine.timeMs) > 3000 // 行間が長い間奏だけ。次の行が近づいたら前の行に戻る、をしない
                     }
                     val pvDisplayIndex = if (pvInterlude) -2 else pvIndex
                     if (pvIndex >= 0) {
@@ -752,6 +758,52 @@ fun MainLauncherScreen() {
                                         modifier = Modifier.padding(top = 235.dp)
                                     )
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 複数行モード: 円を下げてできた上の空白に、前・今・次の3行を表示（今の行が大きめ）
+            if (lyricsDisplayMode == "multi" && showLyrics && currentLauncherPage == 1 && !isLyricsBrowsing) {
+                val multiLines = lyricsLines
+                if (multiLines != null) {
+                    val mPos = musicPlayerManager.currentPosition
+                    val mRaw = multiLines.indexOfLast { it.timeMs <= mPos }
+                    val mCur = multiLines.getOrNull(mRaw)
+                    val mNext = multiLines.getOrNull(mRaw + 1)
+                    val mInterlude = when {
+                        mCur == null -> true
+                        mNext == null -> (mPos - mCur.timeMs) > 8000
+                        else -> (mNext.timeMs - mCur.timeMs) > 6000 && (mPos - mCur.timeMs) > 3000
+                    }
+                    Crossfade(targetState = mRaw, animationSpec = tween(250), label = "multiLyrics") { rawIdx ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 24.dp, end = 24.dp, top = 215.dp)
+                        ) {
+                            val prevText = multiLines.getOrNull(rawIdx - 1)?.text
+                            val curText = multiLines.getOrNull(rawIdx)?.text
+                            val nextText = multiLines.getOrNull(rawIdx + 1)?.text
+                            if (prevText != null) {
+                                Text(prevText, color = Color.White.copy(alpha = 0.45f), fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            } else {
+                                Spacer(Modifier.height(24.dp))
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                text = if (mInterlude) "♪" else (curText ?: ""),
+                                color = Color.White,
+                                fontSize = 30.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = LocalTextStyle.current.copy(shadow = Shadow(color = accentColor.copy(alpha = 0.8f), blurRadius = 16f))
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            if (nextText != null) {
+                                Text(nextText, color = Color.White.copy(alpha = 0.45f), fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                         }
                     }
@@ -874,7 +926,7 @@ fun MainLauncherScreen() {
                             letterSpacing = 1.0.sp,
                             textAlign = TextAlign.Start
                         )
-                        if (showLyrics) {
+                        if (showLyrics && lyricsDisplayMode == "line") { // 小さい歌詞行は「現在の行」モード専用
                             Spacer(modifier = Modifier.height(10.dp))
                             val lines = lyricsLines
                             when {
@@ -897,7 +949,7 @@ fun MainLauncherScreen() {
                                     val inInterlude = when {
                                         curLine == null -> nextLine != null && (nextLine.timeMs - posNow) > 3000
                                         nextLine == null -> (posNow - curLine.timeMs) > 8000
-                                        else -> (nextLine.timeMs - posNow) > 4000 && (posNow - curLine.timeMs) > 3000
+                                        else -> (nextLine.timeMs - curLine.timeMs) > 6000 && (posNow - curLine.timeMs) > 3000 // 行間が長い間奏だけ。次の行が近づいたら前の行に戻る、をしない
                                     }
                                     Crossfade(
                                         targetState = if (inInterlude) -2 else currentLyricIndex,
@@ -2197,7 +2249,8 @@ private fun PvLyricLine(
     val baseFontSize = (40 + (baseSeed % 4) * 10).toFloat()
     val charCount = text.length.coerceAtLeast(1)
     // 画面の横幅ギリギリまで大きくする
-    val fitSize = minOf(baseFontSize, (screenWidthDp - 12f) / (charCount * 1.05f))
+    val longestRow = if (charCount >= 8) maxOf(charCount / 2 + 1, charCount - charCount / 2 + 1) else charCount
+    val fitSize = minOf(baseFontSize, (screenWidthDp - 12f) / (longestRow * 1.05f))
     val lineOffsetX = ((baseSeed / 7) % 51 - 25).dp
     val lineOffsetY = ((baseSeed / 11) % 61 - 30).dp
     // 退場は1本の時計（exitProgress）で全文字を駆動する。文字ごとのAnimatableだと
@@ -2216,6 +2269,11 @@ private fun PvLyricLine(
             underline.animateTo(2f, animationSpec = tween(durationMillis = 320, easing = pvEaseIn))
         }
     }
+    // 長い行は途中で折り返して2段に散らす（リリックスピーカー風の配置）
+    val splitIdx = if (charCount >= 8) (charCount / 2 + (baseSeed % 3) - 1).coerceIn(3, charCount - 3) else charCount
+    val rowIndices: List<List<Int>> = if (splitIdx >= charCount) listOf(text.indices.toList())
+        else listOf((0 until splitIdx).toList(), (splitIdx until charCount).toList())
+    val row2Indent = ((baseSeed / 13) % 5 * 18).dp
     Box(
         modifier = modifier
             .offset(x = lineOffsetX, y = lineOffsetY)
@@ -2224,9 +2282,15 @@ private fun PvLyricLine(
                 alpha = if (exiting) 1f - ((exitProgress.value - 0.6f) / 0.4f).coerceIn(0f, 1f) else 1f
             }
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            text.forEachIndexed { ci, ch ->
+        Column(horizontalAlignment = Alignment.Start) {
+        rowIndices.forEach { rowIdxList ->
+        Row(
+            horizontalArrangement = Arrangement.Start,
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = if (rowIdxList.first() > 0) Modifier.padding(start = row2Indent, top = 6.dp) else Modifier
+        ) {
+            rowIdxList.forEach { ci ->
+                val ch = text[ci]
                 val chSeed = Math.floorMod(baseSeed * 7 + ci * 131, 997)
                 val scriptFactor = when (ch) {
                     in '一'..'鿿', '々', '〆', 'ヶ' -> 1.12f
@@ -2234,9 +2298,9 @@ private fun PvLyricLine(
                     in '゠'..'ヿ' -> 1.0f
                     else -> 0.95f
                 }
-                val chSize = (fitSize * (0.85f + (chSeed % 30) / 100f) * scriptFactor).sp
-                val chRot = ((chSeed / 3) % 17 - 8).toFloat()
-                val chYOffset = ((chSeed / 5) % 13 - 6).dp
+                val chSize = (fitSize * (0.7f + (chSeed % 80) / 100f) * scriptFactor).sp
+                val chRot = ((chSeed / 3) % 29 - 14).toFloat()
+                val chYOffset = ((chSeed / 5) % 41 - 20).dp
                 val chAnim = remember(ci) { Animatable(0f) }
                 if (!exiting) {
                     LaunchedEffect(ci) {
@@ -2284,6 +2348,7 @@ private fun PvLyricLine(
                     )
                 )
             }
+        }
         }
         if (!exiting) {
             Spacer(modifier = Modifier.height(7.dp))
