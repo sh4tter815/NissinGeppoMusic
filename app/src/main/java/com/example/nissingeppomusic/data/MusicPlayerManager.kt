@@ -40,6 +40,9 @@ class MusicPlayerManager(context: Context) {
         private set
     var duration by mutableStateOf(0L)
         private set
+    /** duration が「どの曲の長さか」を示す。選曲直後は前の曲の長さが残るため、歌詞照合ではこちらで鮮度を確認する */
+    var durationSongUri by mutableStateOf<String?>(null)
+        private set
 
     private val prefManager = AppPreferenceManager(appContext)
 
@@ -74,6 +77,7 @@ class MusicPlayerManager(context: Context) {
     private val playerScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var progressJob: Job? = null
     private var queueBuildJob: Job? = null
+    private var queueRequestId = 0
 
     init {
         exoPlayer.addListener(object : Player.Listener {
@@ -128,7 +132,11 @@ class MusicPlayerManager(context: Context) {
             while (true) {
                 if (exoPlayer.isPlaying) {
                     currentPosition = exoPlayer.currentPosition
-                    duration = exoPlayer.duration.coerceAtLeast(0L)
+                    val realDuration = exoPlayer.duration
+                    if (realDuration > 0) {
+                        duration = realDuration
+                        durationSongUri = currentSongUri
+                    }
                 }
                 delay(200)
             }
@@ -249,6 +257,7 @@ class MusicPlayerManager(context: Context) {
             // 構築だけ裏スレッドで行い、終わってからプレイヤーへ渡す。
             // アートワーク画像は「再生中の1曲」にだけ埋め込む。全曲に埋め込むと
             // キュー全体が巨大化し、Bluetooth側がキュー取得で落ちる（BadParcelable）ため
+            val myRequestId = ++queueRequestId
             queueBuildJob?.cancel()
             queueBuildJob = playerScope.launch {
                 val mediaItems = withContext(Dispatchers.Default) {
@@ -256,8 +265,11 @@ class MusicPlayerManager(context: Context) {
                         buildMediaItem(item, withArtwork = index == start)
                     }
                 }
-                // 待っている間に別の選曲が来ていたら、この結果は古いので捨てる
-                if (queue !== items) return@launch
+                // 待っている間に別の選曲が来ていたら、この結果は古いので捨てる。
+                // 以前は「queue !== items」の同一性で判定していたが、原画差し替えが queue を
+                // コピーに差し替えるため、初回選曲の構築結果まで誤って捨ててしまい、
+                // 「1回目の選曲が読み込まれず、2回押すと切り替わる」不具合になっていた
+                if (myRequestId != queueRequestId) return@launch
                 artworkItemIndex = start
                 exoPlayer.setMediaItems(mediaItems, start, 0L)
                 exoPlayer.prepare()
@@ -289,6 +301,8 @@ class MusicPlayerManager(context: Context) {
         currentFileInfo = "FLAC ・ 44.1kHz ・ 32bit"
         currentPosition = 0L
         duration = 0L
+        durationSongUri = null
+        queueRequestId++
         isPlaying = false
         isBuffering = false
     }
