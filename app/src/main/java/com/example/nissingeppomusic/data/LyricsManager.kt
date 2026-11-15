@@ -218,6 +218,8 @@ object LyricsManager {
             for (i in 0 until results.length()) {
                 val item = results.optJSONObject(i) ?: continue
                 val candidate = item.optString("syncedLyrics", "").takeIf { it.isNotBlank() } ?: continue
+                // 候補の曲名自体が目的の曲と一致することも確認する（検索の曖昧さで別曲が混ざるため）
+                if (!titleMatches(item.optString("trackName", ""), queryTitle)) continue
                 if (wantJapanese && !containsJapanese(candidate)) continue
                 val candDurSec = item.optLong("duration", 0L)
                 // 長さが大きく違う候補（別バージョン・別録音）は採用しない
@@ -228,7 +230,7 @@ object LyricsManager {
                     Long.MAX_VALUE - 1
                 }
                 // 曲名だけで引いた場合は、長さが近い候補だけを採用する（別曲の歌詞を掴まないため）
-                if (requireCloseDuration && diff > 4) continue
+                if (requireCloseDuration && durationSec > 0 && diff > 4) continue
                 if (bestText == null || diff < bestDiffSec) {
                     bestText = candidate
                     bestDiffSec = diff
@@ -254,25 +256,7 @@ object LyricsManager {
             }
         }
 
-        // 5) NetEase（网易云）: 中国系サービスで、ボカロ曲の同期歌詞が比較的厚い
-        val neteaseLrc = try {
-            fetchNetEaseLrc(queryTitle, artist, durationMs)
-        } catch (e: Exception) {
-            null
-        }
-        if (!neteaseLrc.isNullOrBlank()) {
-            val parsed = parseLrc(neteaseLrc)
-            if (parsed.isNotEmpty()) {
-                try {
-                    cache.writeText(neteaseLrc, Charsets.UTF_8)
-                } catch (e: Exception) {
-                    // キャッシュ保存失敗は無視する
-                }
-                return@withContext parsed
-            }
-        }
-
-        // 6) Kugou（酷狗）: さらにマニアックな曲の候補
+        // 5) Kugou（酷狗）: さらにマニアックな曲の候補
         val kugouLrc = try {
             fetchKugouLrc(queryTitle, artist, durationMs)
         } catch (e: Exception) {
@@ -283,6 +267,24 @@ object LyricsManager {
             if (parsed.isNotEmpty()) {
                 try {
                     cache.writeText(kugouLrc, Charsets.UTF_8)
+                } catch (e: Exception) {
+                    // キャッシュ保存失敗は無視する
+                }
+                return@withContext parsed
+            }
+        }
+
+        // 6) NetEase（网易云）: 中国系サービスで、ボカロ曲の同期歌詞が比較的厚い
+        val neteaseLrc = try {
+            fetchNetEaseLrc(queryTitle, artist, durationMs)
+        } catch (e: Exception) {
+            null
+        }
+        if (!neteaseLrc.isNullOrBlank()) {
+            val parsed = parseLrc(neteaseLrc)
+            if (parsed.isNotEmpty()) {
+                try {
+                    cache.writeText(neteaseLrc, Charsets.UTF_8)
                 } catch (e: Exception) {
                     // キャッシュ保存失敗は無視する
                 }
@@ -347,29 +349,39 @@ object LyricsManager {
     /** Kugou の非公式APIから同期歌詞（LRCテキスト）を取得する。見つからなければ null */
     private fun fetchKugouLrc(title: String, artist: String, durationMs: Long): String? {
         fun enc(v: String) = URLEncoder.encode(v, "UTF-8")
-        val keyword = if (artist.isBlank()) title else "$title $artist"
-        val searchUrl = "http://mobilecdn.kugou.com/api/v3/search/song?format=json" +
-            "&keyword=${enc(keyword)}&page=1&pagesize=5&showtype=1"
-        val searchText = httpGetText(searchUrl, desktopUa) ?: return null
-        val infos = try {
-            JSONObject(searchText).optJSONObject("data")?.optJSONArray("info")
-        } catch (e: Exception) {
-            null
-        } ?: return null
-
-        // 曲名が一致する候補だけを対象に、長さが近い順に最大3件まで試す（別曲の歌詞を掴まないため）
         val wantJapanese = containsJapanese(title) || containsJapanese(artist)
-        val hashes = mutableListOf<Pair<String, Long>>()
-        for (i in 0 until infos.length()) {
-            val info = infos.optJSONObject(i) ?: continue
-            val hash = info.optString("hash", "")
-            if (hash.isBlank()) continue
-            val songName = info.optString("songname", "")
-                .ifBlank { info.optString("filename", "").substringAfterLast(" - ") }
-            if (!titleMatches(songName, title)) continue
-            val durSec = info.optLong("duration", 0L)
-            hashes.add(hash to durSec)
+        fun searchInfos(keyword: String): org.json.JSONArray? {
+            val url = "http://mobilecdn.kugou.com/api/v3/search/song?format=json" +
+                "&keyword=${enc(keyword)}&page=1&pagesize=5&showtype=1"
+            val text = httpGetText(url, desktopUa) ?: return null
+            return try {
+                JSONObject(text).optJSONObject("data")?.optJSONArray("info")
+            } catch (e: Exception) {
+                null
+            }
         }
+        // 曲名が一致する候補だけを集める（別曲の歌詞を掴まないため）
+        fun collectHashes(infos: org.json.JSONArray?): MutableList<Pair<String, Long>> {
+            val list = mutableListOf<Pair<String, Long>>()
+            if (infos == null) return list
+            for (i in 0 until infos.length()) {
+                val info = infos.optJSONObject(i) ?: continue
+                val hash = info.optString("hash", "")
+                if (hash.isBlank()) continue
+                val songName = info.optString("songname", "")
+                    .ifBlank { info.optString("filename", "").substringAfterLast(" - ") }
+                if (!titleMatches(songName, title)) continue
+                list.add(hash to info.optLong("duration", 0L))
+            }
+            return list
+        }
+        // まず曲名だけで検索する。アーティスト名（特に feat. 表記）を混ぜると検索が汚染され、
+        // 目的の曲が結果から消えることが実測で分かったため
+        var hashes = collectHashes(searchInfos(title))
+        if (hashes.isEmpty() && artist.isNotBlank()) {
+            hashes = collectHashes(searchInfos("$title $artist"))
+        }
+        if (hashes.isEmpty()) return null
         val ordered = if (durationMs > 0) {
             hashes.sortedBy { (kotlin.math.abs(it.second * 1000 - durationMs)) }
         } else {
