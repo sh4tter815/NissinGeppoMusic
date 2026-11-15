@@ -708,35 +708,56 @@ fun MainLauncherScreen() {
                             pvRotation.animateTo(pvRotationTarget, animationSpec = tween(durationMillis = 550, easing = FastOutSlowInEasing))
                         }
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                            AnimatedContent(
-                                targetState = pvDisplayIndex,
-                                modifier = Modifier.padding(top = 150.dp),
-                                transitionSpec = {
-                                    (fadeIn(animationSpec = tween(450, easing = FastOutSlowInEasing)) +
-                                        scaleIn(initialScale = 0.8f, animationSpec = tween(450, easing = FastOutSlowInEasing)) +
-                                        slideInVertically(animationSpec = tween(450, easing = FastOutSlowInEasing)) { it / 5 }) togetherWith
-                                        fadeOut(animationSpec = tween(160))
-                                },
-                                label = "lyricPv"
-                            ) { idx ->
-                                if (idx >= 0) {
-                                Text(
-                                    text = pvLines[idx].text,
-                                    color = Color.White.copy(alpha = 0.92f),
-                                    fontSize = pvFontSize,
-                                    fontWeight = FontWeight.Bold,
-                                    letterSpacing = 1.5.sp,
-                                    textAlign = TextAlign.Center,
-                                    lineHeight = (pvFontSize.value * 1.35f).sp,
-                                    modifier = Modifier
-                                        .offset(x = pvOffsetX, y = pvOffsetY)
-                                        .graphicsLayer { rotationZ = pvRotation.value }
-                                        .padding(horizontal = 24.dp),
-                                    style = LocalTextStyle.current.copy(
-                                        fontFamily = pvFontFamily,
-                                        shadow = Shadow(color = accentColor.copy(alpha = 0.85f), blurRadius = 22f)
-                                    )
-                                )
+                            if (pvDisplayIndex >= 0) {
+                                key(pvDisplayIndex) {
+                                    val pvLineText = pvLines[pvDisplayIndex].text
+                                    // 長い行は画面幅に収まるよう自動で少し小さくする
+                                    val pvCharCount = pvLineText.length.coerceAtLeast(1)
+                                    val pvFitSize = minOf(pvFontSize.value, (screenWidthDp - 56f) / pvCharCount)
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(top = 235.dp)
+                                            .offset(x = pvOffsetX, y = pvOffsetY)
+                                            .graphicsLayer { rotationZ = pvRotation.value }
+                                    ) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.Center,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            pvLineText.forEachIndexed { ci, ch ->
+                                                // 文字ごとに大きさ・角度・縦位置をずらし、1文字ずつ遅れて出てくるようにする
+                                                val chSeed = Math.floorMod(pvSeed * 7 + ci * 131, 997)
+                                                val chSize = (pvFitSize * (0.85f + (chSeed % 30) / 100f)).sp
+                                                val chRot = ((chSeed / 3) % 17 - 8).toFloat()
+                                                val chYOffset = ((chSeed / 5) % 13 - 6).dp
+                                                val chAnim = remember(ci) { Animatable(0f) }
+                                                LaunchedEffect(ci) {
+                                                    chAnim.snapTo(0f)
+                                                    delay(ci * 45L)
+                                                    chAnim.animateTo(1f, animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing))
+                                                }
+                                                Text(
+                                                    text = ch.toString(),
+                                                    color = Color.White.copy(alpha = 0.92f * chAnim.value),
+                                                    fontSize = chSize,
+                                                    fontWeight = FontWeight.Bold,
+                                                    textAlign = TextAlign.Center,
+                                                    modifier = Modifier
+                                                        .offset(y = chYOffset)
+                                                        .graphicsLayer {
+                                                            scaleX = 0.6f + 0.4f * chAnim.value
+                                                            scaleY = 0.6f + 0.4f * chAnim.value
+                                                            rotationZ = chRot * chAnim.value
+                                                            translationY = (1f - chAnim.value) * 22f
+                                                        },
+                                                    style = LocalTextStyle.current.copy(
+                                                        fontFamily = pvFontFamily,
+                                                        shadow = Shadow(color = accentColor.copy(alpha = 0.85f), blurRadius = 22f)
+                                                    )
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
