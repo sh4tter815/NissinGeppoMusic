@@ -15,13 +15,13 @@ object LyricIcon {
     const val LINE = 22; const val CIRCLE = 23
     const val GLOBE = 24; const val BUBBLE = 25
     const val COFFIN = 26; const val EYE = 27; const val PLUS = 28
-    const val MINUS = 29; const val MAP = 30; const val BONE = 31; const val CROSS = 32
+    const val MINUS = 29; const val MAP = 30; const val BONE = 31; const val CROSS = 32; const val BANDAGE = 33
 }
 
 /** 歌詞に出てきたらアイコンを出す単語（前にあるものが優先） */
 val LYRIC_ICON_WORDS: List<Pair<String, Int>> = listOf(
     "傘" to LyricIcon.UMBRELLA, "桜" to LyricIcon.FLOWER, "雨" to LyricIcon.RAIN,
-    "雪" to LyricIcon.SNOW, "星" to LyricIcon.STAR, "月" to LyricIcon.MOON,
+    "凍" to LyricIcon.SNOW, "氷" to LyricIcon.SNOW, "雪" to LyricIcon.SNOW, "星" to LyricIcon.STAR, "月" to LyricIcon.MOON,
     "太陽" to LyricIcon.SUN, "雲" to LyricIcon.CLOUD, "花" to LyricIcon.FLOWER,
     "海" to LyricIcon.WAVES, "波" to LyricIcon.WAVES, "心" to LyricIcon.HEART,
     "ハート" to LyricIcon.HEART, "恋" to LyricIcon.HEART, "愛" to LyricIcon.HEART,
@@ -33,7 +33,7 @@ val LYRIC_ICON_WORDS: List<Pair<String, Int>> = listOf(
     "山" to LyricIcon.MOUNTAIN, "風" to LyricIcon.WIND,
 "音" to LyricIcon.NOTE, "濡" to LyricIcon.DROP,
     "時間" to LyricIcon.CLOCK, "場所" to LyricIcon.MAP, "死" to LyricIcon.COFFIN,
-    "駄目" to LyricIcon.CROSS, "ダメ" to LyricIcon.CROSS, "目" to LyricIcon.EYE, "水" to LyricIcon.DROP, "増" to LyricIcon.PLUS,
+    "傷" to LyricIcon.BANDAGE, "キズ" to LyricIcon.BANDAGE, "駄目" to LyricIcon.CROSS, "ダメ" to LyricIcon.CROSS, "見ている" to LyricIcon.EYE, "見てる" to LyricIcon.EYE, "見る" to LyricIcon.EYE, "瞳" to LyricIcon.EYE, "目" to LyricIcon.EYE, "水" to LyricIcon.DROP, "増" to LyricIcon.PLUS,
     "減" to LyricIcon.MINUS, "骨" to LyricIcon.BONE
 )
 val LYRIC_ICON_EXCLUSIONS: Map<String, List<String>> = mapOf(
@@ -121,13 +121,16 @@ val ASSOC_COLOR_WORDS: List<Pair<String, Color>> = listOf(
     "血" to Color(0xFFFF4545),
     "夜" to Color(0xFF2B4C9B), "海" to Color(0xFF3D7BFF), "嫌" to Color(0xFF3D7BFF), "悲" to Color(0xFF3D7BFF), "哀" to Color(0xFF3D7BFF),
     "月" to Color(0xFFFFC94D), "星" to Color(0xFFFFC94D),
-    "涙" to Color(0xFF7FD4F2), "空" to Color(0xFF7FD4F2),
-    "炎" to Color(0xFFFF9A3D), "夢" to Color(0xFFB07FE8),
+    "涙" to Color(0xFF7FD4F2), "空" to Color(0xFF7FD4F2), "凍" to Color(0xFF7FD4F2), "氷" to Color(0xFF7FD4F2), "想い" to Color(0xFFFF8FBF),
+    "炎" to Color(0xFFFF9A3D), "熱" to Color(0xFFFF9A3D), "火" to Color(0xFFFF9A3D),
+    "砂" to Color(0xFFFFC94D), "汚" to Color(0xFFA9744F), "希望" to Color(0xFFFFE14D),
+    "行方不明" to Color(0xFFFF4545), "不明" to Color(0xFFFF4545), "不安" to Color(0xFFFF4545), "危険" to Color(0xFFFF4545), "怖" to Color(0xFFFF4545), "恐" to Color(0xFFFF4545),
+    "無事" to Color(0xFF4CD964), "安心" to Color(0xFF4CD964), "安全" to Color(0xFF4CD964), "大丈夫" to Color(0xFF4CD964),
     "love" to Color(0xFFFF8FBF), "heart" to Color(0xFFFF8FBF), "blood" to Color(0xFFFF4545),
     "night" to Color(0xFF2B4C9B), "moon" to Color(0xFFFFC94D), "star" to Color(0xFFFFC94D),
     "sea" to Color(0xFF3D7BFF), "hate" to Color(0xFF3D7BFF), "sad" to Color(0xFF3D7BFF),
     "sky" to Color(0xFF7FD4F2), "tear" to Color(0xFF7FD4F2), "tears" to Color(0xFF7FD4F2),
-    "fire" to Color(0xFFFF9A3D), "dream" to Color(0xFFB07FE8)
+    "fire" to Color(0xFFFF9A3D)
 )
 val KATAKANA_EN = mapOf(
     "ハート" to "HEART", "ラブ" to "LOVE", "キス" to "KISS", "ドリーム" to "DREAM",

@@ -340,6 +340,23 @@ fun DrawScope.drawLyricIcon(kind: Int) {
             drawLine(col, pt(0f, -21f), pt(0f, -3f), strokeWidth = 2.6f * u, cap = StrokeCap.Round)
             drawLine(col, pt(-6f, -15f), pt(6f, -15f), strokeWidth = 2.6f * u, cap = StrokeCap.Round)
         }
+        LyricIcon.BANDAGE -> {
+            // 絆創膏: 斜めの帯＋中央のパッド＋穴2つ
+            val cosr = 0.906f; val sinr = -0.423f
+            fun rp(dx: Float, dy: Float) = Offset(cx + (dx * cosr - dy * sinr) * u, cy + (dx * sinr + dy * cosr) * u)
+            val band = Path().apply {
+                val a = rp(-34f, -12f); val b = rp(34f, -12f); val c = rp(34f, 12f); val d = rp(-34f, 12f)
+                moveTo(a.x, a.y); lineTo(b.x, b.y); lineTo(c.x, c.y); lineTo(d.x, d.y); close()
+            }
+            drawPath(band, col, style = st)
+            val pad = Path().apply {
+                val a = rp(-9f, -12f); val b = rp(9f, -12f); val c = rp(9f, 12f); val d = rp(-9f, 12f)
+                moveTo(a.x, a.y); lineTo(b.x, b.y); lineTo(c.x, c.y); lineTo(d.x, d.y); close()
+            }
+            drawPath(pad, col.copy(alpha = 0.35f))
+            drawCircle(col, radius = 2.2f * u, center = rp(-22f, 0f))
+            drawCircle(col, radius = 2.2f * u, center = rp(22f, 0f))
+        }
         LyricIcon.CROSS -> {
             // バツ印
             drawLine(col, pt(-15f, -15f), pt(15f, 15f), strokeWidth = 3.9f * u, cap = StrokeCap.Round)
@@ -675,7 +692,7 @@ fun PvLyricLine(
     // 「落」を含む行は、退場のときに文字をバラさず行ごと画面下へ落下させる
     val fallLine = text.contains("落")
     // 単語で発火する入場・退場エフェクトの対象判定
-    val negLine = text.contains("なかった") || text.contains("無い") || text.contains("ない") || text.contains("なくて") || text.contains("なくな")
+    val negLine = text.contains("なかった") || text.contains("無い") || text.contains("ない") || text.contains("なくて") || text.contains("なくな") || text.contains("じゃない")
     val mosaicLine = text.contains("隠") || text.contains("モザイク")
     val sandLine = text.contains("砂") || text.contains("消")
     val rippleWord = text.contains("響")
@@ -918,8 +935,15 @@ fun PvLyricLine(
                 if (chunk.contains("）") || chunk.contains(")")) inParen = false
                 val chunkIconKind = if (!iconPlaced && iconWord != null && chunk.contains(iconWord.first)) iconWord.second else null
                 val chunkGhost = chunk.contains("透明")
+                // 複数文字の色ワード（希望・想い等）は塊単位で判定し、該当する文字だけに色を渡す
+                val chunkColorHit = (COLOR_WORDS + ASSOC_COLOR_WORDS).firstOrNull { (w, _) -> w.length > 1 && chunk.contains(w) }
+                val chunkColorStart = chunkColorHit?.let { chunk.indexOf(it.first) } ?: -1
+                val chunkArrow = Regex("行[くきけこっか]").containsMatchIn(chunk)
+                val chunkDream = chunk.contains("夢") || chunk.contains("思い出")
+                val chunkUnits = renderUnitsOf(chunk)
+                var chunkCharPos = 0
                 var unitIdxInChunk = 0
-                for (ru in renderUnitsOf(chunk)) {
+                for (ru in chunkUnits) {
                     val gi = globalIndex++
                     val thisUnitIcon = if (chunkIconKind != null && unitIdxInChunk == 0) chunkIconKind else null
                     if (thisUnitIcon != null) iconPlaced = true
@@ -937,6 +961,8 @@ fun PvLyricLine(
                         ru[0] in '゠'..'ヿ' -> 1.05f
                         else -> 0.98f
                     }
+                    val unitStart = chunkCharPos; chunkCharPos += ru.length
+                    val unitChunkColor = if (chunkColorHit != null && unitStart < chunkColorStart + chunkColorHit.first.length && unitStart + ru.length > chunkColorStart) chunkColorHit.second else null
                     PvLyricUnit(
                         bold = bold,
                         unitText = ru,
@@ -955,6 +981,9 @@ fun PvLyricLine(
                         dimmed = chunkDim,
                         ghost = chunkGhost,
                         fallExit = fallLine,
+                        chunkColor = unitChunkColor,
+                        arrowUnder = chunkArrow && ru == "行",
+                        bubble = if (!chunkDream) 0 else if (unitIdxInChunk == chunkUnits.size) 2 else 1,
                         swayScale = if (bigText) 2.8f else 1f
                     )
                 }
@@ -1003,7 +1032,10 @@ fun PvLyricUnit(
     bold: Boolean = true,
     swayScale: Float = 1f,
     ghost: Boolean = false,
-    fallExit: Boolean = false
+    fallExit: Boolean = false,
+    chunkColor: Color? = null,
+    arrowUnder: Boolean = false,
+    bubble: Int = 0
 ) {
     val pvEaseIn = CubicBezierEasing(0.42f, 0f, 1f, 1f)
     val uSeed = staggerIndex
@@ -1059,7 +1091,7 @@ fun PvLyricUnit(
         } else {
             unitText.contains(word)
         }
-    } else null
+    } ?: (if (chunkColor != null) unitText to chunkColor else null) else null
     val wipeT = remember { Animatable(0f) }
     if (colorHit != null) {
         LaunchedEffect(staggerIndex) {
@@ -1169,6 +1201,32 @@ fun PvLyricUnit(
                         cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx()),
                         style = Stroke(width = 1.2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(7f, 6f), 0f))
                     )
+                }
+            }
+            if (arrowUnder) {
+                // 「行く」の下に、右へ伸びる矢印
+                Canvas(modifier = Modifier.matchParentSize()) {
+                    val grow = ulAnim.value.coerceIn(0f, 1f)
+                    if (grow > 0f) {
+                        val y = size.height * 0.97f
+                        val x0 = size.width * 0.02f
+                        val xEnd = size.width * (0.1f + 1.3f * grow)
+                        val colA = accentColor.copy(alpha = 0.75f * grow)
+                        drawLine(colA, Offset(x0, y), Offset(xEnd, y), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
+                        drawLine(colA, Offset(xEnd, y), Offset(xEnd - 7.dp.toPx(), y - 4.5.dp.toPx()), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
+                        drawLine(colA, Offset(xEnd, y), Offset(xEnd - 7.dp.toPx(), y + 4.5.dp.toPx()), strokeWidth = 2.dp.toPx(), cap = StrokeCap.Round)
+                    }
+                }
+            }
+            if (bubble > 0) {
+                // 空想の吹き出し: 文字を楕円で包み、最後の文字には小さい丸を2つ落とす
+                Canvas(modifier = Modifier.matchParentSize()) {
+                    val a = (if (exiting) 1f else ulAnim.value.coerceIn(0f, 1f)) * 0.55f
+                    drawOval(color = Color.White.copy(alpha = a), topLeft = Offset(-size.width * 0.08f, size.height * 0.02f), size = Size(size.width * 1.16f, size.height * 0.94f), style = Stroke(width = 1.3.dp.toPx()))
+                    if (bubble == 2) {
+                        drawCircle(color = Color.White.copy(alpha = a), radius = 3.dp.toPx(), center = Offset(size.width * 0.12f, size.height * 1.14f), style = Stroke(width = 1.2.dp.toPx()))
+                        drawCircle(color = Color.White.copy(alpha = a), radius = 2.dp.toPx(), center = Offset(0f, size.height * 1.32f), style = Stroke(width = 1.1.dp.toPx()))
+                    }
                 }
             }
             if (colorHit != null) {
