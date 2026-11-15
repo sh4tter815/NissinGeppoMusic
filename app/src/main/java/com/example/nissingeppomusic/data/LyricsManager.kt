@@ -22,6 +22,45 @@ object LyricsManager {
 
     private val timestampRegex = Regex("""\[(\d+):(\d+)(?:\.(\d{1,3}))?\]""")
 
+    /** 簡体字・繁体字を日本の漢字（新字体）に寄せる変換表。中国ソースの歌詞の見た目を日本の表記にそろえる */
+    private val kanjiConvertMap: Map<Char, Char> = mapOf(
+        '词' to '詞', '爱' to '愛', '乐' to '楽', '声' to '声', '风' to '風', '云' to '雲',
+        '龙' to '竜', '马' to '馬', '车' to '車', '门' to '門', '开' to '開', '关' to '関',
+        '时' to '時', '间' to '間', '线' to '線', '红' to '紅', '绿' to '緑', '蓝' to '藍',
+        '银' to '銀', '铁' to '鉄', '飞' to '飛', '鸟' to '鳥', '鱼' to '魚', '长' to '長',
+        '发' to '発', '后' to '後', '过' to '過', '还' to '還', '这' to '這', '个' to '個',
+        '们' to '們', '为' to '為', '对' to '対', '说' to '説', '读' to '読', '听' to '聴',
+        '买' to '買', '卖' to '売', '现' to '現', '见' to '見', '觉' to '覚', '远' to '遠',
+        '进' to '進', '运' to '運', '动' to '動', '气' to '気', '压' to '圧', '电' to '電',
+        '视' to '視', '圆' to '円', '团' to '団', '园' to '園', '图' to '図', '书' to '書',
+        '贝' to '貝', '页' to '頁', '阳' to '陽', '阴' to '陰', '梦' to '夢', '伤' to '傷',
+        '泪' to '涙', '让' to '譲', '给' to '給', '话' to '話', '语' to '語', '调' to '調',
+        '谁' to '誰', '岁' to '歳', '尘' to '塵', '净' to '浄', '飘' to '飄', '摇' to '揺',
+        '摆' to '擺', '脸' to '顔', '湿' to '湿', '干' to '乾', '挂' to '掛', '牵' to '牽',
+        '怀' to '懷', '转' to '転', '轮' to '輪', '响' to '響', '应' to '応', '传' to '伝',
+        '统' to '統', '续' to '続', '烧' to '焼', '毁' to '毀', '灭' to '滅', '烟' to '煙',
+        '雾' to '霧', '凉' to '涼', '热' to '熱', '闷' to '悶', '恼' to '悩', '烦' to '煩',
+        '忧' to '憂', '欢' to '歓', '惊' to '驚', '吓' to '嚇', '怜' to '憐', '义' to '義',
+        '节' to '節', '钟' to '鐘', '针' to '針', '钱' to '銭', '铜' to '銅', '铅' to '鉛',
+        '镜' to '鏡', '锁' to '鎖', '窗' to '窓', '户' to '戸', '桥' to '橋', '墙' to '壁',
+        '弹' to '弾', '诗' to '詩', '谱' to '譜', '韵' to '韻', '愿' to '願', '够' to '夠',
+        '麼' to '麼', '來' to '来', '說' to '説', '話' to '話', '語' to '語', '樂' to '楽',
+        '聲' to '声', '聽' to '聴', '寫' to '写', '讀' to '読', '覺' to '覚', '氣' to '気',
+        '壓' to '圧', '畫' to '画', '圓' to '円', '團' to '団', '圖' to '図', '淚' to '涙',
+        '讓' to '譲', '鐵' to '鉄', '髮' to '髪', '臉' to '顔', '綠' to '緑', '關' to '関',
+        '時' to '時', '紅' to '紅', '愛' to '愛', '夢' to '夢', '傷' to '傷', '還' to '還',
+        '過' to '過', '個' to '個', '為' to '為', '這' to '這', '們' to '們'
+    )
+
+    /** 簡体字・繁体字を日本の漢字に変換する */
+    private fun toJapaneseKanji(text: String): String {
+        if (text.none { kanjiConvertMap.containsKey(it) }) return text
+        val sb = StringBuilder(text.length)
+        for (ch in text) sb.append(kanjiConvertMap[ch] ?: ch)
+        return sb.toString()
+    }
+
+
     /** LRC形式テキストをパースする。タイムスタンプのない行は無視する */
     fun parseLrc(lrcText: String): List<LyricLine> {
         val result = mutableListOf<LyricLine>()
@@ -30,8 +69,10 @@ object LyricsManager {
             if (line.isEmpty()) continue
             val matches = timestampRegex.findAll(line).toList()
             if (matches.isEmpty()) continue
-            val text = line.replace(timestampRegex, "").trim()
-            if (text.isEmpty()) continue
+            val rawText = line.replace(timestampRegex, "").trim()
+            if (rawText.isEmpty()) continue
+            // 中国ソース由来の簡体字・繁体字は日本の漢字にそろえる（詞：〜等のクレジット行は残す）
+            val text = toJapaneseKanji(rawText)
             for (m in matches) {
                 val min = m.groupValues[1].toLongOrNull() ?: continue
                 val sec = m.groupValues[2].toLongOrNull() ?: continue
