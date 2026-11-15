@@ -41,7 +41,9 @@ fun WallpaperBackground(
     // アートワーク連動カラーON時に、アートワークから抽出した背景色でオーバーレイを染める
     dynamicBackground: Color? = null,
     // 液体グラデーション背景を使うか（未選択時／再生中はアート背景の下地）
-    liquidEnabled: Boolean = false
+    liquidEnabled: Boolean = false,
+    // 液体の基準色（アクセントカラー）。再生中は暗い背景色ではなくこちらを優先する
+    liquidAccent: Color? = null
 ) {
     val context = LocalContext.current
     val prefManager = remember { AppPreferenceManager(context) }
@@ -94,10 +96,10 @@ fun WallpaperBackground(
                     .fillMaxSize()
                     .background((dynamicBackground ?: Color(0xFF0B101D)).copy(alpha = 0.55f))
             )
-            // 液体ON＋配色連動ONのときは、アートワーク背景の一番上に液体を薄く重ねる
-            val liquidBase = if (liquidEnabled) dynamicBackground else null
-            if (liquidBase != null) {
-                LiquidGradientBackground(baseColor = liquidBase, onBlack = false, layerAlpha = 0.92f, alphaBoost = 1.9f)
+            // 液体ONなら再生中もアートワーク背景の上に液体を重ねる。
+            // 基準色は暗い抽出背景色ではなく、明るいアクセントカラーを優先する（暗い色だと動きが見えないため）
+            if (liquidEnabled) {
+                LiquidGradientBackground(baseColor = liquidAccent ?: dynamicBackground ?: accentBase, onBlack = false, layerAlpha = 1f, alphaBoost = 1.9f)
             }
         } else if (backgroundBitmap != null) {
             Image(
@@ -158,9 +160,9 @@ private fun LiquidGradientBackground(baseColor: Color, onBlack: Boolean = true, 
     )
     // 再生中（アートワークの上）では基準色が暗いため、彩度と明度を持ち上げて液体を見せる
     val vivid = !onBlack
-    val c1 = remember(baseColor) { shiftHue(baseColor, 0f, if (vivid) 1.5f else 1.0f, if (vivid) 0.8f else 0.45f) }
-    val c2 = remember(baseColor) { shiftHue(baseColor, 55f, if (vivid) 1.65f else 1.15f, if (vivid) 0.8f else 0.45f) }
-    val c3 = remember(baseColor) { shiftHue(baseColor, -45f, if (vivid) 0.95f else 0.55f, if (vivid) 0.7f else 0.45f) }
+    val c1 = remember(baseColor) { shiftHue(baseColor, 0f, if (vivid) 1.5f else 1.0f, if (vivid) 0.8f else 0.45f, if (vivid) 0.55f else 0.08f) }
+    val c2 = remember(baseColor) { shiftHue(baseColor, 55f, if (vivid) 1.65f else 1.15f, if (vivid) 0.8f else 0.45f, if (vivid) 0.6f else 0.08f) }
+    val c3 = remember(baseColor) { shiftHue(baseColor, -45f, if (vivid) 0.95f else 0.55f, if (vivid) 0.7f else 0.45f, if (vivid) 0.4f else 0.08f) }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -195,7 +197,7 @@ private fun LiquidGradientBackground(baseColor: Color, onBlack: Boolean = true, 
 }
 
 /** 基準色の色相をずらした色を作る。彩度が低すぎると液体が見えないので下限を設ける */
-private fun shiftHue(color: Color, hueDelta: Float, valueMul: Float, satFloor: Float = 0.45f): Color {
+private fun shiftHue(color: Color, hueDelta: Float, valueMul: Float, satFloor: Float = 0.45f, valueFloor: Float = 0.08f): Color {
     val hsv = FloatArray(3)
     android.graphics.Color.RGBToHSV(
         (color.red * 255).toInt().coerceIn(0, 255),
@@ -205,6 +207,6 @@ private fun shiftHue(color: Color, hueDelta: Float, valueMul: Float, satFloor: F
     )
     hsv[0] = (hsv[0] + hueDelta + 360f) % 360f
     hsv[1] = maxOf(hsv[1], satFloor)
-    hsv[2] = (hsv[2] * valueMul).coerceIn(0.08f, 1f)
+    hsv[2] = (hsv[2] * valueMul).coerceIn(valueFloor, 1f)
     return Color(android.graphics.Color.HSVToColor(hsv))
 }
