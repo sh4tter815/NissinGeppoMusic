@@ -806,7 +806,7 @@ fun MainLauncherScreen() {
                             val curText = multiLines.getOrNull(rawIdx)?.text
                             val nextText = multiLines.getOrNull(rawIdx + 1)?.text
                             if (prevText != null) {
-                                Text(prevText, color = Color.White.copy(alpha = 0.45f), fontSize = 18.sp, letterSpacing = 2.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily), modifier = Modifier.padding(start = 0.dp))
+                                Text(prevText, color = Color.White.copy(alpha = 0.45f), fontSize = 18.sp, letterSpacing = 2.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily), modifier = Modifier.padding(start = 0.dp))
                             } else {
                                 Spacer(Modifier.height(24.dp))
                             }
@@ -817,14 +817,14 @@ fun MainLauncherScreen() {
                                 fontSize = 30.sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 3.sp,
-                                maxLines = 1,
+                                maxLines = 3,
                                 overflow = TextOverflow.Ellipsis,
                                 style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily, shadow = Shadow(color = accentColor.copy(alpha = 0.8f), blurRadius = 16f)),
                                 modifier = Modifier.padding(start = 28.dp)
                             )
                             Spacer(Modifier.height(16.dp))
                             if (nextText != null) {
-                                Text(nextText, color = Color.White.copy(alpha = 0.45f), fontSize = 18.sp, letterSpacing = 2.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily), modifier = Modifier.padding(start = 56.dp))
+                                Text(nextText, color = Color.White.copy(alpha = 0.45f), fontSize = 18.sp, letterSpacing = 2.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily), modifier = Modifier.padding(start = 56.dp))
                             }
                         }
                     }
@@ -2457,7 +2457,7 @@ private fun PvLyricLine(
     val heightCap = if (rows.size >= 2) 52f else 64f
     val fitSize = minOf(baseFontSize, (screenWidthDp - 8f) / (longestRowEm * 1.04f), heightCap)
     val lineOffsetX = ((baseSeed / 7) % 17 - 8).dp
-    val lineOffsetY = ((baseSeed / 11) % 21 - 10).dp
+    val lineOffsetY = ((baseSeed / 11) % 13 - 6).dp
     val row2Indent = ((baseSeed / 13) % 4 * 14).dp
     // 退場は1本の時計（exitProgress）で全文字を駆動する（位相だけ文字ごとにずらす）
     val exitProgress = remember { Animatable(0f) }
@@ -2492,7 +2492,7 @@ private fun PvLyricLine(
         Row(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
-            modifier = if (rowIdx > 0) Modifier.padding(start = row2Indent, top = 8.dp) else Modifier
+            modifier = if (rowIdx > 0) Modifier.padding(start = row2Indent, top = 0.dp) else Modifier
         ) {
             rowChunks.forEachIndexed { posInRow, chunk ->
                 if (posInRow > 0 && latinDominant) {
@@ -2504,7 +2504,7 @@ private fun PvLyricLine(
                     val charFactor = when {
                         ru.length > 1 && ru.all { it in '゠'..'ヿ' } -> 1.05f // カタカナ単語
                         ru.length > 1 -> 0.98f // 英単語
-                        ru[0] in "ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ" -> 0.6f
+                        ru[0] in "ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ" -> 1.0f // 小カナの縮小はPvLyricUnit内のスパンで1回だけ行う
                         ru[0] in '一'..'鿿' || ru[0] == '々' || ru[0] == '〆' || ru[0] == 'ヶ' -> 1.25f
                         ru[0] in 'ぁ'..'ゟ' -> 0.82f
                         ru[0] in '゠'..'ヿ' -> 1.05f
@@ -2512,9 +2512,9 @@ private fun PvLyricLine(
                     }
                     PvLyricUnit(
                         unitText = ru,
-                        uSize = (fitSize * (0.85f + (uSeed % 40) / 100f) * charFactor).sp,
+                        uSize = (fitSize * (0.92f + (uSeed % 22) / 100f) * charFactor).coerceIn(fitSize * 0.55f, fitSize * 1.35f).sp,
                         uRot = ((uSeed / 3) % 29 - 14).toFloat(),
-                        uYOffset = ((uSeed / 5) % 29 - 14).dp,
+                        uYOffset = ((uSeed / 5) % 17 - 8).dp,
                         staggerIndex = gi,
                         exiting = exiting,
                         exitProgressValue = exitProgress.value,
@@ -2611,6 +2611,7 @@ private fun PvLyricUnit(
             overflow = TextOverflow.Visible,
             style = LocalTextStyle.current.copy(
                 fontFamily = fontFamily,
+                lineHeight = uSize * 1.02f,
                 shadow = Shadow(color = accentColor.copy(alpha = 0.85f), blurRadius = 22f)
             )
         )
