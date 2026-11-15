@@ -97,7 +97,7 @@ fun WallpaperBackground(
             // 液体ON＋配色連動ONのときは、アートワーク背景の一番上に液体を薄く重ねる
             val liquidBase = if (liquidEnabled) dynamicBackground else null
             if (liquidBase != null) {
-                LiquidGradientBackground(baseColor = liquidBase, onBlack = false, layerAlpha = 0.65f, alphaBoost = 1.35f)
+                LiquidGradientBackground(baseColor = liquidBase, onBlack = false, layerAlpha = 0.92f, alphaBoost = 1.9f)
             }
         } else if (backgroundBitmap != null) {
             Image(
@@ -156,9 +156,11 @@ private fun LiquidGradientBackground(baseColor: Color, onBlack: Boolean = true, 
         animationSpec = infiniteRepeatable(tween(9000, easing = LinearEasing), RepeatMode.Reverse),
         label = "liquid4"
     )
-    val c1 = remember(baseColor) { shiftHue(baseColor, 0f, 1.0f) }
-    val c2 = remember(baseColor) { shiftHue(baseColor, 55f, 1.15f) }
-    val c3 = remember(baseColor) { shiftHue(baseColor, -45f, 0.55f) }
+    // 再生中（アートワークの上）では基準色が暗いため、彩度と明度を持ち上げて液体を見せる
+    val vivid = !onBlack
+    val c1 = remember(baseColor) { shiftHue(baseColor, 0f, if (vivid) 1.5f else 1.0f, if (vivid) 0.8f else 0.45f) }
+    val c2 = remember(baseColor) { shiftHue(baseColor, 55f, if (vivid) 1.65f else 1.15f, if (vivid) 0.8f else 0.45f) }
+    val c3 = remember(baseColor) { shiftHue(baseColor, -45f, if (vivid) 0.95f else 0.55f, if (vivid) 0.7f else 0.45f) }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -193,7 +195,7 @@ private fun LiquidGradientBackground(baseColor: Color, onBlack: Boolean = true, 
 }
 
 /** 基準色の色相をずらした色を作る。彩度が低すぎると液体が見えないので下限を設ける */
-private fun shiftHue(color: Color, hueDelta: Float, valueMul: Float): Color {
+private fun shiftHue(color: Color, hueDelta: Float, valueMul: Float, satFloor: Float = 0.45f): Color {
     val hsv = FloatArray(3)
     android.graphics.Color.RGBToHSV(
         (color.red * 255).toInt().coerceIn(0, 255),
@@ -202,7 +204,7 @@ private fun shiftHue(color: Color, hueDelta: Float, valueMul: Float): Color {
         hsv
     )
     hsv[0] = (hsv[0] + hueDelta + 360f) % 360f
-    hsv[1] = maxOf(hsv[1], 0.45f)
+    hsv[1] = maxOf(hsv[1], satFloor)
     hsv[2] = (hsv[2] * valueMul).coerceIn(0.08f, 1f)
     return Color(android.graphics.Color.HSVToColor(hsv))
 }
