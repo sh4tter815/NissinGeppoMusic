@@ -18,6 +18,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -54,6 +55,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -695,69 +697,52 @@ fun MainLauncherScreen() {
                     }
                     val pvDisplayIndex = if (pvInterlude) -2 else pvIndex
                     if (pvIndex >= 0) {
-                        val pvTextNow = pvLines[pvIndex].text
-                        val pvSeed = Math.floorMod(pvIndex * 31 + pvTextNow.hashCode(), 997)
-                        val pvFontSize = (26 + (pvSeed % 4) * 7).sp
-                        val pvRotationTarget = ((pvSeed / 4) % 29 - 14).toFloat()
-                        val pvOffsetX = ((pvSeed / 7) % 51 - 25).dp
-                        val pvOffsetY = ((pvSeed / 11) % 61 - 30).dp
                         val pvFontFamily = parseFontFamily(lyricsPvFont, if (lyricsPvFont == "custom") customFontPath else null)
-                        val pvRotation = remember { Animatable(0f) }
+                        // 前の行は消さずに、残像として小さく・薄く・ぼんやり上の方に残す
+                        var pvCurrent by remember { mutableStateOf<Pair<Int, String>?>(null) }
+                        var pvPrevious by remember { mutableStateOf<Pair<Int, String>?>(null) }
+                        LaunchedEffect(lyricsLines) {
+                            pvCurrent = null
+                            pvPrevious = null
+                        }
                         LaunchedEffect(pvDisplayIndex) {
-                            pvRotation.snapTo(pvRotationTarget - 7f)
-                            pvRotation.animateTo(pvRotationTarget, animationSpec = tween(durationMillis = 550, easing = FastOutSlowInEasing))
+                            if (pvDisplayIndex >= 0) {
+                                if (pvCurrent?.first != pvDisplayIndex) {
+                                    pvCurrent?.let { pvPrevious = it }
+                                    if (pvPrevious?.first == pvDisplayIndex) pvPrevious = null
+                                    pvCurrent = pvDisplayIndex to pvLines[pvDisplayIndex].text
+                                }
+                            } else if (pvDisplayIndex == -2) {
+                                // 間奏: 今の行は残像に回して、新しい行は出さない
+                                pvCurrent?.let { pvPrevious = it }
+                                pvCurrent = null
+                            }
                         }
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                            if (pvDisplayIndex >= 0) {
-                                key(pvDisplayIndex) {
-                                    val pvLineText = pvLines[pvDisplayIndex].text
-                                    // 長い行は画面幅に収まるよう自動で少し小さくする
-                                    val pvCharCount = pvLineText.length.coerceAtLeast(1)
-                                    val pvFitSize = minOf(pvFontSize.value, (screenWidthDp - 56f) / pvCharCount)
-                                    Box(
-                                        modifier = Modifier
-                                            .padding(top = 235.dp)
-                                            .offset(x = pvOffsetX, y = pvOffsetY)
-                                            .graphicsLayer { rotationZ = pvRotation.value }
-                                    ) {
-                                        Row(
-                                            horizontalArrangement = Arrangement.Center,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            pvLineText.forEachIndexed { ci, ch ->
-                                                // 文字ごとに大きさ・角度・縦位置をずらし、1文字ずつ遅れて出てくるようにする
-                                                val chSeed = Math.floorMod(pvSeed * 7 + ci * 131, 997)
-                                                val chSize = (pvFitSize * (0.85f + (chSeed % 30) / 100f)).sp
-                                                val chRot = ((chSeed / 3) % 17 - 8).toFloat()
-                                                val chYOffset = ((chSeed / 5) % 13 - 6).dp
-                                                val chAnim = remember(ci) { Animatable(0f) }
-                                                LaunchedEffect(ci) {
-                                                    chAnim.snapTo(0f)
-                                                    delay(ci * 45L)
-                                                    chAnim.animateTo(1f, animationSpec = tween(durationMillis = 350, easing = FastOutSlowInEasing))
-                                                }
-                                                Text(
-                                                    text = ch.toString(),
-                                                    color = Color.White.copy(alpha = 0.92f * chAnim.value),
-                                                    fontSize = chSize,
-                                                    fontWeight = FontWeight.Bold,
-                                                    textAlign = TextAlign.Center,
-                                                    modifier = Modifier
-                                                        .offset(y = chYOffset)
-                                                        .graphicsLayer {
-                                                            scaleX = 0.6f + 0.4f * chAnim.value
-                                                            scaleY = 0.6f + 0.4f * chAnim.value
-                                                            rotationZ = chRot * chAnim.value
-                                                            translationY = (1f - chAnim.value) * 22f
-                                                        },
-                                                    style = LocalTextStyle.current.copy(
-                                                        fontFamily = pvFontFamily,
-                                                        shadow = Shadow(color = accentColor.copy(alpha = 0.85f), blurRadius = 22f)
-                                                    )
-                                                )
-                                            }
-                                        }
-                                    }
+                            pvPrevious?.let { (prevIdx, prevText) ->
+                                key("pvprev$prevIdx") {
+                                    PvLyricLine(
+                                        text = prevText,
+                                        baseSeed = Math.floorMod(prevIdx * 31 + prevText.hashCode(), 997),
+                                        fontFamily = pvFontFamily,
+                                        accentColor = accentColor,
+                                        screenWidthDp = screenWidthDp,
+                                        residual = true,
+                                        modifier = Modifier.padding(top = 235.dp)
+                                    )
+                                }
+                            }
+                            pvCurrent?.let { (curIdx, curText) ->
+                                key("pvcur$curIdx") {
+                                    PvLyricLine(
+                                        text = curText,
+                                        baseSeed = Math.floorMod(curIdx * 31 + curText.hashCode(), 997),
+                                        fontFamily = pvFontFamily,
+                                        accentColor = accentColor,
+                                        screenWidthDp = screenWidthDp,
+                                        residual = false,
+                                        modifier = Modifier.padding(top = 235.dp)
+                                    )
                                 }
                             }
                         }
@@ -2175,4 +2160,98 @@ fun MainLauncherScreen() {
         }
     }
 }
+}
+
+
+/**
+ * 文字PV風の1行表示。
+ * 現在の行: 1文字ずつイーズアウトで大袈裟に入場（大きさ・角度・位置が文字ごとにバラバラ）。
+ * 前の行（residual）: イーズインで小さく・薄く・ぼんやりしながら上へ移動して残る。
+ * 漢字は大きめ、ひらがなは小さめにするとバランスが良い。
+ */
+@Composable
+private fun PvLyricLine(
+    text: String,
+    baseSeed: Int,
+    fontFamily: FontFamily?,
+    accentColor: Color,
+    screenWidthDp: Float,
+    residual: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val pvEaseIn = CubicBezierEasing(0.42f, 0f, 1f, 1f)
+    val baseFontSize = (26 + (baseSeed % 4) * 7).toFloat()
+    val charCount = text.length.coerceAtLeast(1)
+    val fitSize = minOf(baseFontSize, (screenWidthDp - 56f) / (charCount * 1.2f))
+    val lineOffsetX = ((baseSeed / 7) % 51 - 25).dp
+    val lineOffsetY = ((baseSeed / 11) % 61 - 30).dp
+    val rotationTarget = ((baseSeed / 4) % 29 - 14).toFloat()
+    val lineRot = remember { Animatable(0f) }
+    val retire = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        if (residual) {
+            lineRot.snapTo(rotationTarget)
+            retire.animateTo(1f, animationSpec = tween(durationMillis = 650, easing = pvEaseIn))
+        } else {
+            lineRot.snapTo(rotationTarget - 14f)
+            lineRot.animateTo(rotationTarget, animationSpec = tween(durationMillis = 550, easing = FastOutSlowInEasing))
+        }
+    }
+    val r = retire.value
+    Box(
+        modifier = modifier
+            .offset(x = lineOffsetX, y = lineOffsetY + (-85f * r).dp)
+            .blur((6f * r).dp)
+            .graphicsLayer {
+                rotationZ = lineRot.value
+                val lineScale = 1f - 0.45f * r
+                scaleX = lineScale
+                scaleY = lineScale
+                alpha = 1f - 0.62f * r
+            }
+    ) {
+        Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            text.forEachIndexed { ci, ch ->
+                val chSeed = Math.floorMod(baseSeed * 7 + ci * 131, 997)
+                val scriptFactor = when (ch) {
+                    in '一'..'鿿', '々', '〆', 'ヶ' -> 1.18f
+                    in 'ぁ'..'ゟ' -> 0.82f
+                    in '゠'..'ヿ' -> 1.0f
+                    else -> 0.95f
+                }
+                val chSize = (fitSize * (0.75f + (chSeed % 60) / 100f) * scriptFactor).sp
+                val chRot = ((chSeed / 3) % 33 - 16).toFloat()
+                val chYOffset = ((chSeed / 5) % 29 - 14).dp
+                val chXOffset = ((chSeed / 13) % 9 - 4).dp
+                val chAnim = remember(ci) { Animatable(if (residual) 1f else 0f) }
+                if (!residual) {
+                    LaunchedEffect(ci) {
+                        delay(ci * 45L)
+                        chAnim.animateTo(1f, animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing))
+                    }
+                }
+                val a = chAnim.value
+                Text(
+                    text = ch.toString(),
+                    color = Color.White.copy(alpha = 0.92f * a),
+                    fontSize = chSize,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .offset(x = chXOffset, y = chYOffset)
+                        .graphicsLayer {
+                            val charScale = 0.4f + 0.6f * a
+                            scaleX = charScale
+                            scaleY = charScale
+                            rotationZ = chRot * (2.2f - 1.2f * a)
+                            translationY = (1f - a) * 38f
+                        },
+                    style = LocalTextStyle.current.copy(
+                        fontFamily = fontFamily,
+                        shadow = Shadow(color = accentColor.copy(alpha = 0.85f), blurRadius = 22f)
+                    )
+                )
+            }
+        }
+    }
 }
