@@ -691,17 +691,18 @@ fun MainLauncherScreen() {
                         val pvSeed = Math.floorMod(pvIndex * 31 + pvTextNow.hashCode(), 997)
                         val pvFontSize = (26 + (pvSeed % 4) * 7).sp
                         val pvRotationTarget = ((pvSeed / 4) % 29 - 14).toFloat()
-                        val pvOffsetX = ((pvSeed / 7) % 81 - 40).dp
-                        val pvOffsetY = ((pvSeed / 11) % 101 - 50).dp
+                        val pvOffsetX = ((pvSeed / 7) % 51 - 25).dp
+                        val pvOffsetY = ((pvSeed / 11) % 61 - 30).dp
                         val pvFontFamily = parseFontFamily(lyricsPvFont, if (lyricsPvFont == "custom") customFontPath else null)
                         val pvRotation = remember { Animatable(0f) }
                         LaunchedEffect(pvDisplayIndex) {
                             pvRotation.snapTo(pvRotationTarget - 7f)
                             pvRotation.animateTo(pvRotationTarget, animationSpec = tween(durationMillis = 550, easing = FastOutSlowInEasing))
                         }
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                             AnimatedContent(
                                 targetState = pvDisplayIndex,
+                                modifier = Modifier.padding(top = 150.dp),
                                 transitionSpec = {
                                     (fadeIn(animationSpec = tween(450, easing = FastOutSlowInEasing)) +
                                         scaleIn(initialScale = 0.8f, animationSpec = tween(450, easing = FastOutSlowInEasing)) +
