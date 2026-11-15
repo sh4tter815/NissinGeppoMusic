@@ -675,7 +675,17 @@ fun MainLauncherScreen() {
             if (lyricsPvMode && showLyrics && currentLauncherPage == 1 && !isLyricsBrowsing) {
                 val pvLines = lyricsLines
                 if (pvLines != null) {
-                    val pvIndex = pvLines.indexOfLast { it.timeMs <= musicPlayerManager.currentPosition }
+                    val pvPos = musicPlayerManager.currentPosition
+                    val pvIndex = pvLines.indexOfLast { it.timeMs <= pvPos }
+                    // PVは間奏では何も表示しない（音符マークも出さない）
+                    val pvCurLine = pvLines.getOrNull(pvIndex)
+                    val pvNextLine = pvLines.getOrNull(pvIndex + 1)
+                    val pvInterlude = when {
+                        pvCurLine == null -> false
+                        pvNextLine == null -> (pvPos - pvCurLine.timeMs) > 8000
+                        else -> (pvNextLine.timeMs - pvPos) > 4000 && (pvPos - pvCurLine.timeMs) > 3000
+                    }
+                    val pvDisplayIndex = if (pvInterlude) -2 else pvIndex
                     if (pvIndex >= 0) {
                         val pvTextNow = pvLines[pvIndex].text
                         val pvSeed = Math.floorMod(pvIndex * 31 + pvTextNow.hashCode(), 997)
@@ -685,13 +695,13 @@ fun MainLauncherScreen() {
                         val pvOffsetY = ((pvSeed / 11) % 101 - 50).dp
                         val pvFontFamily = parseFontFamily(lyricsPvFont, if (lyricsPvFont == "custom") customFontPath else null)
                         val pvRotation = remember { Animatable(0f) }
-                        LaunchedEffect(pvIndex) {
+                        LaunchedEffect(pvDisplayIndex) {
                             pvRotation.snapTo(pvRotationTarget - 7f)
                             pvRotation.animateTo(pvRotationTarget, animationSpec = tween(durationMillis = 550, easing = FastOutSlowInEasing))
                         }
                         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                             AnimatedContent(
-                                targetState = pvIndex,
+                                targetState = pvDisplayIndex,
                                 transitionSpec = {
                                     (fadeIn(animationSpec = tween(450, easing = FastOutSlowInEasing)) +
                                         scaleIn(initialScale = 0.8f, animationSpec = tween(450, easing = FastOutSlowInEasing)) +
@@ -700,6 +710,7 @@ fun MainLauncherScreen() {
                                 },
                                 label = "lyricPv"
                             ) { idx ->
+                                if (idx >= 0) {
                                 Text(
                                     text = pvLines[idx].text,
                                     color = Color.White.copy(alpha = 0.92f),
@@ -717,6 +728,7 @@ fun MainLauncherScreen() {
                                         shadow = Shadow(color = accentColor.copy(alpha = 0.85f), blurRadius = 22f)
                                     )
                                 )
+                                }
                             }
                         }
                     }
@@ -854,16 +866,27 @@ fun MainLauncherScreen() {
                                 }
                                 lines != null -> {
                                     // 同期歌詞の現在の1行を、行の切り替わりにフェードをかけて表示
-                                    val currentLyricIndex = lines.indexOfLast {
-                                        it.timeMs <= musicPlayerManager.currentPosition
+                                    // 間奏（次の行まで間が空いている区間）では歌詞の代わりに音符マークを出す
+                                    val posNow = musicPlayerManager.currentPosition
+                                    val currentLyricIndex = lines.indexOfLast { it.timeMs <= posNow }
+                                    val curLine = lines.getOrNull(currentLyricIndex)
+                                    val nextLine = lines.getOrNull(currentLyricIndex + 1)
+                                    val inInterlude = when {
+                                        curLine == null -> nextLine != null && (nextLine.timeMs - posNow) > 3000
+                                        nextLine == null -> (posNow - curLine.timeMs) > 8000
+                                        else -> (nextLine.timeMs - posNow) > 4000 && (posNow - curLine.timeMs) > 3000
                                     }
                                     Crossfade(
-                                        targetState = currentLyricIndex,
+                                        targetState = if (inInterlude) -2 else currentLyricIndex,
                                         animationSpec = tween(durationMillis = 350),
                                         label = "lyricFade"
                                     ) { idx ->
                                         Text(
-                                            text = if (idx >= 0) lines[idx].text else "",
+                                            text = when {
+                                                idx == -2 -> "♪"
+                                                idx >= 0 -> lines[idx].text
+                                                else -> ""
+                                            },
                                             color = Color.White,
                                             fontSize = 15.sp,
                                             fontWeight = FontWeight.Medium,
