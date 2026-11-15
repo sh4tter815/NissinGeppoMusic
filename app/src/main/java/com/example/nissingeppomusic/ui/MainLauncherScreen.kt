@@ -295,6 +295,7 @@ fun MainLauncherScreen() {
     var matchArtwork by remember { mutableStateOf(repo.prefManager.isMatchArtworkColor()) }
     var homeDiscLayout by remember { mutableStateOf(repo.prefManager.getHomeDiscLayout()) }
     var liquidBackground by remember { mutableStateOf(repo.prefManager.isLiquidBackgroundEnabled()) }
+    var lyricsPvMode by remember { mutableStateOf(repo.prefManager.isLyricsPvMode()) }
     var artworkAccent by remember { mutableStateOf<Color?>(null) }
     var artworkBackground by remember { mutableStateOf<Color?>(null) }
     LaunchedEffect(musicPlayerManager.currentAlbumArt, matchArtwork) {
@@ -419,6 +420,7 @@ fun MainLauncherScreen() {
         matchArtwork = repo.prefManager.isMatchArtworkColor()
         homeDiscLayout = repo.prefManager.getHomeDiscLayout()
         liquidBackground = repo.prefManager.isLiquidBackgroundEnabled()
+        lyricsPvMode = repo.prefManager.isLyricsPvMode()
         if (currentLauncherPage == 1) {
             if (!repo.prefManager.isFirstWelcomeTutorialShown()) {
                 showWelcomeTutorial = true
@@ -1157,6 +1159,40 @@ fun MainLauncherScreen() {
                         },
                         onHoldingChanged = { isHoldingRight = it }
                     )
+                }
+            }
+        }
+
+        // 文字PV風: 歌詞を画面の中央に大きく表示（ホームで歌詞表示ON＋PV設定ONのとき）
+        if (lyricsPvMode && showLyrics && currentLauncherPage == 1 && !isRackShown && !isLyricsBrowsing) {
+            val pvLines = lyricsLines
+            if (pvLines != null) {
+                val pvIndex = pvLines.indexOfLast { it.timeMs <= musicPlayerManager.currentPosition }
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Crossfade(
+                        targetState = pvIndex,
+                        animationSpec = tween(durationMillis = 350),
+                        label = "lyricPvFade"
+                    ) { idx ->
+                        if (idx >= 0) {
+                            Text(
+                                text = pvLines[idx].text,
+                                color = Color.White.copy(alpha = 0.95f),
+                                fontSize = 34.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.5.sp,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 46.sp,
+                                modifier = Modifier.padding(horizontal = 24.dp),
+                                style = LocalTextStyle.current.copy(
+                                    shadow = Shadow(color = accentColor.copy(alpha = 0.9f), blurRadius = 24f)
+                                )
+                            )
+                        }
+                    }
                 }
             }
         }
