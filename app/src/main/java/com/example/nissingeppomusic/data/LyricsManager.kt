@@ -49,8 +49,8 @@ object LyricsManager {
     }
 
     private fun cacheKey(title: String, artist: String, album: String): String {
-        // v4: 照合ロジックを厳しくしたため、旧ロジックで保存された誤った歌詞キャッシュを使わない
-        val raw = "v4|$title|$artist|$album"
+        // v5: 照合ロジックを厳しくしたため、旧ロジックで保存された誤った歌詞キャッシュを使わない
+        val raw = "v5|$title|$artist|$album"
         val digest = MessageDigest.getInstance("MD5").digest(raw.toByteArray(Charsets.UTF_8))
         return digest.joinToString("") { "%02x".format(it) }
     }
@@ -73,6 +73,21 @@ object LyricsManager {
         val b = normalizeTitleForMatch(target)
         if (a.isBlank() || b.isBlank()) return false
         return a == b || a.contains(b) || b.contains(a)
+    }
+
+    /** 候補のアーティスト名が目的のアーティストと一致するか（表記ゆれ・feat.表記を吸収して判定） */
+    private fun artistNameMatches(candidateArtist: String, artist: String): Boolean {
+        if (candidateArtist.isBlank() || artist.isBlank()) return false
+        fun norm(v: String) = v.lowercase().replace(Regex("""[\s・、,，/]"""), "")
+        val c = norm(candidateArtist)
+        if (c.isBlank()) return false
+        // "A feat. B" のような表記は構成要素ごとに照合する
+        val parts = artist.lowercase().split(Regex("""[\s・、,，/]+"""))
+            .map { it.trim().removeSuffix(".") }
+            .filter { it.isNotBlank() && it != "feat" && it != "featuring" }
+        if (parts.any { part -> c.contains(norm(part)) }) return true
+        val a = norm(artist)
+        return a.isNotBlank() && (a.contains(c) || c.contains(a))
     }
 
     private fun cacheFile(context: Context, title: String, artist: String, album: String): File {
@@ -222,6 +237,8 @@ object LyricsManager {
         val searchUrl = "https://lrclib.net/api/search?track_name=${enc(queryTitle)}&artist_name=${enc(artist)}"
         var bestText: String? = null
         var bestDiffSec = Long.MAX_VALUE
+        var bestArtistText: String? = null
+        var bestArtistDiffSec = Long.MAX_VALUE
         fun consider(results: org.json.JSONArray?, requireCloseDuration: Boolean) {
             if (results == null) return
             for (i in 0 until results.length()) {
@@ -244,6 +261,13 @@ object LyricsManager {
                     bestText = candidate
                     bestDiffSec = diff
                 }
+                // 同名曲が複数ある場合は、アーティスト名が一致する候補を優先する
+                if (artistNameMatches(item.optString("artistName", ""), artist)) {
+                    if (bestArtistText == null || diff < bestArtistDiffSec) {
+                        bestArtistText = candidate
+                        bestArtistDiffSec = diff
+                    }
+                }
             }
         }
         consider(httpGetJsonArray(searchUrl), requireCloseDuration = false)
@@ -252,7 +276,7 @@ object LyricsManager {
             val titleOnlyUrl = "https://lrclib.net/api/search?track_name=${enc(queryTitle)}"
             consider(httpGetJsonArray(titleOnlyUrl), requireCloseDuration = true)
         }
-        val chosen = bestText
+        val chosen = bestArtistText ?: bestText
         if (chosen != null) {
             val parsed = parseLrc(chosen)
             if (parsed.isNotEmpty()) {
@@ -321,7 +345,7 @@ object LyricsManager {
         // 以前は「長さが近いだけ」で選び、無ければ先頭の結果を無条件に使っていたため、
         // 同じアーティストの別曲の歌詞を掴む事故が起きていた
         val wantJapanese = containsJapanese(title) || containsJapanese(artist)
-        val matched = mutableListOf<Pair<Long, Long>>()
+        val matched = mutableListOf<Triple<Long, Long, Boolean>>()
         for (i in 0 until songs.length()) {
             val song = songs.optJSONObject(i) ?: continue
             val id = song.optLong("id", -1L)
@@ -333,11 +357,25 @@ object LyricsManager {
             } else {
                 Long.MAX_VALUE - 1
             }
-            matched.add(id to diff)
+            val artistsArr = song.optJSONArray("artists")
+            val artistNames = StringBuilder()
+            if (artistsArr != null) {
+                for (j in 0 until artistsArr.length()) {
+                    val an = artistsArr.optJSONObject(j)?.optString("name", "") ?: ""
+                    if (an.isNotBlank()) {
+                        if (artistNames.isNotEmpty()) artistNames.append("、")
+                        artistNames.append(an)
+                    }
+                }
+            }
+            matched.add(Triple(id, diff, artistNameMatches(artistNames.toString(), artist)))
         }
-        matched.sortBy { it.second }
+        // アーティストが一致する候補を最優先し、その中で長さが近い順に試す
+        val artistMatchedSongs = matched.filter { it.third }
+        val songPool = if (artistMatchedSongs.isNotEmpty()) artistMatchedSongs else matched
+        val orderedMatched = songPool.sortedBy { it.second }
 
-        for ((id, _) in matched.take(3)) {
+        for ((id, _, _) in orderedMatched.take(3)) {
             val lyricUrl = "https://music.163.com/api/song/lyric?id=$id&lv=1&tv=1&rv=1"
             val lyricText = httpGetText(lyricUrl, desktopUa, "https://music.163.com/") ?: continue
             val lrc = try {
@@ -358,7 +396,7 @@ object LyricsManager {
         val wantJapanese = containsJapanese(title) || containsJapanese(artist)
         fun searchInfos(keyword: String): org.json.JSONArray? {
             val url = "http://mobilecdn.kugou.com/api/v3/search/song?format=json" +
-                "&keyword=${enc(keyword)}&page=1&pagesize=5&showtype=1"
+                "&keyword=${enc(keyword)}&page=1&pagesize=30&showtype=1"
             val text = httpGetText(url, desktopUa) ?: return null
             return try {
                 JSONObject(text).optJSONObject("data")?.optJSONArray("info")
@@ -367,8 +405,8 @@ object LyricsManager {
             }
         }
         // 曲名が一致する候補だけを集める（別曲の歌詞を掴まないため）
-        fun collectHashes(infos: org.json.JSONArray?): MutableList<Pair<String, Long>> {
-            val list = mutableListOf<Pair<String, Long>>()
+        fun collectHashes(infos: org.json.JSONArray?): MutableList<Triple<String, Long, Boolean>> {
+            val list = mutableListOf<Triple<String, Long, Boolean>>()
             if (infos == null) return list
             for (i in 0 until infos.length()) {
                 val info = infos.optJSONObject(i) ?: continue
@@ -377,7 +415,8 @@ object LyricsManager {
                 val songName = info.optString("songname", "")
                     .ifBlank { info.optString("filename", "").substringAfterLast(" - ") }
                 if (!titleMatches(songName, title)) continue
-                list.add(hash to info.optLong("duration", 0L))
+                val singer = info.optString("singername", "")
+                list.add(Triple(hash, info.optLong("duration", 0L), artistNameMatches(singer, artist)))
             }
             return list
         }
@@ -388,13 +427,21 @@ object LyricsManager {
             hashes = collectHashes(searchInfos("$title $artist"))
         }
         if (hashes.isEmpty()) return null
+        // 同名曲が大量にある場合に別アーティストの版を掴まないよう、アーティストが一致する候補を優先する
+        val artistPool = hashes.filter { it.third }
+        var pool = if (artistPool.isNotEmpty()) artistPool else hashes
+        // 長さが大きく違う候補（別バージョン・別曲）は除外する。ただし全滅する場合は元の候補に戻す
+        if (durationMs > 0) {
+            val gated = pool.filter { it.second <= 0 || kotlin.math.abs(it.second * 1000 - durationMs) <= 15_000 }
+            if (gated.isNotEmpty()) pool = gated
+        }
         val ordered = if (durationMs > 0) {
-            hashes.sortedBy { (kotlin.math.abs(it.second * 1000 - durationMs)) }
+            pool.sortedBy { kotlin.math.abs(it.second * 1000 - durationMs) }
         } else {
-            hashes
+            pool
         }
 
-        for ((hash, durSec) in ordered.take(3)) {
+        for ((hash, durSec, _) in ordered.take(3)) {
             val durMs = if (durSec > 0) durSec * 1000 else durationMs
             val candUrl = "https://lyrics.kugou.com/search?ver=1&man=yes&client=pc" +
                 "&keyword=${enc(title)}&duration=$durMs&hash=$hash"
