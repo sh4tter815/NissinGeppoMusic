@@ -848,9 +848,8 @@ fun SettingsScreen(
                                                         }
                                                         Text("複数行は円を下げて、できた空白に前・今・次の3行を表示します", color = Color.Gray, fontSize = 12.sp)
                                                     }
-                                                    if (lyricsDisplayMode == "video") {
-                                                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                            Text("PV表示のフォント", color = Color.White, fontSize = 14.sp)
+                                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                        Text("歌詞のフォント（全モード共通）", color = Color.White, fontSize = 14.sp)
                                                             listOf(
                                                                 "default" to "デフォルトフォント (Default)",
                                                                 "receipt" to "レシートフォント (Receipt Font)",
@@ -872,7 +871,6 @@ fun SettingsScreen(
                                                                 )
                                                             }
                                                             Text("「カスタムフォント」はフォント設定で選んだファイルを使います", color = Color.Gray, fontSize = 12.sp)
-                                                        }
                                                     }
                                                 }
                                             }
