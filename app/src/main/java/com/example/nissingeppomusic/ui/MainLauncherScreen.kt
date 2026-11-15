@@ -2794,8 +2794,7 @@ private val LYRIC_ICON_WORDS: List<Pair<String, Int>> = listOf(
     "涙" to LyricIcon.DROP, "雫" to LyricIcon.DROP, "虹" to LyricIcon.RAINBOW,
     "雷" to LyricIcon.LIGHTNING, "笑顔" to LyricIcon.SMILE, "魚" to LyricIcon.FISH,
     "山" to LyricIcon.MOUNTAIN, "風" to LyricIcon.WIND,
-    "線" to LyricIcon.LINE, "円" to LyricIcon.CIRCLE,
-    "世界" to LyricIcon.GLOBE, "音" to LyricIcon.NOTE, "濡" to LyricIcon.DROP,
+"音" to LyricIcon.NOTE, "濡" to LyricIcon.DROP,
     "時間" to LyricIcon.CLOCK, "場所" to LyricIcon.MAP, "死" to LyricIcon.COFFIN,
     "目" to LyricIcon.EYE, "水" to LyricIcon.DROP, "増" to LyricIcon.PLUS,
     "減" to LyricIcon.MINUS, "骨" to LyricIcon.BONE
@@ -2807,7 +2806,7 @@ private fun DrawScope.drawLyricIcon(kind: Int) {
     val u = size.width / 100f
     val cx = size.width / 2f
     val cy = size.height / 2f
-    val st = Stroke(width = 4.2f * u, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    val st = Stroke(width = 2.3f * u, cap = StrokeCap.Round, join = StrokeJoin.Round)
     fun pt(dx: Float, dy: Float) = Offset(cx + dx * u, cy + dy * u)
     when (kind) {
         LyricIcon.STAR -> {
@@ -2846,37 +2845,37 @@ private fun DrawScope.drawLyricIcon(kind: Int) {
             for (i in 0 until 8) {
                 val ang = Math.toRadians(i * 45.0)
                 val c = kotlin.math.cos(ang).toFloat(); val sn = kotlin.math.sin(ang).toFloat()
-                drawLine(col, pt(c * 23f, sn * 23f), pt(c * 31f, sn * 31f), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
+                drawLine(col, pt(c * 23f, sn * 23f), pt(c * 31f, sn * 31f), strokeWidth = 3.0f * u, cap = StrokeCap.Round)
             }
         }
         LyricIcon.CLOUD, LyricIcon.RAIN -> {
             val oy = if (kind == LyricIcon.RAIN) -8f else 0f
-            drawLine(col, pt(-26f, 16f + oy), pt(26f, 16f + oy), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(-26f, 16f + oy), pt(26f, 16f + oy), strokeWidth = 3.0f * u, cap = StrokeCap.Round)
             drawArc(col, topLeft = pt(-28f, -8f + oy), size = Size(30f * u, 24f * u), startAngle = 180f, sweepAngle = 180f, useCenter = false, style = st)
             drawArc(col, topLeft = pt(-4f, -18f + oy), size = Size(34f * u, 34f * u), startAngle = 180f, sweepAngle = 180f, useCenter = false, style = st)
             drawArc(col, topLeft = pt(12f, -6f + oy), size = Size(26f * u, 22f * u), startAngle = 180f, sweepAngle = 180f, useCenter = false, style = st)
-            drawLine(col, pt(-26f, 4f + oy), pt(-26f, 16f + oy), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
-            drawLine(col, pt(26f, 4f + oy), pt(26f, 16f + oy), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(-26f, 4f + oy), pt(-26f, 16f + oy), strokeWidth = 3.0f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(26f, 4f + oy), pt(26f, 16f + oy), strokeWidth = 3.0f * u, cap = StrokeCap.Round)
             if (kind == LyricIcon.RAIN) {
-                drawLine(col, pt(-16f, 26f), pt(-20f, 36f), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
-                drawLine(col, pt(0f, 26f), pt(-4f, 36f), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
-                drawLine(col, pt(16f, 26f), pt(12f, 36f), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
+                drawLine(col, pt(-16f, 26f), pt(-20f, 36f), strokeWidth = 3.0f * u, cap = StrokeCap.Round)
+                drawLine(col, pt(0f, 26f), pt(-4f, 36f), strokeWidth = 3.0f * u, cap = StrokeCap.Round)
+                drawLine(col, pt(16f, 26f), pt(12f, 36f), strokeWidth = 3.0f * u, cap = StrokeCap.Round)
             }
         }
         LyricIcon.SNOW -> {
             for (i in 0 until 3) {
                 val ang = Math.toRadians(i * 60.0)
                 val c = kotlin.math.cos(ang).toFloat(); val sn = kotlin.math.sin(ang).toFloat()
-                drawLine(col, pt(-c * 30f, -sn * 30f), pt(c * 30f, sn * 30f), strokeWidth = 5f * u, cap = StrokeCap.Round)
+                drawLine(col, pt(-c * 30f, -sn * 30f), pt(c * 30f, sn * 30f), strokeWidth = 2.8f * u, cap = StrokeCap.Round)
             }
             drawCircle(col, radius = 5f * u, center = pt(0f, 0f), style = st)
         }
         LyricIcon.UMBRELLA -> {
             drawArc(col, topLeft = pt(-32f, -28f), size = Size(64f * u, 54f * u), startAngle = 180f, sweepAngle = 180f, useCenter = false, style = st)
-            drawLine(col, pt(-32f, -1f), pt(-11f, -1f), strokeWidth = 5f * u, cap = StrokeCap.Round)
-            drawLine(col, pt(-11f, -1f), pt(11f, -1f), strokeWidth = 5f * u, cap = StrokeCap.Round)
-            drawLine(col, pt(11f, -1f), pt(32f, -1f), strokeWidth = 5f * u, cap = StrokeCap.Round)
-            drawLine(col, pt(0f, -28f), pt(0f, 20f), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(-32f, -1f), pt(-11f, -1f), strokeWidth = 2.8f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(-11f, -1f), pt(11f, -1f), strokeWidth = 2.8f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(11f, -1f), pt(32f, -1f), strokeWidth = 2.8f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(0f, -28f), pt(0f, 20f), strokeWidth = 3.0f * u, cap = StrokeCap.Round)
             drawArc(col, topLeft = pt(0f, 10f), size = Size(18f * u, 18f * u), startAngle = 0f, sweepAngle = 180f, useCenter = false, style = st)
         }
         LyricIcon.FLOWER -> {
@@ -2898,26 +2897,26 @@ private fun DrawScope.drawLyricIcon(kind: Int) {
         }
         LyricIcon.KEY -> {
             drawCircle(col, radius = 13f * u, center = pt(-13f, -7f), style = st)
-            drawLine(col, pt(-4f, 2f), pt(25f, 29f), strokeWidth = 6f * u, cap = StrokeCap.Round)
-            drawLine(col, pt(15f, 19f), pt(23f, 11f), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
-            drawLine(col, pt(21f, 25f), pt(28f, 18f), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(-4f, 2f), pt(25f, 29f), strokeWidth = 3.3f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(15f, 19f), pt(23f, 11f), strokeWidth = 3.0f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(21f, 25f), pt(28f, 18f), strokeWidth = 3.0f * u, cap = StrokeCap.Round)
         }
         LyricIcon.NOTE -> {
             drawOval(col, topLeft = pt(-26f, 10f), size = Size(17f * u, 13f * u), style = st)
             drawOval(col, topLeft = pt(9f, 4f), size = Size(17f * u, 13f * u), style = st)
-            drawLine(col, pt(-9f, 13f), pt(-9f, -22f), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
-            drawLine(col, pt(26f, 7f), pt(26f, -28f), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
-            drawLine(col, pt(-9f, -22f), pt(26f, -28f), strokeWidth = 9f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(-9f, 13f), pt(-9f, -22f), strokeWidth = 3.0f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(26f, 7f), pt(26f, -28f), strokeWidth = 3.0f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(-9f, -22f), pt(26f, -28f), strokeWidth = 5.0f * u, cap = StrokeCap.Round)
         }
         LyricIcon.ENVELOPE -> {
             drawRoundRect(col, topLeft = pt(-30f, -18f), size = Size(60f * u, 36f * u), cornerRadius = CornerRadius(4f * u, 4f * u), style = st)
-            drawLine(col, pt(-29f, -17f), pt(0f, 5f), strokeWidth = 5f * u, cap = StrokeCap.Round)
-            drawLine(col, pt(29f, -17f), pt(0f, 5f), strokeWidth = 5f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(-29f, -17f), pt(0f, 5f), strokeWidth = 2.8f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(29f, -17f), pt(0f, 5f), strokeWidth = 2.8f * u, cap = StrokeCap.Round)
         }
         LyricIcon.CLOCK -> {
             drawCircle(col, radius = 28f * u, center = pt(0f, 0f), style = st)
-            drawLine(col, pt(0f, 0f), pt(0f, -15f), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
-            drawLine(col, pt(0f, 0f), pt(11f, 6f), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(0f, 0f), pt(0f, -15f), strokeWidth = 3.0f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(0f, 0f), pt(11f, 6f), strokeWidth = 3.0f * u, cap = StrokeCap.Round)
         }
         LyricIcon.FLAME -> {
             val path = Path().apply {
@@ -2986,7 +2985,7 @@ private fun DrawScope.drawLyricIcon(kind: Int) {
         }
         LyricIcon.LINE -> {
             // 「線」そのもの: 少し斜めの線を1本引く
-            drawLine(col, pt(-30f, 8f), pt(30f, -10f), strokeWidth = 6f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(-30f, 8f), pt(30f, -10f), strokeWidth = 3.3f * u, cap = StrokeCap.Round)
         }
         LyricIcon.CIRCLE -> {
             // 「円」そのもの: 円を描く
@@ -3018,11 +3017,11 @@ private fun DrawScope.drawLyricIcon(kind: Int) {
             drawCircle(col, radius = 3.2f * u, center = pt(0f, 0f))
         }
         LyricIcon.PLUS -> {
-            drawLine(col, pt(-17f, 0f), pt(17f, 0f), strokeWidth = 7f * u, cap = StrokeCap.Round)
-            drawLine(col, pt(0f, -17f), pt(0f, 17f), strokeWidth = 7f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(-17f, 0f), pt(17f, 0f), strokeWidth = 3.9f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(0f, -17f), pt(0f, 17f), strokeWidth = 3.9f * u, cap = StrokeCap.Round)
         }
         LyricIcon.MINUS -> {
-            drawLine(col, pt(-17f, 0f), pt(17f, 0f), strokeWidth = 7f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(-17f, 0f), pt(17f, 0f), strokeWidth = 3.9f * u, cap = StrokeCap.Round)
         }
         LyricIcon.MAP -> {
             // 折れた地図: 三つ折りの面と折り目
@@ -3038,12 +3037,12 @@ private fun DrawScope.drawLyricIcon(kind: Int) {
                 close()
             }
             drawPath(path, col, style = st)
-            drawLine(col, pt(-10f, -23f), pt(-10f, 17f), strokeWidth = 4f * u, cap = StrokeCap.Round)
-            drawLine(col, pt(10f, -17f), pt(10f, 23f), strokeWidth = 4f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(-10f, -23f), pt(-10f, 17f), strokeWidth = 2.2f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(10f, -17f), pt(10f, 23f), strokeWidth = 2.2f * u, cap = StrokeCap.Round)
         }
         LyricIcon.BONE -> {
             // 骨: 斜めの軸の両端にこぶ
-            drawLine(col, pt(-14f, 14f), pt(14f, -14f), strokeWidth = 9f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(-14f, 14f), pt(14f, -14f), strokeWidth = 5.0f * u, cap = StrokeCap.Round)
             drawCircle(col, radius = 7.5f * u, center = pt(-19f, 11f), style = st)
             drawCircle(col, radius = 7.5f * u, center = pt(-11f, 19f), style = st)
             drawCircle(col, radius = 7.5f * u, center = pt(11f, -19f), style = st)
@@ -3054,13 +3053,13 @@ private fun DrawScope.drawLyricIcon(kind: Int) {
             drawCircle(col, radius = 27f * u, center = pt(0f, 0f), style = st)
             drawOval(col, topLeft = pt(-13f, -27f), size = Size(26f * u, 54f * u), style = st)
             drawOval(col, topLeft = pt(-27f, -10f), size = Size(54f * u, 20f * u), style = st)
-            drawLine(col, pt(0f, -27f), pt(0f, 27f), strokeWidth = 4f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(0f, -27f), pt(0f, 27f), strokeWidth = 2.2f * u, cap = StrokeCap.Round)
         }
         LyricIcon.BUBBLE -> {
             // 夢の吹き出し: 角丸の四角にしっぽ
             drawRoundRect(col, topLeft = pt(-28f, -25f), size = Size(56f * u, 40f * u), cornerRadius = CornerRadius(11f * u, 11f * u), style = st)
-            drawLine(col, pt(-12f, 14f), pt(-19f, 30f), strokeWidth = 5f * u, cap = StrokeCap.Round)
-            drawLine(col, pt(3f, 14f), pt(-19f, 30f), strokeWidth = 5f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(-12f, 14f), pt(-19f, 30f), strokeWidth = 2.8f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(3f, 14f), pt(-19f, 30f), strokeWidth = 2.8f * u, cap = StrokeCap.Round)
         }
         LyricIcon.WIND -> {
             val path = Path().apply {
@@ -3161,7 +3160,8 @@ private fun PvAmbientEffect(kind: Int, modifier: Modifier = Modifier) {
 
 /** アイコン対象から外す複合語（「心配」の「心」でハートが出ないように） */
 private val LYRIC_ICON_EXCLUSIONS: Map<String, List<String>> = mapOf(
-    "心" to listOf("心配")
+    "心" to listOf("心配"),
+    "山" to listOf("沢山")
 )
 
 /** 行の中からアイコン対象の単語を探す。除外語の一部として現れる箇所は数えない */
@@ -3369,7 +3369,12 @@ private fun PvLyricLine(
         }
     }
     flushRun()
-    val rows: List<List<String>> = if (rowsBuilt.isEmpty()) listOf(chunks) else rowsBuilt
+    // 改行は最大3行まで。括弧を1行にすると3行を超える場合は、括弧ルールを無視して通常分割にする
+    val rows: List<List<String>> = when {
+        rowsBuilt.isEmpty() -> listOf(chunks)
+        rowsBuilt.size > 3 -> splitChunks(chunks)
+        else -> rowsBuilt
+    }
     fun rowEm(row: List<String>): Float = row.sumOf { chunkEm(it).toDouble() }.toFloat() + gapEm * (row.size - 1).coerceAtLeast(0)
     val longestRowEm = rows.maxOf { rowEm(it) }.coerceAtLeast(1f)
     // 行ごとの大きさを均等に: どの行も「枠いっぱいに広がるサイズ」を基本にし、短い行だけ高さ上限で止める
@@ -3391,7 +3396,15 @@ private fun PvLyricLine(
         }
     }
     // 行の表示時間が極端に短いときは、装飾エフェクトを出す暇がないので歌詞の表示を優先する
-    val effKind = if (lineDurationMs < 1400L) 0 else effectKind
+    val effKind = when {
+        lineDurationMs < 1400L -> 0
+        text.contains("！") || text.contains("!") -> 4
+        text.contains("円") -> 1
+        text.contains("四角形") -> 10
+        text.contains("三角形") -> 9
+        text.contains("線") -> 8
+        else -> effectKind
+    }
     // 装飾エフェクト（親から渡される。前の行と被らないランダム）:
     // 0=下線スイープ / 1=波紋 / 2=白スワイプ / 3=点滅 / 4=グリッチ / 5=枠線 / 6=粒子バースト / 7=波打ち登場
     val barAnim = remember { Animatable(0f) }
@@ -3441,6 +3454,53 @@ private fun PvLyricLine(
                                 style = Stroke(width = 3.5f)
                             )
                         }
+                    }
+                }
+            }
+        }
+        if (effKind == 9 || effKind == 10) {
+            // 図形の波紋: 三角形・四角形の輪が広がる
+            Canvas(modifier = Modifier.matchParentSize()) {
+                val t = rippleAnim.value
+                if (t > 0f && t < 1f) {
+                    val cx = size.width / 2f
+                    val cy = size.height / 2f
+                    for (k in 0 until 3) {
+                        val lt = ((t * 1.25f) - k * 0.18f).coerceIn(0f, 1f)
+                        if (lt <= 0f) continue
+                        val r = lt * size.width * 0.42f
+                        val alpha = (1f - lt) * 0.28f
+                        if (effKind == 9) {
+                            val path = Path().apply {
+                                moveTo(cx, cy - r)
+                                lineTo(cx + r * 0.87f, cy + r * 0.5f)
+                                lineTo(cx - r * 0.87f, cy + r * 0.5f)
+                                close()
+                            }
+                            drawPath(path, accentColor.copy(alpha = alpha), style = Stroke(width = 3.5f))
+                        } else {
+                            drawRect(accentColor.copy(alpha = alpha), topLeft = Offset(cx - r, cy - r), size = Size(r * 2f, r * 2f), style = Stroke(width = 3.5f))
+                        }
+                    }
+                }
+            }
+        }
+        if (effKind == 8) {
+            // 線エフェクト: アクセント色の横線が3本、左から右へ伸びて消える
+            Canvas(modifier = Modifier.matchParentSize()) {
+                val t = fxAnim.value
+                if (t > 0f && t < 1f) {
+                    for (k in 0 until 3) {
+                        val lt = ((t * 1.4f) - k * 0.16f).coerceIn(0f, 1f)
+                        if (lt <= 0f) continue
+                        val y = size.height * (0.22f + 0.28f * k)
+                        drawLine(
+                            color = accentColor.copy(alpha = sin(lt * 3.14159f) * 0.5f),
+                            start = Offset(0f, y),
+                            end = Offset(size.width * lt, y),
+                            strokeWidth = 2.5f,
+                            cap = StrokeCap.Round
+                        )
                     }
                 }
             }
