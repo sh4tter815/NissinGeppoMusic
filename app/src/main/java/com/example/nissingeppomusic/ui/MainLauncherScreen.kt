@@ -3780,7 +3780,13 @@ private fun PvLyricUnit(
             )
             if (colorHit != null) {
                 val cWord = colorHit.first
-                val cColor = colorHit.second
+                // 原色そのままではなく、アクセントカラーに色相を寄せて白で薄めた淡い色にする
+                val base = colorHit.second
+                val cColor = Color(
+                    red = (base.red * 0.55f + accentColor.red * 0.45f) * 0.55f + 0.45f,
+                    green = (base.green * 0.55f + accentColor.green * 0.45f) * 0.55f + 0.45f,
+                    blue = (base.blue * 0.55f + accentColor.blue * 0.45f) * 0.55f + 0.45f
+                )
                 val cStart = unitText.indexOf(cWord)
                 val wp = wipeT.value.coerceIn(0f, 1f)
                 val wipeBrush = Brush.linearGradient(
