@@ -812,6 +812,7 @@ fun MainLauncherScreen() {
                                         screenWidthDp = screenWidthDp,
                                         exiting = true,
                                         effectKind = pvKindFor(exIdx, exText),
+                                        lineDurationMs = pvLines.getOrNull(exIdx + 1)?.let { it.timeMs - pvLines[exIdx].timeMs } ?: Long.MAX_VALUE,
                                         modifier = Modifier.padding(top = 195.dp)
                                     )
                                 }
@@ -826,6 +827,7 @@ fun MainLauncherScreen() {
                                         screenWidthDp = screenWidthDp,
                                         exiting = false,
                                         effectKind = pvKindFor(curIdx, curText),
+                                        lineDurationMs = pvLines.getOrNull(curIdx + 1)?.let { it.timeMs - pvLines[curIdx].timeMs } ?: Long.MAX_VALUE,
                                         modifier = Modifier.padding(top = 195.dp)
                                     )
                                 }
@@ -1905,6 +1907,7 @@ fun MainLauncherScreen() {
                                         accentColor = accentColor,
                                         screenWidthDp = fsWidth,
                                         bigText = true,
+                                        lineDurationMs = fsLines.getOrNull(exIdx + 1)?.let { it.timeMs - fsLines[exIdx].timeMs } ?: Long.MAX_VALUE,
                                         exiting = true,
                                         effectKind = Math.floorMod(Math.floorMod(exIdx * 31 + exText.hashCode(), 997), 8),
                                         modifier = Modifier
@@ -1920,6 +1923,7 @@ fun MainLauncherScreen() {
                                         accentColor = accentColor,
                                         screenWidthDp = fsWidth,
                                         bigText = true,
+                                        lineDurationMs = fsLines.getOrNull(curIdx + 1)?.let { it.timeMs - fsLines[curIdx].timeMs } ?: Long.MAX_VALUE,
                                         exiting = false,
                                         effectKind = Math.floorMod(Math.floorMod(curIdx * 31 + curText.hashCode(), 997), 8),
                                         modifier = Modifier
@@ -3282,6 +3286,7 @@ private fun PvLyricLine(
     accentColor: Color,
     effectKind: Int = 0,
     bigText: Boolean = false,
+    lineDurationMs: Long = Long.MAX_VALUE,
     screenWidthDp: Float,
     exiting: Boolean,
     modifier: Modifier = Modifier
@@ -3385,6 +3390,8 @@ private fun PvLyricLine(
             exitProgress.animateTo(1f, animationSpec = tween(durationMillis = 720, easing = LinearEasing))
         }
     }
+    // 行の表示時間が極端に短いときは、装飾エフェクトを出す暇がないので歌詞の表示を優先する
+    val effKind = if (lineDurationMs < 1400L) 0 else effectKind
     // 装飾エフェクト（親から渡される。前の行と被らないランダム）:
     // 0=下線スイープ / 1=波紋 / 2=白スワイプ / 3=点滅 / 4=グリッチ / 5=枠線 / 6=粒子バースト / 7=波打ち登場
     val barAnim = remember { Animatable(0f) }
@@ -3418,7 +3425,7 @@ private fun PvLyricLine(
                 alpha = if (exiting) 1f - ((exitProgress.value - 0.6f) / 0.4f).coerceIn(0f, 1f) else 1f
             }
     ) {
-        if (effectKind == 1) {
+        if (effKind == 1) {
             Canvas(modifier = Modifier.matchParentSize()) {
                 val t = rippleAnim.value
                 if (t > 0f && t < 1f) {
@@ -3438,7 +3445,7 @@ private fun PvLyricLine(
                 }
             }
         }
-        if (effectKind == 5 && !exiting) {
+        if (effKind == 5 && !exiting) {
             // 枠線: 行を囲む角丸の枠がふわっと現れて消える
             val ft = fxAnim.value
             if (ft > 0f && ft < 1f) {
@@ -3454,7 +3461,7 @@ private fun PvLyricLine(
                 }
             }
         }
-        if (effectKind == 6 && !exiting) {
+        if (effKind == 6 && !exiting) {
             // 粒子バースト: 行の中心からキラキラと粒が飛び散る
             val ft = fxAnim.value
             if (ft > 0f && ft < 1f) {
@@ -3533,23 +3540,24 @@ private fun PvLyricLine(
                         exitDelayMs = (uSeed % 5) * 35f + gi * 12f,
                         fontFamily = fontFamily,
                         accentColor = accentColor,
-                        effectKind = effectKind,
+                        effectKind = effKind,
                         iconKind = thisUnitIcon,
                         dimmed = chunkDim
                     )
                 }
             }
         }
-            if (effectKind == 2) {
+            if (effKind == 2) {
                 // 白い四角が文字の上を左から右へしゅっと塗り、そのまま右へしゅっと消える
                 val bv = barAnim.value
                 if (bv > 0f && bv < 2f) {
                     Canvas(modifier = Modifier.matchParentSize()) {
                         val frac = if (bv <= 1f) bv else 2f - bv
                         val xOff = if (bv <= 1f) 0f else (bv - 1f) * size.width
-                        // 文字ギリギリのサイズの、角丸なし・不透明な白い四角
+                        // 文字ギリギリのサイズの、角丸なしの白い四角（点滅しながら塗る）
+                        val blink = if (sin(bv * 9.42f) > 0f) 1f else 0.30f
                         drawRect(
-                            color = Color.White,
+                            color = Color.White.copy(alpha = blink),
                             topLeft = Offset(xOff, 0f),
                             size = Size(frac * size.width, size.height)
                         )
