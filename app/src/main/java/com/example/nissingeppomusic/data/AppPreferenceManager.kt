@@ -209,6 +209,14 @@ class AppPreferenceManager(private val context: Context) {
     fun setLyricsPvMode(enabled: Boolean) { prefs.edit().putBoolean("lyrics_pv_mode", enabled).apply() }
     fun getLyricsPvFont(): String = prefs.getString("lyrics_pv_font", "default") ?: "default"
     fun setLyricsPvFont(value: String) { prefs.edit().putString("lyrics_pv_font", value).apply() }
+    /** 歌詞の表示モード: "line"=現在の行のみ / "video"=リリックビデオ（文字PV） / "multi"=複数行 */
+    fun getLyricsDisplayMode(): String {
+        val saved = prefs.getString("lyrics_display_mode", null)
+        if (saved != null) return saved
+        // 旧設定（文字PVスイッチ）からの引き継ぎ
+        return if (isLyricsPvMode()) "video" else "line"
+    }
+    fun setLyricsDisplayMode(value: String) { prefs.edit().putString("lyrics_display_mode", value).apply() }
     fun getHomeDiscLayout(): String = prefs.getString("home_disc_layout", "artwork") ?: "artwork"
     fun setHomeDiscLayout(layout: String) { prefs.edit().putString("home_disc_layout", layout).apply() }
     fun getHomeWallpaperAlpha(): Float = prefs.getFloat("home_wallpaper_alpha", 0.35f)
