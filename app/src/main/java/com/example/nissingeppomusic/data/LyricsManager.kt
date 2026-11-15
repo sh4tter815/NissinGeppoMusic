@@ -49,8 +49,8 @@ object LyricsManager {
     }
 
     private fun cacheKey(title: String, artist: String, album: String): String {
-        // v3: 照合ロジックを厳しくしたため、旧ロジックで保存された誤った歌詞キャッシュを使わない
-        val raw = "v3|$title|$artist|$album"
+        // v4: 照合ロジックを厳しくしたため、旧ロジックで保存された誤った歌詞キャッシュを使わない
+        val raw = "v4|$title|$artist|$album"
         val digest = MessageDigest.getInstance("MD5").digest(raw.toByteArray(Charsets.UTF_8))
         return digest.joinToString("") { "%02x".format(it) }
     }
@@ -79,6 +79,15 @@ object LyricsManager {
         val dir = File(context.filesDir, "lyrics")
         if (!dir.exists()) dir.mkdirs()
         return File(dir, cacheKey(title, artist, album) + ".lrc")
+    }
+
+    /** 指定した曲の歌詞キャッシュを削除する（誤った歌詞を掴んだときの再取得用） */
+    fun invalidateCache(context: Context, title: String, artist: String, album: String) {
+        try {
+            cacheFile(context, title, artist, album).delete()
+        } catch (e: Exception) {
+            // 削除失敗は無視する
+        }
     }
 
     private fun httpGetJson(urlString: String): JSONObject? {
@@ -283,11 +292,8 @@ object LyricsManager {
         if (!neteaseLrc.isNullOrBlank()) {
             val parsed = parseLrc(neteaseLrc)
             if (parsed.isNotEmpty()) {
-                try {
-                    cache.writeText(neteaseLrc, Charsets.UTF_8)
-                } catch (e: Exception) {
-                    // キャッシュ保存失敗は無視する
-                }
+                // NetEaseは別曲の歌詞が誤って紐付いていることがあるため、結果をキャッシュしない
+                // （次回再生時にKugou等を先に試し直す）
                 return@withContext parsed
             }
         }
