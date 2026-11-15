@@ -788,7 +788,7 @@ fun MainLauncherScreen() {
                         translations = lyricTranslations,
                         pvTopDp = 195.dp,
                         interludeTopDp = 175.dp,
-                        translationTopDp = 448.dp
+                        translationTopDp = 350.dp
                     )
                 }
             }

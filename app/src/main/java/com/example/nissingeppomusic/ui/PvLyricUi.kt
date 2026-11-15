@@ -126,6 +126,7 @@ import androidx.compose.runtime.key
 import com.example.nissingeppomusic.ui.components.LiquidGradientBackground
 import kotlin.math.floor
 import kotlin.math.ceil
+import androidx.compose.animation.core.exponentialDecay
 
 // 歌詞PVの描画まわり一式（文字PV・間奏アート・アイコン描画・自動フィット・設定のプレビューカード）。
 // 正本はこの音楽アプリ側。ランチャー側にも同じ内容のファイルがあるので、直したらランチャー側へもコピーすること。
@@ -1687,25 +1688,13 @@ fun LyricsBrowseOverlay(
 ) {
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
-    var targetOffset by remember { mutableIntStateOf(0) }
     var follow by remember { mutableStateOf(true) }
     var showOffsetPanel by remember { mutableStateOf(false) }
-    var stepAnimRunning by remember { mutableStateOf(false) }
-    val scrollAnim = remember { Animatable(0f) }
-    fun runSteps() {
-        if (stepAnimRunning) return
-        stepAnimRunning = true
-        scope.launch {
-            while (scrollAnim.value != targetOffset.toFloat()) {
-                scrollAnim.animateTo(
-                    targetValue = targetOffset.toFloat(),
-                    animationSpec = tween(durationMillis = 170, easing = FastOutSlowInEasing)
-                )
-            }
-            stepAnimRunning = false
-        }
-    }
-    Box(modifier = Modifier.fillMaxSize()) {
+    // 自由スクロール: 位置は「行」単位の小数で持ち、指に追従させて離すと慣性で流れる
+    val scrollAnim = remember { Animatable(startIndex.toFloat()) }
+    val maxPos = (lines.size - 1).coerceAtLeast(0).toFloat()
+    LaunchedEffect(lines.size) { scrollAnim.updateBounds(0f, maxPos) }
+    Box(modifier = Modifier.fillMaxSize().zIndex(96f)) {
     if (source.isNotBlank()) {
         Text(
             text = "歌詞ソース: $source",
@@ -1714,13 +1703,16 @@ fun LyricsBrowseOverlay(
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp).zIndex(91f)
         )
     }
-        val virtualPos = startIndex + scrollAnim.value
+        val virtualPos = scrollAnim.value
+        val focusedIdx = virtualPos.roundToInt().coerceIn(0, lines.size - 1)
     // 同期モード中は再生中の行へ自動で追従する
     val browsePlayingIdx = lines.indexOfLast { it.timeMs <= positionMs + lyricOffsetMs }
     LaunchedEffect(browsePlayingIdx, follow) {
-        if (follow && browsePlayingIdx >= 0 && browsePlayingIdx != startIndex + targetOffset) {
-            targetOffset = browsePlayingIdx - startIndex
-            runSteps()
+        if (follow && browsePlayingIdx >= 0 && browsePlayingIdx.toFloat() != scrollAnim.value) {
+            scrollAnim.animateTo(
+                browsePlayingIdx.toFloat(),
+                tween(durationMillis = 300, easing = FastOutSlowInEasing)
+            )
         }
     }
     BoxWithConstraints(
@@ -1739,34 +1731,44 @@ fun LyricsBrowseOverlay(
                 )
             }
             .zIndex(90f)
-            .pointerInput(Unit) {
+            .pointerInput(lines.size) {
                 awaitPointerEventScope {
                     while (true) {
                         val down = awaitFirstDown(requireUnconsumed = false)
-                        val dragLines = lines
-                        val dirSign = if (reverseScroll) -1 else 1
-                        var acc = 0f
+                        val dirSign = if (reverseScroll) -1f else 1f
                         var lastY = down.position.y
+                        var lastT = down.uptimeMillis
+                        var velocityPx = 0f
+                        var moved = false
                         var done = false
+                        scope.launch { scrollAnim.stop() }
                         while (!done) {
                             val event = awaitPointerEvent()
                             val change = event.changes.firstOrNull { it.id == down.id } ?: break
                             if (change.changedToUp()) {
                                 done = true
+                                if (moved && abs(velocityPx) > 60f) {
+                                    val linePx = 48f * density
+                                    val vLines = (-velocityPx / linePx) * dirSign
+                                    scope.launch { scrollAnim.animateDecay(vLines, exponentialDecay()) }
+                                }
                             } else {
                                 val dy = change.position.y - lastY
+                                val dt = (change.uptimeMillis - lastT).coerceAtLeast(1L)
+                                velocityPx = velocityPx * 0.7f + (dy / dt * 1000f) * 0.3f
                                 lastY = change.position.y
-                                acc += dy
-                                while (acc <= -40f || acc >= 40f) {
-                                    val dir = (if (acc <= -40f) 1 else -1) * dirSign
-                                    val newTarget = targetOffset + dir
-                                    if (startIndex + newTarget in dragLines.indices) {
-                                        targetOffset = newTarget
+                                lastT = change.uptimeMillis
+                                if (dy != 0f) {
+                                    if (!moved && abs(change.position.y - down.position.y) > 6f) {
+                                        moved = true
                                         follow = false
-                                        runSteps()
-                                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     }
-                                    if (acc <= -40f) acc += 40f else acc -= 40f
+                                    if (moved) {
+                                        val linePx = 48f * density
+                                        val delta = (-dy / linePx) * dirSign
+                                        val target = (scrollAnim.value + delta).coerceIn(0f, maxPos)
+                                        scope.launch { scrollAnim.snapTo(target) }
+                                    }
                                 }
                                 change.consume()
                             }
@@ -1812,7 +1814,7 @@ fun LyricsBrowseOverlay(
         val lastIdx = minOf(lines.size - 1, ceil(virtualPos + 7f).toInt())
         for (idx in firstIdx..lastIdx) {
             val relPos = idx - virtualPos
-            val isFocusedLine = idx == startIndex + targetOffset
+            val isFocusedLine = idx == focusedIdx
             val fade = (1f - (abs(relPos) - 4f) / 3f).coerceIn(0f, 1f)
             val myHeightDp = (lineHeightsPx[idx]?.let { it / densityNow.density } ?: 34f)
             Text(
@@ -1838,7 +1840,7 @@ fun LyricsBrowseOverlay(
         }
     }
     // 下部ボタン: 移動（フォーカス行へジャンプ）／タイミング調整／閉じる
-    val focusedLineForButtons = lines.getOrNull(startIndex + targetOffset)
+    val focusedLineForButtons = lines.getOrNull(focusedIdx)
     Box(
         modifier = Modifier
             .align(Alignment.TopEnd)
