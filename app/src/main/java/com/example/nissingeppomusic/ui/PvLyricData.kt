@@ -15,7 +15,7 @@ object LyricIcon {
     const val LINE = 22; const val CIRCLE = 23
     const val GLOBE = 24; const val BUBBLE = 25
     const val COFFIN = 26; const val EYE = 27; const val PLUS = 28
-    const val MINUS = 29; const val MAP = 30; const val BONE = 31
+    const val MINUS = 29; const val MAP = 30; const val BONE = 31; const val CROSS = 32
 }
 
 /** 歌詞に出てきたらアイコンを出す単語（前にあるものが優先） */
@@ -33,7 +33,7 @@ val LYRIC_ICON_WORDS: List<Pair<String, Int>> = listOf(
     "山" to LyricIcon.MOUNTAIN, "風" to LyricIcon.WIND,
 "音" to LyricIcon.NOTE, "濡" to LyricIcon.DROP,
     "時間" to LyricIcon.CLOCK, "場所" to LyricIcon.MAP, "死" to LyricIcon.COFFIN,
-    "目" to LyricIcon.EYE, "水" to LyricIcon.DROP, "増" to LyricIcon.PLUS,
+    "駄目" to LyricIcon.CROSS, "ダメ" to LyricIcon.CROSS, "目" to LyricIcon.EYE, "水" to LyricIcon.DROP, "増" to LyricIcon.PLUS,
     "減" to LyricIcon.MINUS, "骨" to LyricIcon.BONE
 )
 val LYRIC_ICON_EXCLUSIONS: Map<String, List<String>> = mapOf(
@@ -59,12 +59,19 @@ val LYRIC_ICON_WORDS_EN: List<Pair<String, Int>> = listOf(
 )
 fun findIconWord(text: String): Pair<String, Int>? {
     for ((word, kind) in LYRIC_ICON_WORDS) {
+        // 「心」が単体で出てきたときはハートを出さない
+        if (word == "心" && text.trim() == "心") continue
         val exclusions = LYRIC_ICON_EXCLUSIONS[word] ?: emptyList()
         var from = 0
         while (true) {
             val i = text.indexOf(word, from)
             if (i < 0) break
             if (exclusions.any { text.startsWith(it, i) }) {
+                from = i + 1
+                continue
+            }
+            // 「何日目」「3回目」のような助数詞の目は、目のアイコンを出さない
+            if (word == "目" && i > 0 && text[i - 1] in "0123456789０１２３４５６７８９一二三四五六七八九十百千何日回番度つ個曲点週年月項標的注面") {
                 from = i + 1
                 continue
             }
