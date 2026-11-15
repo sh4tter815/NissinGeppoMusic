@@ -906,7 +906,7 @@ fun MainLauncherScreen() {
                             val curText = multiLines.getOrNull(rawIdx)?.text
                             val nextText = multiLines.getOrNull(rawIdx + 1)?.text
                             if (prevText != null) {
-                                Text(prevText, color = Color.White.copy(alpha = 0.45f), fontSize = 18.sp, letterSpacing = 2.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily), modifier = Modifier.padding(start = 0.dp))
+                                Text(prevText, color = Color.White.copy(alpha = 0.45f), fontSize = fitFontSizeSp(prevText, 18f, screenWidthDp - 48f).sp, letterSpacing = 2.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily), modifier = Modifier.padding(start = 0.dp))
                             } else {
                                 Spacer(Modifier.height(24.dp))
                             }
@@ -914,17 +914,17 @@ fun MainLauncherScreen() {
                             Text(
                                 text = if (mInterlude) "♪" else (curText ?: ""),
                                 color = Color.White,
-                                fontSize = 30.sp,
+                                fontSize = fitFontSizeSp(if (mInterlude) "♪" else (curText ?: ""), 30f, screenWidthDp - 76f).sp,
                                 fontWeight = FontWeight.Bold,
                                 letterSpacing = 3.sp,
-                                maxLines = 3,
+                                maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily, shadow = Shadow(color = accentColor.copy(alpha = 0.8f), blurRadius = 16f)),
                                 modifier = Modifier.padding(start = 28.dp)
                             )
                             Spacer(Modifier.height(16.dp))
                             if (nextText != null) {
-                                Text(nextText, color = Color.White.copy(alpha = 0.45f), fontSize = 18.sp, letterSpacing = 2.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily), modifier = Modifier.padding(start = 56.dp))
+                                Text(nextText, color = Color.White.copy(alpha = 0.45f), fontSize = fitFontSizeSp(nextText, 18f, screenWidthDp - 104f).sp, letterSpacing = 2.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily), modifier = Modifier.padding(start = 56.dp))
                             }
                         }
                     }
@@ -1047,11 +1047,19 @@ fun MainLauncherScreen() {
                                                 else -> ""
                                             },
                                             color = Color.White,
-                                            fontSize = 15.sp,
+                                            fontSize = fitFontSizeSp(
+                                                when {
+                                                    idx == -2 -> "♪"
+                                                    idx >= 0 -> lines[idx].text
+                                                    else -> ""
+                                                },
+                                                15f,
+                                                screenWidthDp - 116f
+                                            ).sp,
                                             fontWeight = FontWeight.Medium,
                                             letterSpacing = 2.0.sp,
                                             textAlign = TextAlign.Start,
-                                            maxLines = 2,
+                                            maxLines = 1,
                                             style = LocalTextStyle.current.copy(
                                                 fontFamily = lyricsFontFamily,
                                                 shadow = Shadow(color = Color.White.copy(alpha = 0.85f), blurRadius = 16f)
@@ -1220,11 +1228,11 @@ fun MainLauncherScreen() {
                                 Text(
                                     text = lines[idx].text,
                                     color = if (isFocusedLine) accentColor else Color.White.copy(alpha = 0.75f * fade),
-                                    fontSize = if (isFocusedLine) 26.sp else 15.sp,
+                                    fontSize = fitFontSizeSp(lines[idx].text, if (isFocusedLine) 26f else 15f, maxWidth.value * 0.85f).sp,
                                     fontWeight = if (isFocusedLine) FontWeight.Bold else FontWeight.Normal,
                                     letterSpacing = 1.0.sp,
                                     textAlign = TextAlign.Start,
-                                    maxLines = 4,
+                                    maxLines = 1,
                                     style = LocalTextStyle.current.copy(
                                         fontFamily = lyricsFontFamily,
                                         shadow = if (accentGlow && isFocusedLine) Shadow(color = accentColor, blurRadius = 14f) else null
@@ -1974,17 +1982,17 @@ fun MainLauncherScreen() {
                                 val curText = if (fsInterlude) "♪" else (fsCurLine?.text ?: "")
                                 val nextText = fsNextLine?.text ?: ""
                                 if (prevText.isNotEmpty()) {
-                                    Text(prevText, color = Color.White.copy(alpha = 0.45f), fontSize = 18.sp, letterSpacing = 2.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily))
+                                    Text(prevText, color = Color.White.copy(alpha = 0.45f), fontSize = fitFontSizeSp(prevText, 18f, fsWidth - 80f).sp, letterSpacing = 2.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily))
                                     Spacer(Modifier.height(14.dp))
                                 }
                                 if (curText.isNotEmpty()) {
                                     Text(
                                         curText,
                                         color = Color.White,
-                                        fontSize = 30.sp,
+                                        fontSize = fitFontSizeSp(curText, 30f, fsWidth - 108f).sp,
                                         fontWeight = FontWeight.Bold,
                                         letterSpacing = 3.sp,
-                                        maxLines = 3,
+                                        maxLines = 1,
                                         style = LocalTextStyle.current.copy(
                                             fontFamily = lyricsFontFamily,
                                             shadow = Shadow(color = Color.White.copy(alpha = 0.85f), blurRadius = 18f)
@@ -1994,7 +2002,7 @@ fun MainLauncherScreen() {
                                 }
                                 if (nextText.isNotEmpty()) {
                                     Spacer(Modifier.height(14.dp))
-                                    Text(nextText, color = Color.White.copy(alpha = 0.45f), fontSize = 18.sp, letterSpacing = 2.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily), modifier = Modifier.padding(start = 56.dp))
+                                    Text(nextText, color = Color.White.copy(alpha = 0.45f), fontSize = fitFontSizeSp(nextText, 18f, fsWidth - 136f).sp, letterSpacing = 2.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily), modifier = Modifier.padding(start = 56.dp))
                                 }
                             } else {
                                 val lineText = if (fsIndex < 0) "" else if (fsInterlude) "♪" else (fsCurLine?.text ?: "")
@@ -2002,10 +2010,10 @@ fun MainLauncherScreen() {
                                     Text(
                                         lineText,
                                         color = Color.White,
-                                        fontSize = 26.sp,
+                                        fontSize = fitFontSizeSp(lineText, 26f, fsWidth - 80f).sp,
                                         fontWeight = FontWeight.Bold,
                                         letterSpacing = 2.sp,
-                                        maxLines = 3,
+                                        maxLines = 1,
                                         style = LocalTextStyle.current.copy(
                                             fontFamily = lyricsFontFamily,
                                             shadow = Shadow(color = Color.White.copy(alpha = 0.85f), blurRadius = 18f)
@@ -3180,6 +3188,21 @@ private fun findIconWord(text: String): Pair<String, Int>? {
         }
     }
     return null
+}
+
+/** 折り返さずに1行で収まる最大の文字サイズを返す（なるべく大きく、収まらなければ下げる） */
+private fun fitFontSizeSp(text: String, baseSp: Float, availWidthDp: Float): Float {
+    if (text.isEmpty() || availWidthDp <= 0f) return baseSp
+    var em = 0f
+    for (ch in text) {
+        em += when {
+            ch == ' ' || ch == '　' -> 0.30f
+            ch.code < 0x300 -> 0.55f
+            else -> 1.02f
+        }
+    }
+    if (em <= 0f) return baseSp
+    return minOf(baseSp, availWidthDp * 0.95f / em).coerceAtLeast(8f)
 }
 
 /** コーラスの掛け声（yeah / ah / ラララ等）かどうか */
