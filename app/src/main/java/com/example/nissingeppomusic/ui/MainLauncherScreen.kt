@@ -52,6 +52,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.SolidColor
@@ -62,6 +64,11 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
@@ -1139,12 +1146,31 @@ fun MainLauncherScreen() {
                                 }
                         ) {
                             val centerYDp = maxHeight.value / 2f
+                            val densityNow = LocalDensity.current
+                            // 折り返した行は高さが変わるので、実測した行高で累積配置する
+                            val lineHeightsPx = remember { mutableStateMapOf<Int, Int>() }
+                            fun stepDp(i: Int): Float {
+                                val hPx = lineHeightsPx[i]
+                                return (if (hPx != null) hPx / densityNow.density else 34f) + 14f
+                            }
+                            val baseIdx = floor(virtualPos).toInt().coerceIn(0, lines.size - 1)
+                            val fracPart = virtualPos - floor(virtualPos)
+                            fun offsetDpFor(idx: Int): Float {
+                                var acc = 0f
+                                if (idx > baseIdx) {
+                                    for (i in baseIdx until idx) acc += stepDp(i)
+                                } else if (idx < baseIdx) {
+                                    for (i in idx until baseIdx) acc -= stepDp(i)
+                                }
+                                return acc - fracPart * stepDp(baseIdx)
+                            }
                             val firstIdx = maxOf(0, floor(virtualPos - 7f).toInt())
                             val lastIdx = minOf(lines.size - 1, ceil(virtualPos + 7f).toInt())
                             for (idx in firstIdx..lastIdx) {
                                 val relPos = idx - virtualPos
                                 val isFocusedLine = idx == lyricsBrowseStartIndex + lyricsTargetOffset
                                 val fade = (1f - (abs(relPos) - 4f) / 3f).coerceIn(0f, 1f)
+                                val myHeightDp = (lineHeightsPx[idx]?.let { it / densityNow.density } ?: 34f)
                                 Text(
                                     text = lines[idx].text,
                                     color = if (isFocusedLine) accentColor else Color.White.copy(alpha = 0.75f * fade),
@@ -1152,8 +1178,7 @@ fun MainLauncherScreen() {
                                     fontWeight = if (isFocusedLine) FontWeight.Bold else FontWeight.Normal,
                                     letterSpacing = 1.0.sp,
                                     textAlign = TextAlign.Start,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
+                                    maxLines = 4,
                                     style = LocalTextStyle.current.copy(
                                         fontFamily = lyricsFontFamily,
                                         shadow = if (accentGlow && isFocusedLine) Shadow(color = accentColor, blurRadius = 14f) else null
@@ -1161,9 +1186,10 @@ fun MainLauncherScreen() {
                                     modifier = Modifier
                                         .offset(
                                             x = (40f + relPos * 5f).dp,
-                                            y = (centerYDp + relPos * 46f - (if (isFocusedLine) 17f else 11f)).dp
+                                            y = (centerYDp + offsetDpFor(idx) - myHeightDp / 2f).dp
                                         )
                                         .fillMaxWidth(0.85f)
+                                        .onGloballyPositioned { lineHeightsPx[idx] = it.size.height }
                                 )
                             }
                         }
@@ -2461,7 +2487,261 @@ fun MainLauncherScreen() {
  * 前の行（residual）: イーズインで小さく・薄く・ぼんやりしながら上へ移動して残る。
  * 漢字は大きめ、ひらがなは小さめにするとバランスが良い。
  */
+/** 歌詞アイコン種別 */
+private object LyricIcon {
+    const val UMBRELLA = 0; const val RAIN = 1; const val SNOW = 2; const val STAR = 3
+    const val MOON = 4; const val SUN = 5; const val CLOUD = 6; const val FLOWER = 7
+    const val WAVES = 8; const val HEART = 9; const val KEY = 10; const val NOTE = 11
+    const val ENVELOPE = 12; const val CLOCK = 13; const val FLAME = 14; const val DROP = 15
+    const val RAINBOW = 16; const val LIGHTNING = 17; const val SMILE = 18; const val FISH = 19
+    const val MOUNTAIN = 20; const val WIND = 21
+}
+
+/** 歌詞に出てきたらアイコンを出す単語（前にあるものが優先） */
+private val LYRIC_ICON_WORDS: List<Pair<String, Int>> = listOf(
+    "傘" to LyricIcon.UMBRELLA, "桜" to LyricIcon.FLOWER, "雨" to LyricIcon.RAIN,
+    "雪" to LyricIcon.SNOW, "星" to LyricIcon.STAR, "月" to LyricIcon.MOON,
+    "太陽" to LyricIcon.SUN, "雲" to LyricIcon.CLOUD, "花" to LyricIcon.FLOWER,
+    "海" to LyricIcon.WAVES, "波" to LyricIcon.WAVES, "心" to LyricIcon.HEART,
+    "ハート" to LyricIcon.HEART, "恋" to LyricIcon.HEART, "愛" to LyricIcon.HEART,
+    "夢" to LyricIcon.STAR, "夜" to LyricIcon.MOON, "鍵" to LyricIcon.KEY,
+    "音楽" to LyricIcon.NOTE, "歌" to LyricIcon.NOTE, "手紙" to LyricIcon.ENVELOPE,
+    "時計" to LyricIcon.CLOCK, "炎" to LyricIcon.FLAME, "火" to LyricIcon.FLAME,
+    "涙" to LyricIcon.DROP, "雫" to LyricIcon.DROP, "虹" to LyricIcon.RAINBOW,
+    "雷" to LyricIcon.LIGHTNING, "笑顔" to LyricIcon.SMILE, "魚" to LyricIcon.FISH,
+    "山" to LyricIcon.MOUNTAIN, "風" to LyricIcon.WIND
+)
+
+/** 白い枠線だけの小さな線画アイコンを描く（キャンバスは正方形前提） */
+private fun DrawScope.drawLyricIcon(kind: Int) {
+    val col = Color.White.copy(alpha = 0.92f)
+    val u = size.width / 100f
+    val cx = size.width / 2f
+    val cy = size.height / 2f
+    val st = Stroke(width = 5.5f * u, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    fun pt(dx: Float, dy: Float) = Offset(cx + dx * u, cy + dy * u)
+    when (kind) {
+        LyricIcon.STAR -> {
+            val path = Path()
+            for (i in 0..9) {
+                val ang = Math.toRadians(-90.0 + i * 36.0)
+                val r = if (i % 2 == 0) 34.0 else 15.0
+                val x = cx + (r * kotlin.math.cos(ang)).toFloat() * u
+                val y = cy + (r * kotlin.math.sin(ang)).toFloat() * u
+                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            path.close()
+            drawPath(path, col, style = st)
+        }
+        LyricIcon.HEART -> {
+            val path = Path().apply {
+                moveTo(cx, cy + 30f * u)
+                cubicTo(cx - 44f * u, cy + 2f * u, cx - 28f * u, cy - 32f * u, cx, cy - 13f * u)
+                cubicTo(cx + 28f * u, cy - 32f * u, cx + 44f * u, cy + 2f * u, cx, cy + 30f * u)
+                close()
+            }
+            drawPath(path, col, style = st)
+        }
+        LyricIcon.MOON -> {
+            val path = Path().apply {
+                arcTo(Rect(cx - 30f * u, cy - 30f * u, cx + 30f * u, cy + 30f * u), -125f, 250f, false)
+                arcTo(Rect(cx - 6f * u, cy - 23f * u, cx + 38f * u, cy + 23f * u), 55f, -250f, false)
+                close()
+            }
+            drawPath(path, col, style = st)
+        }
+        LyricIcon.SUN -> {
+            drawCircle(col, radius = 15f * u, center = pt(0f, 0f), style = st)
+            for (i in 0 until 8) {
+                val ang = Math.toRadians(i * 45.0)
+                val c = kotlin.math.cos(ang).toFloat(); val sn = kotlin.math.sin(ang).toFloat()
+                drawLine(col, pt(c * 23f, sn * 23f), pt(c * 31f, sn * 31f), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
+            }
+        }
+        LyricIcon.CLOUD, LyricIcon.RAIN -> {
+            val oy = if (kind == LyricIcon.RAIN) -8f else 0f
+            drawLine(col, pt(-26f, 16f + oy), pt(26f, 16f + oy), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
+            drawArc(col, topLeft = pt(-28f, -8f + oy), size = Size(30f * u, 24f * u), startAngle = 180f, sweepAngle = 180f, useCenter = false, style = st)
+            drawArc(col, topLeft = pt(-4f, -18f + oy), size = Size(34f * u, 34f * u), startAngle = 180f, sweepAngle = 180f, useCenter = false, style = st)
+            drawArc(col, topLeft = pt(12f, -6f + oy), size = Size(26f * u, 22f * u), startAngle = 180f, sweepAngle = 180f, useCenter = false, style = st)
+            drawLine(col, pt(-26f, 4f + oy), pt(-26f, 16f + oy), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(26f, 4f + oy), pt(26f, 16f + oy), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
+            if (kind == LyricIcon.RAIN) {
+                drawLine(col, pt(-16f, 26f), pt(-20f, 36f), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
+                drawLine(col, pt(0f, 26f), pt(-4f, 36f), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
+                drawLine(col, pt(16f, 26f), pt(12f, 36f), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
+            }
+        }
+        LyricIcon.SNOW -> {
+            for (i in 0 until 3) {
+                val ang = Math.toRadians(i * 60.0)
+                val c = kotlin.math.cos(ang).toFloat(); val sn = kotlin.math.sin(ang).toFloat()
+                drawLine(col, pt(-c * 30f, -sn * 30f), pt(c * 30f, sn * 30f), strokeWidth = 5f * u, cap = StrokeCap.Round)
+            }
+            drawCircle(col, radius = 5f * u, center = pt(0f, 0f), style = st)
+        }
+        LyricIcon.UMBRELLA -> {
+            drawArc(col, topLeft = pt(-32f, -28f), size = Size(64f * u, 54f * u), startAngle = 180f, sweepAngle = 180f, useCenter = false, style = st)
+            drawLine(col, pt(-32f, -1f), pt(-11f, -1f), strokeWidth = 5f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(-11f, -1f), pt(11f, -1f), strokeWidth = 5f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(11f, -1f), pt(32f, -1f), strokeWidth = 5f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(0f, -28f), pt(0f, 20f), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
+            drawArc(col, topLeft = pt(0f, 10f), size = Size(18f * u, 18f * u), startAngle = 0f, sweepAngle = 180f, useCenter = false, style = st)
+        }
+        LyricIcon.FLOWER -> {
+            for (i in 0 until 5) {
+                val ang = Math.toRadians(-90.0 + i * 72.0)
+                val px = (15.0 * kotlin.math.cos(ang)).toFloat(); val py = (15.0 * kotlin.math.sin(ang)).toFloat()
+                drawCircle(col, radius = 10.5f * u, center = pt(px, py), style = st)
+            }
+            drawCircle(col, radius = 5.5f * u, center = pt(0f, 0f), style = st)
+        }
+        LyricIcon.WAVES -> {
+            val path = Path()
+            for (yOff in listOf(-6f, 12f)) {
+                path.moveTo(cx - 32f * u, cy + yOff * u)
+                path.quadraticBezierTo(cx - 16f * u, cy + (yOff - 15f) * u, cx, cy + yOff * u)
+                path.quadraticBezierTo(cx + 16f * u, cy + (yOff + 15f) * u, cx + 32f * u, cy + yOff * u)
+            }
+            drawPath(path, col, style = st)
+        }
+        LyricIcon.KEY -> {
+            drawCircle(col, radius = 13f * u, center = pt(-13f, -7f), style = st)
+            drawLine(col, pt(-4f, 2f), pt(25f, 29f), strokeWidth = 6f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(15f, 19f), pt(23f, 11f), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(21f, 25f), pt(28f, 18f), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
+        }
+        LyricIcon.NOTE -> {
+            drawOval(col, topLeft = pt(-26f, 10f), size = Size(17f * u, 13f * u), style = st)
+            drawOval(col, topLeft = pt(9f, 4f), size = Size(17f * u, 13f * u), style = st)
+            drawLine(col, pt(-9f, 13f), pt(-9f, -22f), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(26f, 7f), pt(26f, -28f), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(-9f, -22f), pt(26f, -28f), strokeWidth = 9f * u, cap = StrokeCap.Round)
+        }
+        LyricIcon.ENVELOPE -> {
+            drawRoundRect(col, topLeft = pt(-30f, -18f), size = Size(60f * u, 36f * u), cornerRadius = CornerRadius(4f * u, 4f * u), style = st)
+            drawLine(col, pt(-29f, -17f), pt(0f, 5f), strokeWidth = 5f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(29f, -17f), pt(0f, 5f), strokeWidth = 5f * u, cap = StrokeCap.Round)
+        }
+        LyricIcon.CLOCK -> {
+            drawCircle(col, radius = 28f * u, center = pt(0f, 0f), style = st)
+            drawLine(col, pt(0f, 0f), pt(0f, -15f), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
+            drawLine(col, pt(0f, 0f), pt(11f, 6f), strokeWidth = 5.5f * u, cap = StrokeCap.Round)
+        }
+        LyricIcon.FLAME -> {
+            val path = Path().apply {
+                moveTo(cx, cy - 32f * u)
+                cubicTo(cx + 20f * u, cy - 8f * u, cx + 22f * u, cy + 6f * u, cx + 14f * u, cy + 18f * u)
+                cubicTo(cx + 8f * u, cy + 29f * u, cx - 8f * u, cy + 29f * u, cx - 14f * u, cy + 18f * u)
+                cubicTo(cx - 22f * u, cy + 6f * u, cx - 13f * u, cy - 10f * u, cx, cy - 32f * u)
+                close()
+            }
+            drawPath(path, col, style = st)
+        }
+        LyricIcon.DROP -> {
+            val path = Path().apply {
+                moveTo(cx, cy - 30f * u)
+                cubicTo(cx + 17f * u, cy - 2f * u, cx + 20f * u, cy + 8f * u, cx + 20f * u, cy + 14f * u)
+                cubicTo(cx + 20f * u, cy + 27f * u, cx - 20f * u, cy + 27f * u, cx - 20f * u, cy + 14f * u)
+                cubicTo(cx - 20f * u, cy + 8f * u, cx - 17f * u, cy - 2f * u, cx, cy - 30f * u)
+                close()
+            }
+            drawPath(path, col, style = st)
+        }
+        LyricIcon.RAINBOW -> {
+            drawArc(col, topLeft = pt(-32f, -10f), size = Size(64f * u, 64f * u), startAngle = 180f, sweepAngle = 180f, useCenter = false, style = st)
+            drawArc(col, topLeft = pt(-23f, -1f), size = Size(46f * u, 46f * u), startAngle = 180f, sweepAngle = 180f, useCenter = false, style = st)
+            drawArc(col, topLeft = pt(-14f, 8f), size = Size(28f * u, 28f * u), startAngle = 180f, sweepAngle = 180f, useCenter = false, style = st)
+        }
+        LyricIcon.LIGHTNING -> {
+            val path = Path().apply {
+                moveTo(cx + 7f * u, cy - 31f * u)
+                lineTo(cx - 14f * u, cy + 6f * u)
+                lineTo(cx - 1f * u, cy + 6f * u)
+                lineTo(cx - 7f * u, cy + 31f * u)
+                lineTo(cx + 16f * u, cy - 8f * u)
+                lineTo(cx + 3f * u, cy - 8f * u)
+                close()
+            }
+            drawPath(path, col, style = st)
+        }
+        LyricIcon.SMILE -> {
+            drawCircle(col, radius = 27f * u, center = pt(0f, 0f), style = st)
+            drawCircle(col, radius = 2.8f * u, center = pt(-11f, -6f))
+            drawCircle(col, radius = 2.8f * u, center = pt(11f, -6f))
+            drawArc(col, topLeft = pt(-14f, -3f), size = Size(28f * u, 22f * u), startAngle = 25f, sweepAngle = 130f, useCenter = false, style = st)
+        }
+        LyricIcon.FISH -> {
+            drawOval(col, topLeft = pt(-29f, -11f), size = Size(45f * u, 22f * u), style = st)
+            val path = Path().apply {
+                moveTo(cx + 13f * u, cy)
+                lineTo(cx + 30f * u, cy - 12f * u)
+                lineTo(cx + 30f * u, cy + 12f * u)
+                close()
+            }
+            drawPath(path, col, style = st)
+            drawCircle(col, radius = 2.6f * u, center = pt(-17f, -3f))
+        }
+        LyricIcon.MOUNTAIN -> {
+            val path = Path().apply {
+                moveTo(cx - 32f * u, cy + 22f * u)
+                lineTo(cx - 8f * u, cy - 16f * u)
+                lineTo(cx + 9f * u, cy + 22f * u)
+                moveTo(cx - 3f * u, cy + 22f * u)
+                lineTo(cx + 17f * u, cy - 5f * u)
+                lineTo(cx + 32f * u, cy + 22f * u)
+            }
+            drawPath(path, col, style = st)
+        }
+        LyricIcon.WIND -> {
+            val path = Path().apply {
+                moveTo(cx - 30f * u, cy - 13f * u)
+                lineTo(cx + 6f * u, cy - 13f * u)
+                quadraticBezierTo(cx + 27f * u, cy - 13f * u, cx + 25f * u, cy - 24f * u)
+                quadraticBezierTo(cx + 23f * u, cy - 32f * u, cx + 15f * u, cy - 28f * u)
+                moveTo(cx - 30f * u, cy + 2f * u)
+                lineTo(cx + 14f * u, cy + 2f * u)
+                quadraticBezierTo(cx + 31f * u, cy + 2f * u, cx + 29f * u, cy - 7f * u)
+                quadraticBezierTo(cx + 27f * u, cy - 14f * u, cx + 20f * u, cy - 11f * u)
+                moveTo(cx - 30f * u, cy + 17f * u)
+                lineTo(cx + 2f * u, cy + 17f * u)
+            }
+            drawPath(path, col, style = st)
+        }
+    }
+}
+
 /** PV入場の8方向（上・右上・右・右下・下・左下・左・左上） */
+/** PVでカタカナ語の下に小さく添える英単語（歌詞でよく出る語だけの内蔵対応表） */
+private val KATAKANA_EN = mapOf(
+    "ハート" to "HEART", "ラブ" to "LOVE", "キス" to "KISS", "ドリーム" to "DREAM",
+    "ライト" to "LIGHT", "ナイト" to "NIGHT", "スター" to "STAR", "ムーン" to "MOON",
+    "スカイ" to "SKY", "ミュージック" to "MUSIC", "ソング" to "SONG", "ダンス" to "DANCE",
+    "ロック" to "ROCK", "ポップ" to "POP", "ビート" to "BEAT", "リズム" to "RHYTHM",
+    "メロディ" to "MELODY", "ハーモニー" to "HARMONY", "ボイス" to "VOICE", "サウンド" to "SOUND",
+    "ワールド" to "WORLD", "ライフ" to "LIFE", "タイム" to "TIME", "モーメント" to "MOMENT",
+    "メモリー" to "MEMORY", "ストーリー" to "STORY", "フューチャー" to "FUTURE", "プロミス" to "PROMISE",
+    "シークレット" to "SECRET", "ミステリー" to "MYSTERY", "マジック" to "MAGIC", "パワー" to "POWER",
+    "エナジー" to "ENERGY", "ファイア" to "FIRE", "ウォーター" to "WATER", "レイン" to "RAIN",
+    "スノー" to "SNOW", "フラワー" to "FLOWER", "バタフライ" to "BUTTERFLY", "エンジェル" to "ANGEL",
+    "デビル" to "DEVIL", "ゴースト" to "GHOST", "シャドウ" to "SHADOW", "シャイン" to "SHINE",
+    "ダーク" to "DARK", "カラー" to "COLOR", "ブルー" to "BLUE", "ピンク" to "PINK",
+    "ブラック" to "BLACK", "ホワイト" to "WHITE", "ゴールド" to "GOLD", "シルバー" to "SILVER",
+    "クリスタル" to "CRYSTAL", "ダイヤモンド" to "DIAMOND", "プラズマ" to "PLASMA", "ブラックアウト" to "BLACKOUT",
+    "テレビ" to "TV", "ラジオ" to "RADIO", "ゲーム" to "GAME", "ヒーロー" to "HERO",
+    "クイーン" to "QUEEN", "プリンセス" to "PRINCESS", "ベイビー" to "BABY", "ダーリン" to "DARLING",
+    "ハニー" to "HONEY", "フレンド" to "FRIEND", "ラバー" to "LOVER", "エンド" to "END",
+    "スタート" to "START", "ゴール" to "GOAL", "ドア" to "DOOR", "キー" to "KEY",
+    "ロード" to "ROAD", "シティ" to "CITY", "ホーム" to "HOME", "ミラー" to "MIRROR",
+    "スマイル" to "SMILE", "ソウル" to "SOUL", "マインド" to "MIND", "ステージ" to "STAGE",
+    "ライブ" to "LIVE", "パーティ" to "PARTY", "カフェ" to "CAFE", "ホテル" to "HOTEL",
+    "レター" to "LETTER", "カード" to "CARD", "チケット" to "TICKET", "ドレス" to "DRESS",
+    "リング" to "RING", "ブック" to "BOOK", "シーズン" to "SEASON", "サマー" to "SUMMER",
+    "ウィンター" to "WINTER", "モーニング" to "MORNING", "ミッドナイト" to "MIDNIGHT", "トゥモロー" to "TOMORROW",
+    "イエスタデイ" to "YESTERDAY", "フォーエバー" to "FOREVER", "パラダイス" to "PARADISE", "ヘブン" to "HEAVEN",
+    "アース" to "EARTH", "オーシャン" to "OCEAN", "リバー" to "RIVER", "フォレスト" to "FOREST"
+)
+
 private val PV_ENTRY_DIRS = listOf(
     0f to -1f, 0.72f to -0.72f, 1f to 0f, 0.72f to 0.72f,
     0f to 1f, -0.72f to 0.72f, -1f to 0f, -0.72f to -0.72f
@@ -2479,6 +2759,7 @@ private fun PvLyricLine(
 ) {
     val pvEaseIn = CubicBezierEasing(0.42f, 0f, 1f, 1f)
     // 改行位置は塊（文節・英単語）の境界で決める。描画とアニメーションは文字ごと（英単語だけ単語ごと）
+    val lineIconKind = LYRIC_ICON_WORDS.firstOrNull { text.contains(it.first) }?.second
     val chunks = remember(text) { splitLyricUnits(text) }
     if (chunks.isEmpty()) return
     fun isLatinWord(c: String): Boolean = c.isNotEmpty() && c.all { it.code < 0x300 }
@@ -2622,6 +2903,19 @@ private fun PvLyricLine(
                     )
                 }
             }
+            if (rowIdx == rows.lastIndex && !exiting && lineIconKind != null) {
+                Spacer(Modifier.width((fitSize * 0.20f).dp))
+                Canvas(
+                    modifier = Modifier
+                        .size((fitSize * 0.52f).dp)
+                        .graphicsLayer {
+                            alpha = underline.value.coerceIn(0f, 1f)
+                            rotationZ = -9f
+                        }
+                ) {
+                    drawLyricIcon(lineIconKind)
+                }
+            }
         }
             if (effectKind == 2) {
                 // 白い四角が文字の上を左から右へしゅっと塗り、そのまま右へしゅっと消える
@@ -2748,6 +3042,7 @@ private fun PvLyricUnit(
                 shadow = Shadow(color = accentColor.copy(alpha = 0.85f), blurRadius = 22f)
             )
         )
+        val enCaption = if (!exiting && unitText.length > 1 && unitText.all { it in 'ァ'..'ヶ' || it == 'ー' || it == '・' }) KATAKANA_EN[unitText] else null
         if (!exiting && effectKind == 0) {
             Spacer(modifier = Modifier.height(3.dp))
             val ulv = ulAnim.value
@@ -2763,6 +3058,18 @@ private fun PvLyricUnit(
                     )
                 }
             }
+        }
+        if (enCaption != null) {
+            Text(
+                text = enCaption,
+                color = accentColor.copy(alpha = 0.85f),
+                fontSize = (uSize.value * 0.30f).sp,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = (uSize.value * 0.12f).sp,
+                maxLines = 1,
+                style = LocalTextStyle.current.copy(fontFamily = fontFamily),
+                modifier = Modifier.padding(top = 2.dp)
+            )
         }
     }
 }
