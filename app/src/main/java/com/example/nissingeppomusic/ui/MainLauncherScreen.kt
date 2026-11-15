@@ -24,6 +24,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import android.view.HapticFeedbackConstants
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -40,6 +41,9 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -2198,6 +2202,15 @@ private fun PvLyricLine(
         }
     }
     val r = retire.value
+    // 下線: 文字の入場が完了したら、左から右へ伸びて（イーズアウト）、すぐに左から右へ消える（イーズイン）
+    val underline = remember { Animatable(0f) }
+    if (!residual) {
+        LaunchedEffect(Unit) {
+            delay((charCount - 1) * 45L + 380L)
+            underline.animateTo(1f, animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing))
+            underline.animateTo(2f, animationSpec = tween(durationMillis = 320, easing = pvEaseIn))
+        }
+    }
     Box(
         modifier = modifier
             .offset(x = lineOffsetX, y = lineOffsetY + (-85f * r).dp)
@@ -2210,6 +2223,7 @@ private fun PvLyricLine(
                 alpha = 1f - 0.62f * r
             }
     ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             text.forEachIndexed { ci, ch ->
                 val chSeed = Math.floorMod(baseSeed * 7 + ci * 131, 997)
@@ -2252,6 +2266,23 @@ private fun PvLyricLine(
                     )
                 )
             }
+        }
+        if (!residual) {
+            Spacer(modifier = Modifier.height(7.dp))
+            val ulv = underline.value
+            Canvas(modifier = Modifier.fillMaxWidth().height(3.dp)) {
+                val startFrac = if (ulv <= 1f) 0f else ulv - 1f
+                val endFrac = if (ulv <= 1f) ulv else 1f
+                if (endFrac > startFrac) {
+                    drawRoundRect(
+                        color = accentColor.copy(alpha = 0.9f),
+                        topLeft = Offset(size.width * startFrac, 0f),
+                        size = Size(size.width * (endFrac - startFrac), size.height),
+                        cornerRadius = CornerRadius(size.height / 2f, size.height / 2f)
+                    )
+                }
+            }
+        }
         }
     }
 }
