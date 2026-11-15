@@ -2194,27 +2194,24 @@ private fun PvLyricLine(
     modifier: Modifier = Modifier
 ) {
     val pvEaseIn = CubicBezierEasing(0.42f, 0f, 1f, 1f)
-    val baseFontSize = (26 + (baseSeed % 4) * 7).toFloat()
+    val baseFontSize = (40 + (baseSeed % 4) * 10).toFloat()
     val charCount = text.length.coerceAtLeast(1)
-    val fitSize = minOf(baseFontSize, (screenWidthDp - 56f) / (charCount * 1.15f))
+    // 画面の横幅ギリギリまで大きくする
+    val fitSize = minOf(baseFontSize, (screenWidthDp - 12f) / (charCount * 1.05f))
     val lineOffsetX = ((baseSeed / 7) % 51 - 25).dp
     val lineOffsetY = ((baseSeed / 11) % 61 - 30).dp
-    val rotationTarget = ((baseSeed / 4) % 29 - 14).toFloat()
-    val lineRot = remember { Animatable(0f) }
-    LaunchedEffect(Unit) {
-        if (exiting) {
-            lineRot.snapTo(rotationTarget)
-            lineRot.animateTo(rotationTarget + 6f, animationSpec = tween(durationMillis = 500, easing = pvEaseIn))
-        } else {
-            lineRot.snapTo(rotationTarget - 7f)
-            lineRot.animateTo(rotationTarget, animationSpec = tween(durationMillis = 550, easing = FastOutSlowInEasing))
+    // 退場は1本の時計（exitProgress）で全文字を駆動する。文字ごとのAnimatableだと
+    // スケジューリングのブレでカクつくため、位相だけ文字ごとにずらす
+    val exitProgress = remember { Animatable(0f) }
+    if (exiting) {
+        LaunchedEffect(Unit) {
+            exitProgress.animateTo(1f, animationSpec = tween(durationMillis = 720, easing = LinearEasing))
         }
     }
-    // 下線: 文字の入場が完了したら、左から右へ伸びて（イーズアウト）、すぐに左から右へ消える（イーズイン）
+    // 下線: 文字の入場と同時に、左から右へ伸びて（イーズアウト）、すぐに左から右へ消える（イーズイン）
     val underline = remember { Animatable(0f) }
     if (!exiting) {
         LaunchedEffect(Unit) {
-            delay((charCount - 1) * 45L + 380L)
             underline.animateTo(1f, animationSpec = tween(durationMillis = 320, easing = FastOutSlowInEasing))
             underline.animateTo(2f, animationSpec = tween(durationMillis = 320, easing = pvEaseIn))
         }
@@ -2222,7 +2219,10 @@ private fun PvLyricLine(
     Box(
         modifier = modifier
             .offset(x = lineOffsetX, y = lineOffsetY)
-            .graphicsLayer { rotationZ = lineRot.value }
+            .graphicsLayer {
+                // 退場の最後は行ごとフェードアウトして残像を残さない
+                alpha = if (exiting) 1f - ((exitProgress.value - 0.6f) / 0.4f).coerceIn(0f, 1f) else 1f
+            }
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
@@ -2237,21 +2237,18 @@ private fun PvLyricLine(
                 val chSize = (fitSize * (0.85f + (chSeed % 30) / 100f) * scriptFactor).sp
                 val chRot = ((chSeed / 3) % 17 - 8).toFloat()
                 val chYOffset = ((chSeed / 5) % 13 - 6).dp
-                val chAnim = remember(ci) { Animatable(if (exiting) 1f else 0f) }
-                LaunchedEffect(ci) {
-                    if (exiting) {
-                        // 退場は文字ごとにバラバラの遅延（シード由来）で、イーズインで落ちながら消える
-                        delay((chSeed % 5) * 35L + ci * 12L)
-                        chAnim.animateTo(0f, animationSpec = tween(durationMillis = 300, easing = pvEaseIn))
-                    } else {
+                val chAnim = remember(ci) { Animatable(0f) }
+                if (!exiting) {
+                    LaunchedEffect(ci) {
                         delay(ci * 45L)
                         chAnim.animateTo(1f, animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing))
                     }
                 }
-                val a = chAnim.value
+                // 退場の文字ごとの遅延（ミリ秒換算）。位相は exitProgress から計算する
+                val exitDelayMs = (chSeed % 5) * 35f + ci * 12f
                 Text(
                     text = ch.toString(),
-                    color = Color.White.copy(alpha = 0.92f * a),
+                    color = Color.White.copy(alpha = 0.92f),
                     fontSize = chSize,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
@@ -2260,12 +2257,17 @@ private fun PvLyricLine(
                         .offset(y = chYOffset)
                         .graphicsLayer {
                             if (exiting) {
+                                val localX = ((exitProgress.value * 720f - exitDelayMs) / 320f).coerceIn(0f, 1f)
+                                val a = 1f - pvEaseIn.transform(localX)
+                                alpha = a
                                 val es = 0.5f + 0.5f * a
                                 scaleX = es
                                 scaleY = es
                                 rotationZ = chRot * (2f - a)
                                 translationY = (1f - a) * 30f
                             } else {
+                                val a = chAnim.value
+                                alpha = a
                                 val ns = 0.6f + 0.4f * a
                                 scaleX = ns
                                 scaleY = ns
