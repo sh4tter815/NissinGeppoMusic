@@ -2298,16 +2298,20 @@ private fun PvLyricLine(
     }
     Box(
         modifier = modifier
+            .fillMaxWidth()
             .offset(x = lineOffsetX, y = lineOffsetY)
             .graphicsLayer {
                 // 退場の最後は行ごとフェードアウトして残像を残さない
                 alpha = if (exiting) 1f - ((exitProgress.value - 0.6f) / 0.4f).coerceIn(0f, 1f) else 1f
             }
     ) {
-        Column(horizontalAlignment = Alignment.Start) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth()
+        ) {
         rows.forEach { rowUnits ->
         Row(
-            horizontalArrangement = Arrangement.Start,
+            horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
             modifier = if (rowUnits.first() > 0) Modifier.padding(start = row2Indent, top = 6.dp) else Modifier
         ) {
@@ -2319,12 +2323,12 @@ private fun PvLyricLine(
                 val uSeed = Math.floorMod(baseSeed * 7 + ui * 131, 997)
                 val scriptFactor = when {
                     unit.length > 1 || unit[0].code < 0x300 -> 0.98f
-                    unit[0] in '一'..'鿿' || unit[0] == '々' || unit[0] == '〆' || unit[0] == 'ヶ' -> 1.12f
-                    unit[0] in 'ぁ'..'ゟ' -> 0.88f
-                    unit[0] in '゠'..'ヿ' -> 1.0f
+                    unit[0] in '一'..'鿿' || unit[0] == '々' || unit[0] == '〆' || unit[0] == 'ヶ' -> 1.25f
+                    unit[0] in 'ぁ'..'ゟ' -> 0.82f
+                    unit[0] in '゠'..'ヿ' -> 1.05f
                     else -> 0.95f
                 }
-                val uSize = (fitSize * (0.7f + (uSeed % 80) / 100f) * scriptFactor).sp
+                val uSize = (fitSize * (0.85f + (uSeed % 40) / 100f) * scriptFactor).sp
                 val uRot = ((uSeed / 3) % 29 - 14).toFloat()
                 val uYOffset = ((uSeed / 5) % 29 - 14).dp
                 val uAnim = remember(ui) { Animatable(0f) }
@@ -2339,8 +2343,15 @@ private fun PvLyricLine(
                 val unitText = remember(unit, uSize) {
                     buildAnnotatedString {
                         for (ch in unit) {
-                            if (ch in "ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ") {
-                                withStyle(SpanStyle(fontSize = uSize * 0.6f)) { append(ch) }
+                            val charFactor = when {
+                                ch in "ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ" -> 0.6f
+                                ch in '一'..'鿿' || ch == '々' || ch == '〆' || ch == 'ヶ' -> 1.18f
+                                ch in 'ぁ'..'ゟ' -> 0.94f
+                                ch in '゠'..'ヿ' -> 1.02f
+                                else -> 1.0f
+                            }
+                            if (charFactor != 1.0f) {
+                                withStyle(SpanStyle(fontSize = uSize * charFactor)) { append(ch) }
                             } else {
                                 append(ch)
                             }
