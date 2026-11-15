@@ -36,6 +36,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.nissingeppomusic.data.AppRepository
+import com.example.nissingeppomusic.ui.components.parseFontFamily
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
@@ -185,7 +186,7 @@ fun FontSelectionSection(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(currentLabel, fontSize = 14.sp)
+                    Text(currentLabel, fontSize = 15.sp, fontFamily = parseFontFamily(currentFontChoice, if (currentFontChoice == "custom") customFontPath else null))
                     Text("▼", fontSize = 12.sp)
                 }
             }
@@ -196,7 +197,14 @@ fun FontSelectionSection(
             ) {
                 fontOptions.forEach { (key, label) ->
                     DropdownMenuItem(
-                        text = { Text(label, color = Color.White) },
+                        text = { Text(label, color = Color.White, fontSize = 15.sp, fontFamily = parseFontFamily(key, if (key == "custom") customFontPath else null)) },
+                        leadingIcon = {
+                            RadioButton(
+                                selected = key == currentFontChoice,
+                                onClick = null,
+                                colors = RadioButtonDefaults.colors(selectedColor = Color.White, unselectedColor = Color.Gray)
+                            )
+                        },
                         onClick = {
                             onFontSelected(key)
                             expanded = false
@@ -844,13 +852,10 @@ fun SettingsScreen(
                                                                 "receipt" to "レシートフォント (Receipt Font)",
                                                                 "denkichip" to "でんきチップ (DenkiChip)",
                                                                 "tsukuhou" to "築豊明朝 (Tsukuhou Mincho)",
-        "tsukuhou" to "築豊明朝 (Tsukuhou Mincho)",
                                                                 "custom" to "カスタムフォント (.ttf/.otf)"
                                                             ).forEach { (key, label) ->
-                                                                Text(
-                                                                    text = (if (lyricsPvFont == key) "● " else "○ ") + label,
-                                                                    color = if (lyricsPvFont == key) currentAccentColor else Color.White.copy(alpha = 0.75f),
-                                                                    fontSize = 13.sp,
+                                                                Row(
+                                                                    verticalAlignment = Alignment.CenterVertically,
                                                                     modifier = Modifier
                                                                         .fillMaxWidth()
                                                                         .clickable {
@@ -858,8 +863,20 @@ fun SettingsScreen(
                                                                             repo.prefManager.setLyricsPvFont(key)
                                                                             onChanged()
                                                                         }
-                                                                        .padding(vertical = 4.dp)
-                                                                )
+                                                                        .padding(vertical = 2.dp)
+                                                                ) {
+                                                                    RadioButton(
+                                                                        selected = lyricsPvFont == key,
+                                                                        onClick = null,
+                                                                        colors = RadioButtonDefaults.colors(selectedColor = currentAccentColor, unselectedColor = Color.Gray)
+                                                                    )
+                                                                    Text(
+                                                                        text = label,
+                                                                        color = if (lyricsPvFont == key) currentAccentColor else Color.White.copy(alpha = 0.8f),
+                                                                        fontSize = 15.sp,
+                                                                        fontFamily = parseFontFamily(key, if (key == "custom") customFontPath else null)
+                                                                    )
+                                                                }
                                                             }
                                                             Text("「カスタムフォント」はフォント設定で選んだファイルを使います", color = Color.Gray, fontSize = 12.sp)
                                                     }

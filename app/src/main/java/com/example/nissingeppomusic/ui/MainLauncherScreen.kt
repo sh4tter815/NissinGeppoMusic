@@ -422,6 +422,16 @@ fun MainLauncherScreen() {
     var lyricsSongUri by remember { mutableStateOf<String?>(null) }
     var lyricsLoading by remember { mutableStateOf(false) }
     var lyricsNotFound by remember { mutableStateOf(false) }
+    // 歌詞が見つからなかった曲は、その曲の間だけ歌詞表示をオフにする（曲が変われば自動で再検索）
+    var lyricsDisabledUri by remember { mutableStateOf<String?>(null) }
+    var notFoundMsgVisible by remember { mutableStateOf(false) }
+    LaunchedEffect(lyricsDisabledUri) {
+        if (lyricsDisabledUri != null) {
+            notFoundMsgVisible = true
+            delay(4000)
+            notFoundMsgVisible = false
+        }
+    }
     LaunchedEffect(showLyrics, musicPlayerManager.currentSongUri, lyricsRefreshTick) {
         val uri = musicPlayerManager.currentSongUri
         if (showLyrics && uri != null && uri != lyricsSongUri) {
@@ -448,6 +458,7 @@ fun MainLauncherScreen() {
             lyricsLines = result
             lyricsSongUri = uri
             lyricsNotFound = result == null
+            if (result == null) lyricsDisabledUri = uri else if (lyricsDisabledUri == uri) lyricsDisabledUri = null
             lyricsLoading = false
         }
     }
@@ -805,6 +816,20 @@ fun MainLauncherScreen() {
                 }
             }
 
+            if (showLyrics && currentLauncherPage == 1 && !isLyricsBrowsing && notFoundMsgVisible && lyricsDisplayMode != "line") {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(top = 215.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "歌詞が見つかりませんでした",
+                        color = Color.White.copy(alpha = 0.55f),
+                        fontSize = 15.sp,
+                        style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily)
+                    )
+                }
+            }
+
             // 複数行モード: 円を下げてできた上の空白に、前・今・次の3行を表示（今の行が大きめ）
             if (lyricsDisplayMode == "multi" && showLyrics && currentLauncherPage == 1 && !isLyricsBrowsing) {
                 val multiLines = lyricsLines
@@ -981,9 +1006,9 @@ fun MainLauncherScreen() {
                                         )
                                     }
                                 }
-                                lyricsNotFound -> {
+                                lyricsNotFound && notFoundMsgVisible -> {
                                     Text(
-                                        text = "同期歌詞が見つかりませんでした",
+                                        text = "歌詞が見つかりませんでした",
                                         color = Color.White.copy(alpha = 0.45f),
                                         fontSize = 12.sp,
                                         letterSpacing = 1.0.sp,
@@ -2505,7 +2530,9 @@ private fun PvLyricLine(
     val rippleAnim = remember { Animatable(0f) }
     if (!exiting) {
         LaunchedEffect(Unit) {
-            barAnim.animateTo(1f, animationSpec = tween(durationMillis = 520, easing = FastOutSlowInEasing))
+            barAnim.animateTo(1f, animationSpec = tween(durationMillis = 340, easing = FastOutSlowInEasing))
+            delay(130)
+            barAnim.animateTo(2f, animationSpec = tween(durationMillis = 400, easing = FastOutSlowInEasing))
             rippleAnim.animateTo(1f, animationSpec = tween(durationMillis = 1150, easing = LinearEasing))
         }
     }
@@ -2555,16 +2582,6 @@ private fun PvLyricLine(
         val unitsInRow = rowChunks.sumOf { renderUnitsOf(it).size }
         var rowUnitIdx = 0
         Box {
-            if (effectKind == 2) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .fillMaxWidth(barAnim.value.coerceIn(0f, 1f))
-                        .height((fitSize * 1.32f).dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(Color.Black.copy(alpha = 0.5f * (if (exiting) 1f - exitProgress.value else 1f)))
-                )
-            }
         Row(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
@@ -2606,6 +2623,23 @@ private fun PvLyricLine(
                 }
             }
         }
+            if (effectKind == 2) {
+                // 白い四角が文字の上を左から右へしゅっと塗り、そのまま右へしゅっと消える
+                val bv = barAnim.value
+                if (bv > 0f && bv < 2f) {
+                    Canvas(modifier = Modifier.matchParentSize()) {
+                        val frac = if (bv <= 1f) bv else 2f - bv
+                        val xOff = if (bv <= 1f) 0f else (bv - 1f) * size.width
+                        val barH = size.height * 0.96f
+                        drawRoundRect(
+                            color = Color.White.copy(alpha = 0.92f),
+                            topLeft = Offset(xOff, (size.height - barH) / 2f),
+                            size = Size(frac * size.width, barH),
+                            cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
+                        )
+                    }
+                }
+            }
         }
         }
         }
@@ -2642,8 +2676,8 @@ private fun PvLyricUnit(
             sway.animateTo(
                 1f,
                 animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 1300 + (uSeed % 5) * 230, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse
+                    animation = tween(durationMillis = 2400 + (uSeed % 5) * 380, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart
                 )
             )
         }
@@ -2692,8 +2726,10 @@ private fun PvLyricUnit(
                     rotationZ = uRot * a
                     // 入場は単位ごとにバラバラの方向（8方向）から飛んでくる
                     val dir = PV_ENTRY_DIRS[Math.floorMod(uSeed * 131 + 7, 8)]
-                    val swx = (sway.value - 0.5f) * 3.2f
-                    val swy = (0.5f - sway.value) * 2.6f
+                    // 波に乗るような揺れ: サイン波でなめらかに、位相は文字ごとにずらす
+                    val ph = sway.value * 6.2832f + (uSeed % 7) * 0.9f
+                    val swx = sin(ph) * 3.4f
+                    val swy = sin(ph + 1.3f) * 2.6f
                     translationX = dir.first * 52f * (1f - a) + swx * a
                     translationY = dir.second * 52f * (1f - a) + swy * a
                 }
