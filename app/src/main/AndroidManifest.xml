@@ -36,6 +36,7 @@
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|keyboardHidden"
             android:theme="@style/Theme.NissinGeppoLauncher"
             android:windowSoftInputMode="adjustResize">
             <!-- アプリ起動・ホーム画面 -->
