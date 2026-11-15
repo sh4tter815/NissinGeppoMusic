@@ -1204,6 +1204,20 @@ fun MainLauncherScreen() {
                                     }
                                 }
                         ) {
+                            // 明るい背景（液体やアートワーク）でも歌詞が読めるよう、薄い暗幕を敷く
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.verticalGradient(
+                                            listOf(
+                                                Color.Black.copy(alpha = 0.34f),
+                                                Color.Black.copy(alpha = 0.48f),
+                                                Color.Black.copy(alpha = 0.40f)
+                                            )
+                                        )
+                                    )
+                            )
                             val centerYDp = maxHeight.value / 2f
                             val densityNow = LocalDensity.current
                             // 折り返した行は高さが変わるので、実測した行高で累積配置する
@@ -1232,7 +1246,7 @@ fun MainLauncherScreen() {
                                 val myHeightDp = (lineHeightsPx[idx]?.let { it / densityNow.density } ?: 34f)
                                 Text(
                                     text = lines[idx].text,
-                                    color = if (isFocusedLine) accentColor else Color.White.copy(alpha = 0.75f * fade),
+                                    color = if (isFocusedLine) Color.White else Color.White.copy(alpha = 0.92f * fade),
                                     fontSize = fitFontSizeSp(lines[idx].text, if (isFocusedLine) 26f else 15f, maxWidth.value * 0.85f).sp,
                                     fontWeight = if (isFocusedLine) lyricWeight else FontWeight.Normal,
                                     letterSpacing = 1.0.sp,
@@ -1240,7 +1254,7 @@ fun MainLauncherScreen() {
                                     maxLines = 1,
                                     style = LocalTextStyle.current.copy(
                                         fontFamily = lyricsFontFamily,
-                                        shadow = if (accentGlow && isFocusedLine) Shadow(color = accentColor, blurRadius = 14f) else null
+                                        shadow = if (accentGlow && isFocusedLine) Shadow(color = accentColor, blurRadius = 14f) else Shadow(color = Color.Black.copy(alpha = 0.75f), blurRadius = 10f)
                                     ),
                                     modifier = Modifier
                                         .offset(
@@ -1520,6 +1534,9 @@ fun MainLauncherScreen() {
                                 selectedAlbumFilter = app.packageName.removePrefix("album::")
                             } else if (app.packageName.startsWith("artist::")) {
                                 selectedArtistFilter = app.packageName.removePrefix("artist::")
+                            } else if (searchQuery.isNotBlank() && !isHideMode) {
+                                // 検索結果から再生しても、キューは検索結果ではなく全曲にする
+                                onAppClick(app.packageName, allApps.filter { !it.isHidden })
                             } else {
                                 onAppClick(app.packageName, displayedApps)
                             }
