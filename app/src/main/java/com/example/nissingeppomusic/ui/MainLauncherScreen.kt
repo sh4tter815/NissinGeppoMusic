@@ -399,18 +399,20 @@ fun MainLauncherScreen() {
             lyricsLoading = true
             lyricsNotFound = false
             val song = allApps.firstOrNull { it.packageName == uri }
-            // 曲の長さがまだ分からないと歌詞の照合精度が落ちるため、最大2秒だけ待つ
+            // 選曲直後は「前の曲の長さ」が残っていて、それを使うと別曲・別バージョンの歌詞を
+            // 掴む誤照合の原因になる。この曲の長さが確定するまで最大2秒だけ待つ
             var waitedMs = 0
-            while (musicPlayerManager.duration <= 0L && waitedMs < 2000) {
+            while (waitedMs < 2000 && !(musicPlayerManager.durationSongUri == uri && musicPlayerManager.duration > 0L)) {
                 delay(100)
                 waitedMs += 100
             }
+            val fetchDurationMs = if (musicPlayerManager.durationSongUri == uri) musicPlayerManager.duration else 0L
             val result = LyricsManager.getSyncedLyrics(
                 context = context,
                 title = musicPlayerManager.currentTitle,
                 artist = musicPlayerManager.currentArtist,
                 album = musicPlayerManager.currentAlbum,
-                durationMs = musicPlayerManager.duration,
+                durationMs = fetchDurationMs,
                 filePath = song?.filePath
             )
             lyricsLines = result
@@ -536,11 +538,17 @@ fun MainLauncherScreen() {
     val isBigDiscLayout = currentLauncherPage == 1 &&
         (homeDiscLayout == "artwork" || (homeDiscLayout == "auto" && musicPlayerManager.isPlaying))
     val activeDisc1CenterX = if (isBigDiscLayout) disc1CenterXHome else disc1CenterXNormal
-    val disc1CenterY = screenHeightDp * 0.50f
+    // PV表示中は左右の円盤を少し下げて、上の歌詞文字と被らないようにする
+    val pvDiscShiftY by animateFloatAsState(
+        targetValue = if (lyricsPvMode && showLyrics && currentLauncherPage == 1 && !isLyricsBrowsing && lyricsLines != null) 64f else 0f,
+        animationSpec = tween(durationMillis = 450, easing = FastOutSlowInEasing),
+        label = "pvDiscShiftY"
+    )
+    val disc1CenterY = screenHeightDp * 0.50f + pvDiscShiftY
 
     val disc2RadiusDp = 165f
     val disc2CenterX = screenWidthDp + 80f
-    val disc2CenterY = screenHeightDp * 0.50f
+    val disc2CenterY = screenHeightDp * 0.50f + pvDiscShiftY
 
     // --- 左側（索引ダイヤル）の状態管理 ---
     val leftRotationAnim = remember { Animatable(0f) }
