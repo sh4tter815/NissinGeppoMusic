@@ -2431,7 +2431,15 @@ private fun PvLyricLine(
     val chunks = remember(text) { splitLyricUnits(text) }
     if (chunks.isEmpty()) return
     fun isLatinWord(c: String): Boolean = c.isNotEmpty() && c.all { it.code < 0x300 }
-    fun chunkEm(c: String): Float = c.fold(0f) { acc, ch -> acc + if (ch.code < 0x300) 0.6f else 1.0f }
+    fun charEm(ch: Char): Float = when {
+        ch in "ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ" -> 0.6f
+        ch in '一'..'鿿' || ch == '々' || ch == '〆' || ch == 'ヶ' -> 1.25f
+        ch in 'ぁ'..'ゟ' -> 0.82f
+        ch in '゠'..'ヿ' -> 1.05f
+        ch.code < 0x300 -> 0.6f
+        else -> 0.98f
+    }
+    fun chunkEm(c: String): Float = c.fold(0f) { acc, ch -> acc + charEm(ch) * 1.02f }
     val latinDominant = text.count { it.code in 0x41..0x7A } > text.count { it.code >= 0x300 }
     val gapEm = if (latinDominant) 0.32f else 0f
     // 基本2行構成: 塊の境界の中で、左右のemが一番均等になる位置で割る
@@ -2452,10 +2460,9 @@ private fun PvLyricLine(
         else listOf(chunks.subList(0, splitIdx), chunks.subList(splitIdx, chunks.size))
     fun rowEm(row: List<String>): Float = row.sumOf { chunkEm(it).toDouble() }.toFloat() + gapEm * (row.size - 1).coerceAtLeast(0)
     val longestRowEm = rows.maxOf { rowEm(it) }.coerceAtLeast(1f)
-    val baseFontSize = (40 + (baseSeed % 4) * 10).toFloat()
-    // 横は余白ギリギリまで、縦は円に被らない範囲で最大化
+    // 行ごとの大きさを均等に: どの行も「枠いっぱいに広がるサイズ」を基本にし、短い行だけ高さ上限で止める
     val heightCap = if (rows.size >= 2) 52f else 64f
-    val fitSize = minOf(baseFontSize, (screenWidthDp - 8f) / (longestRowEm * 1.04f), heightCap)
+    val fitSize = minOf((screenWidthDp - 8f) / (longestRowEm * 1.06f), heightCap)
     val lineOffsetX = ((baseSeed / 7) % 17 - 8).dp
     val lineOffsetY = ((baseSeed / 11) % 13 - 6).dp
     val row2Indent = ((baseSeed / 13) % 4 * 14).dp
