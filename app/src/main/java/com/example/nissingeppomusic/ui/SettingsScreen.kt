@@ -252,6 +252,7 @@ fun SettingsScreen(
     var homeDiscLayout by remember { mutableStateOf(repo.prefManager.getHomeDiscLayout()) }
     var liquidBackground by remember { mutableStateOf(repo.prefManager.isLiquidBackgroundEnabled()) }
     var lyricsPvMode by remember { mutableStateOf(repo.prefManager.isLyricsPvMode()) }
+    var lyricsPvFont by remember { mutableStateOf(repo.prefManager.getLyricsPvFont()) }
     var wallpaperAlpha by remember { mutableFloatStateOf(repo.prefManager.getHomeWallpaperAlpha()) }
     var showPasscodeChangeDialog by remember { mutableStateOf(false) }
     var newPasscodeField by remember { mutableStateOf(repo.prefManager.getPasscode()) }
@@ -809,7 +810,7 @@ fun SettingsScreen(
                                                     ) {
                                                         Column(modifier = Modifier.weight(1f)) {
                                                             Text("歌詞を背景に大きく表示（文字PV風）", color = Color.White, fontSize = 14.sp)
-                                                            Text("歌詞表示ONのとき、再生中の歌詞を画面の中央に大きく表示します", color = Color.Gray, fontSize = 12.sp)
+                                                            Text("歌詞表示ONのとき、再生中の歌詞を背景に大きく表示します（大きさ・傾き・位置は行ごとに変わります）", color = Color.Gray, fontSize = 12.sp)
                                                         }
                                                         Switch(
                                                             checked = lyricsPvMode,
@@ -820,6 +821,32 @@ fun SettingsScreen(
                                                             },
                                                             colors = switchColors
                                                         )
+                                                    }
+                                                    if (lyricsPvMode) {
+                                                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                                            Text("PV表示のフォント", color = Color.White, fontSize = 14.sp)
+                                                            listOf(
+                                                                "default" to "デフォルトフォント (Default)",
+                                                                "receipt" to "レシートフォント (Receipt Font)",
+                                                                "denkichip" to "DenkiChip (x8y12pxDenkiChip)",
+                                                                "custom" to "カスタムフォント (.ttf/.otf)"
+                                                            ).forEach { (key, label) ->
+                                                                Text(
+                                                                    text = (if (lyricsPvFont == key) "● " else "○ ") + label,
+                                                                    color = if (lyricsPvFont == key) currentAccentColor else Color.White.copy(alpha = 0.75f),
+                                                                    fontSize = 13.sp,
+                                                                    modifier = Modifier
+                                                                        .fillMaxWidth()
+                                                                        .clickable {
+                                                                            lyricsPvFont = key
+                                                                            repo.prefManager.setLyricsPvFont(key)
+                                                                            onChanged()
+                                                                        }
+                                                                        .padding(vertical = 4.dp)
+                                                                )
+                                                            }
+                                                            Text("「カスタムフォント」はフォント設定で選んだファイルを使います", color = Color.Gray, fontSize = 12.sp)
+                                                        }
                                                     }
                                                 }
                                             }
