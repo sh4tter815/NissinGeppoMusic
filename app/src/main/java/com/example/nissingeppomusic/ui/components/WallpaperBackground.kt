@@ -136,7 +136,7 @@ fun WallpaperBackground(
  * パレットは基準色から色相をずらして作る。
  */
 @Composable
-private fun LiquidGradientBackground(baseColor: Color, onBlack: Boolean = true, layerAlpha: Float = 1f, alphaBoost: Float = 1f) {
+fun LiquidGradientBackground(baseColor: Color, onBlack: Boolean = true, layerAlpha: Float = 1f, alphaBoost: Float = 1f) {
     val transition = rememberInfiniteTransition(label = "liquid")
     val t1 by transition.animateFloat(
         initialValue = 0f, targetValue = 1f,

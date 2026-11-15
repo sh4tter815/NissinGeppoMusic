@@ -1847,6 +1847,10 @@ fun MainLauncherScreen() {
                 } else {
                     Box(Modifier.fillMaxSize().background(Color.Black))
                 }
+                // 横画面でも液体グラデーションを流す（設定ONのとき）
+                if (liquidBackground) {
+                    LiquidGradientBackground(baseColor = accentColor, onBlack = false, layerAlpha = 1f, alphaBoost = 1.9f)
+                }
                 if (lyricsLines == null) {
                     // 歌詞が無い曲: 左にアートワーク、右に曲名などの情報だけを出す
                     Row(
