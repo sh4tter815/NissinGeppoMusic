@@ -49,8 +49,8 @@ object LyricsManager {
     }
 
     private fun cacheKey(title: String, artist: String, album: String): String {
-        // v2: 照合ロジックを厳しくしたため、旧ロジックで保存された誤った歌詞キャッシュを使わない
-        val raw = "v2|$title|$artist|$album"
+        // v3: 照合ロジックを厳しくしたため、旧ロジックで保存された誤った歌詞キャッシュを使わない
+        val raw = "v3|$title|$artist|$album"
         val digest = MessageDigest.getInstance("MD5").digest(raw.toByteArray(Charsets.UTF_8))
         return digest.joinToString("") { "%02x".format(it) }
     }
