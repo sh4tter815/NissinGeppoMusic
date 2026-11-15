@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Kugou の曲検索APIは HTTP のみ提供されているため、このドメインだけ平文通信を許可する -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">mobilecdn.kugou.com</domain>
+    </domain-config>
+</network-security-config>
