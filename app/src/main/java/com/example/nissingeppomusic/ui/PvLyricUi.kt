@@ -664,6 +664,8 @@ fun PvLyricLine(
     val row2Indent = ((baseSeed / 13) % 4 * 14).dp
     // 退場は1本の時計（exitProgress）で全文字を駆動する（位相だけ文字ごとにずらす）
     val exitProgress = remember { Animatable(0f) }
+    // 「落」を含む行は、退場のときに文字をバラさず行ごと画面下へ落下させる
+    val fallLine = text.contains("落")
     if (exiting) {
         LaunchedEffect(Unit) {
             exitProgress.animateTo(1f, animationSpec = tween(durationMillis = 720, easing = LinearEasing))
@@ -710,6 +712,12 @@ fun PvLyricLine(
             .graphicsLayer {
                 // 退場の最後は行ごとフェードアウトして残像を残さない
                 alpha = if (exiting) 1f - ((exitProgress.value - 0.6f) / 0.4f).coerceIn(0f, 1f) else 1f
+                // 「落」の行は重力で加速しながら落ちる（少し傾きながら）
+                if (exiting && fallLine) {
+                    val fp = exitProgress.value
+                    translationY = fp * fp * 1700f
+                    rotationZ = (baseSeed % 5 - 2) * fp * 2.2f
+                }
             }
     ) {
         if (effKind == 1) {
@@ -871,7 +879,7 @@ fun PvLyricLine(
                         uXShiftDp = uXShift,
                         staggerIndex = gi,
                         exiting = exiting,
-                        exitProgressValue = exitProgress.value,
+                        exitProgressValue = if (fallLine) 0f else exitProgress.value,
                         exitDelayMs = (uSeed % 5) * 35f + gi * 12f,
                         fontFamily = fontFamily,
                         accentColor = accentColor,
@@ -970,6 +978,12 @@ fun PvLyricUnit(
     val colorHit = if (!exiting) COLOR_WORDS.firstOrNull { (word, _) ->
         if (word.all { it.code < 128 }) {
             // 英語の色名は単語単位で照合する（hundred の中の red などを拾わない）
+            Regex("""(?i)(?<![A-Za-z])${Regex.escape(word)}(?![A-Za-z])""").containsMatchIn(unitText)
+        } else {
+            unitText.contains(word)
+        }
+    } ?: ASSOC_COLOR_WORDS.firstOrNull { (word, _) ->
+        if (word.all { it.code < 128 }) {
             Regex("""(?i)(?<![A-Za-z])${Regex.escape(word)}(?![A-Za-z])""").containsMatchIn(unitText)
         } else {
             unitText.contains(word)
@@ -1590,7 +1604,16 @@ fun LyricsPvLayer(
                 pvExiting = null
             }
         }
+        // 「暗」を含む行では背景を少し暗くし、次の行で戻す
+        val darkTarget = if (pvDisplayIndex >= 0 && lines.getOrNull(pvDisplayIndex)?.text?.contains("暗") == true) 0.32f else 0f
+        val darkAlpha = remember { Animatable(0f) }
+        LaunchedEffect(darkTarget) {
+            darkAlpha.animateTo(darkTarget, animationSpec = tween(durationMillis = 700))
+        }
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+            if (darkAlpha.value > 0.001f) {
+                Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = darkAlpha.value)))
+            }
             pvExiting?.let { (exIdx, exText) ->
                 key("pvexit$exIdx") {
                     PvLyricLine(
@@ -2074,7 +2097,16 @@ fun LyricsFullscreenOverlay(
                     }
                     if (fsExiting != null) { delay(750); fsExiting = null }
                 }
+                // 「暗」を含む行では背景を少し暗くし、次の行で戻す
+                val fsDarkTarget = if (fsDisplayIndex >= 0 && fsLines.getOrNull(fsDisplayIndex)?.text?.contains("暗") == true) 0.32f else 0f
+                val fsDarkAlpha = remember { Animatable(0f) }
+                LaunchedEffect(fsDarkTarget) {
+                    fsDarkAlpha.animateTo(fsDarkTarget, animationSpec = tween(durationMillis = 700))
+                }
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    if (fsDarkAlpha.value > 0.001f) {
+                        Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = fsDarkAlpha.value)))
+                    }
                     fsExiting?.let { (exIdx, exText) ->
                         key("fsexit$exIdx") {
                             PvLyricLine(
