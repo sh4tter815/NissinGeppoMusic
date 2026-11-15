@@ -1070,7 +1070,7 @@ fun MainLauncherScreen() {
                         }
                     }
 
-                    if (!isRackShown && !isLyricsBrowsing) {
+                    if (!isRackShown && !isLyricsBrowsing && !pvFullscreen) {
                         MusicSeekBarDisc(
                             modifier = Modifier.fillMaxSize(),
                             playerManager = musicPlayerManager,
@@ -1622,7 +1622,7 @@ fun MainLauncherScreen() {
         }
 
                 // --- 画面下部 ページ切り替え (ボタン式 / ダイヤル式を設定で切替、ラック表示中は隠す) ---
-        if (!isRackShown && !isLyricsBrowsing) {
+        if (!isRackShown && !isLyricsBrowsing && !pvFullscreen) {
         if (repo.prefManager.getPageSwitchStyle() == "dial") {
             // ダイヤルは6ストップ: 0=設定, 1=ホーム(再生中), 2=曲名, 3=アーティスト, 4=アルバム, 5=プレイリスト(フォルダ)
             PeekPageDial(
@@ -1801,7 +1801,7 @@ fun MainLauncherScreen() {
         }
 
         // フルスクリーンボタン: 歌詞ボタンの下。押すと横画面で歌詞だけの画面になる
-        if (currentLauncherPage == 1 && !isRackShown && !isLyricsBrowsing && lyricsLines != null && showLyrics) {
+        if (currentLauncherPage == 1 && !isRackShown && !isLyricsBrowsing && musicPlayerManager.currentSongUri != null) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -1821,10 +1821,10 @@ fun MainLauncherScreen() {
         }
 
         // 歌詞フルスクリーン（横画面）: PVモードならPVだけ、1行/複数行モードなら曲名・アーティストと一緒に歌詞を表示
-        if (pvFullscreen && currentLauncherPage == 1 && showLyrics && lyricsLines != null) {
+        if (pvFullscreen && currentLauncherPage == 1) {
             BoxWithConstraints(modifier = Modifier.fillMaxSize().zIndex(96f)) {
                 val fsWidth = maxWidth.value
-                val fsLines = lyricsLines!!
+                val fsLines = lyricsLines ?: emptyList()
                 if (musicPlayerManager.currentAlbumArt != null) {
                     Image(
                         bitmap = musicPlayerManager.currentAlbumArt!!.asImageBitmap(),
@@ -1836,6 +1836,36 @@ fun MainLauncherScreen() {
                 } else {
                     Box(Modifier.fillMaxSize().background(Color.Black))
                 }
+                if (lyricsLines == null) {
+                    // 歌詞が無い曲: 左にアートワーク、右に曲名などの情報だけを出す
+                    Row(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 48.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (musicPlayerManager.currentAlbumArt != null) {
+                            Image(
+                                bitmap = musicPlayerManager.currentAlbumArt!!.asImageBitmap(),
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.size(240.dp).clip(RoundedCornerShape(16.dp))
+                            )
+                        } else {
+                            Box(Modifier.size(240.dp).clip(RoundedCornerShape(16.dp)).background(accentColor.copy(alpha = 0.25f)))
+                        }
+                        Spacer(Modifier.width(40.dp))
+                        Column {
+                            Text(musicPlayerManager.currentTitle, color = Color.White, fontSize = 32.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            if (musicPlayerManager.currentArtist.isNotBlank()) {
+                                Spacer(Modifier.height(10.dp))
+                                Text(musicPlayerManager.currentArtist, color = Color.White.copy(alpha = 0.75f), fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            if (musicPlayerManager.currentAlbum.isNotBlank()) {
+                                Spacer(Modifier.height(6.dp))
+                                Text(musicPlayerManager.currentAlbum, color = Color.White.copy(alpha = 0.55f), fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
+                } else {
                 val fsPos = musicPlayerManager.currentPosition + lyricOffsetMs
                 val fsIndex = fsLines.indexOfLast { it.timeMs <= fsPos }
                 val fsCurLine = fsLines.getOrNull(fsIndex)
@@ -1874,6 +1904,7 @@ fun MainLauncherScreen() {
                                         fontFamily = lyricsFontFamily,
                                         accentColor = accentColor,
                                         screenWidthDp = fsWidth,
+                                        bigText = true,
                                         exiting = true,
                                         effectKind = Math.floorMod(Math.floorMod(exIdx * 31 + exText.hashCode(), 997), 8),
                                         modifier = Modifier
@@ -1888,6 +1919,7 @@ fun MainLauncherScreen() {
                                         fontFamily = lyricsFontFamily,
                                         accentColor = accentColor,
                                         screenWidthDp = fsWidth,
+                                        bigText = true,
                                         exiting = false,
                                         effectKind = Math.floorMod(Math.floorMod(curIdx * 31 + curText.hashCode(), 997), 8),
                                         modifier = Modifier
@@ -1979,6 +2011,7 @@ fun MainLauncherScreen() {
                             }
                         }
                     }
+                }
                 }
                 // 終了ボタン: もう一度押すと縦画面に戻る
                 Box(
@@ -2765,7 +2798,7 @@ private fun DrawScope.drawLyricIcon(kind: Int) {
     val u = size.width / 100f
     val cx = size.width / 2f
     val cy = size.height / 2f
-    val st = Stroke(width = 5.5f * u, cap = StrokeCap.Round, join = StrokeJoin.Round)
+    val st = Stroke(width = 4.2f * u, cap = StrokeCap.Round, join = StrokeJoin.Round)
     fun pt(dx: Float, dy: Float) = Offset(cx + dx * u, cy + dy * u)
     when (kind) {
         LyricIcon.STAR -> {
@@ -3184,6 +3217,7 @@ private fun PvLyricLine(
     fontFamily: FontFamily?,
     accentColor: Color,
     effectKind: Int = 0,
+    bigText: Boolean = false,
     screenWidthDp: Float,
     exiting: Boolean,
     modifier: Modifier = Modifier
@@ -3206,25 +3240,76 @@ private fun PvLyricLine(
     val latinDominant = text.count { it.code in 0x41..0x7A } > text.count { it.code >= 0x300 }
     val gapEm = if (latinDominant) 0.32f else 0f
     // 基本2行構成: 塊の境界の中で、左右のemが一番均等になる位置で割る
+    // ただし「」や（）で囲まれた部分は丸ごと1行で表示する（閉じ括弧がこの行に無い場合は通常扱い）
     val totalChars = text.count { it != ' ' && it != '　' }
-    val splitIdx = if (chunks.size >= 2 && totalChars >= 6) {
-        val totalEm = chunks.sumOf { chunkEm(it).toDouble() }.toFloat() + gapEm * (chunks.size - 1)
-        var acc = 0f
-        var best = 1
-        var bestDiff = Float.MAX_VALUE
-        for (idx in 1 until chunks.size) {
-            acc += chunkEm(chunks[idx - 1]) + gapEm
-            val diff = kotlin.math.abs(totalEm / 2f - acc)
-            if (diff < bestDiff) { bestDiff = diff; best = idx }
+    fun splitChunks(list: List<String>): List<List<String>> {
+        if (list.size >= 2 && list.sumOf { it.count { ch -> ch != ' ' && ch != '　' } } >= 6) {
+            val totalEm = list.sumOf { chunkEm(it).toDouble() }.toFloat() + gapEm * (list.size - 1)
+            var acc = 0f
+            var best = 1
+            var bestDiff = Float.MAX_VALUE
+            for (idx in 1 until list.size) {
+                acc += chunkEm(list[idx - 1]) + gapEm
+                val diff = kotlin.math.abs(totalEm / 2f - acc)
+                if (diff < bestDiff) { bestDiff = diff; best = idx }
+            }
+            return listOf(list.subList(0, best), list.subList(best, list.size))
         }
-        best
-    } else chunks.size
-    val rows: List<List<String>> = if (splitIdx >= chunks.size) listOf(chunks)
-        else listOf(chunks.subList(0, splitIdx), chunks.subList(splitIdx, chunks.size))
+        return listOf(list)
+    }
+    // 括弧セグメントの検出（開き括弧から閉じ括弧までを1つの塊にする）
+    val segs = mutableListOf<Pair<Boolean, List<String>>>()
+    var bracketBuf = mutableListOf<String>()
+    var inBracket = false
+    for (c in chunks) {
+        if (!inBracket && (c.contains("（") || c.contains("(") || c.contains("「"))) {
+            inBracket = true
+            bracketBuf = mutableListOf(c)
+            if (c.contains("）") || c.contains(")") || c.contains("」")) {
+                segs.add(true to bracketBuf.toList())
+                inBracket = false
+            }
+        } else if (inBracket) {
+            bracketBuf.add(c)
+            if (c.contains("）") || c.contains(")") || c.contains("」")) {
+                segs.add(true to bracketBuf.toList())
+                inBracket = false
+            }
+        } else {
+            segs.add(false to listOf(c))
+        }
+    }
+    if (inBracket) {
+        // 閉じ括弧がこの行に無い → 括弧扱いをやめて通常の塊として並べ直す
+        for (c in bracketBuf) segs.add(false to listOf(c))
+    }
+    val rowsBuilt = mutableListOf<List<String>>()
+    var runBuf = mutableListOf<String>()
+    fun flushRun() {
+        if (runBuf.isNotEmpty()) {
+            rowsBuilt.addAll(splitChunks(runBuf.toList()))
+            runBuf = mutableListOf()
+        }
+    }
+    for ((isBracket, segChunks) in segs) {
+        if (isBracket) {
+            flushRun()
+            rowsBuilt.add(segChunks)
+        } else {
+            runBuf.addAll(segChunks)
+        }
+    }
+    flushRun()
+    val rows: List<List<String>> = if (rowsBuilt.isEmpty()) listOf(chunks) else rowsBuilt
     fun rowEm(row: List<String>): Float = row.sumOf { chunkEm(it).toDouble() }.toFloat() + gapEm * (row.size - 1).coerceAtLeast(0)
     val longestRowEm = rows.maxOf { rowEm(it) }.coerceAtLeast(1f)
     // 行ごとの大きさを均等に: どの行も「枠いっぱいに広がるサイズ」を基本にし、短い行だけ高さ上限で止める
-    val heightCap = if (rows.size >= 2) 52f else 64f
+    val heightCapBase = when {
+        rows.size >= 3 -> 40f
+        rows.size == 2 -> 52f
+        else -> 64f
+    }
+    val heightCap = if (bigText) heightCapBase * 1.8f else heightCapBase
     val fitSize = minOf((screenWidthDp - 8f) / (longestRowEm * 1.06f), heightCap)
     val lineOffsetX = ((baseSeed / 7) % 17 - 8).dp
     val lineOffsetY = ((baseSeed / 11) % 13 - 6).dp
@@ -3398,12 +3483,11 @@ private fun PvLyricLine(
                     Canvas(modifier = Modifier.matchParentSize()) {
                         val frac = if (bv <= 1f) bv else 2f - bv
                         val xOff = if (bv <= 1f) 0f else (bv - 1f) * size.width
-                        val barH = size.height * 1.18f
-                        drawRoundRect(
-                            color = Color.White.copy(alpha = 0.55f),
-                            topLeft = Offset(xOff, (size.height - barH) / 2f),
-                            size = Size(frac * size.width, barH),
-                            cornerRadius = CornerRadius(3.dp.toPx(), 3.dp.toPx())
+                        // 文字ギリギリのサイズの、角丸なし・不透明な白い四角
+                        drawRect(
+                            color = Color.White,
+                            topLeft = Offset(xOff, 0f),
+                            size = Size(frac * size.width, size.height)
                         )
                     }
                 }
@@ -3486,7 +3570,7 @@ private fun PvLyricUnit(
     if (!exiting && (effectKind == 3 || effectKind == 4)) {
         LaunchedEffect(staggerIndex) {
             delay(staggerIndex * 45L)
-            fxT.animateTo(1f, animationSpec = tween(durationMillis = if (effectKind == 3) 1500 else 800, easing = LinearEasing))
+            fxT.animateTo(1f, animationSpec = tween(durationMillis = 800, easing = LinearEasing))
         }
     }
     Box(
@@ -3530,7 +3614,7 @@ private fun PvLyricUnit(
                 val flick = (0.35f + 0.3f * sin(fxT.value * 47f + uSeed * 3.1f)).coerceIn(0.1f, 0.65f)
                 Text(
                     text = annotatedUnit,
-                    color = Color(0xFFFF3B30).copy(alpha = flick),
+                    color = accentColor.copy(alpha = flick),
                     fontSize = uSize,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
@@ -3540,7 +3624,7 @@ private fun PvLyricUnit(
                 )
                 Text(
                     text = annotatedUnit,
-                    color = Color(0xFF64D2FF).copy(alpha = flick),
+                    color = accentColor.copy(alpha = flick * 0.55f),
                     fontSize = uSize,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
@@ -3654,7 +3738,7 @@ private fun PvLyricUnit(
                     .offset(x = 12.dp, y = (-12).dp)
                     .size((uSize.value * 0.55f).dp)
                     .graphicsLayer {
-                        alpha = ulAnim.value.coerceIn(0f, 1f)
+                        alpha = ulAnim.value.coerceIn(0f, 1f) * 0.45f
                         rotationZ = -9f
                     }
             ) {
