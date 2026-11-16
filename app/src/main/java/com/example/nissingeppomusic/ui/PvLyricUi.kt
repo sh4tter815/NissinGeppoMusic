@@ -732,6 +732,22 @@ fun PvLyricLine(
         }
         return listOf(list)
     }
+    // 括弧セグメントが長すぎる場合は、丸ごと1行にせず2〜3行に割る（目安: 幅12em超）
+    fun splitLongBracket(segChunks: List<String>): List<List<String>> {
+        fun emOf(list: List<String>): Float = list.sumOf { chunkEm(it).toDouble() }.toFloat() + gapEm * (list.size - 1).coerceAtLeast(0)
+        if (segChunks.size < 2 || emOf(segChunks) <= 12f) return listOf(segChunks)
+        var parts = splitChunks(segChunks)
+        if (parts.size == 1) return parts
+        // まだ長い行があれば、その行だけもう一度割って最大3行にする
+        val longestIdx = parts.indices.maxByOrNull { emOf(parts[it]) } ?: -1
+        if (longestIdx >= 0 && emOf(parts[longestIdx]) > 12f) {
+            val sub = splitChunks(parts[longestIdx])
+            if (sub.size == 2) {
+                parts = parts.toMutableList().also { it.removeAt(longestIdx); it.addAll(longestIdx, sub) }
+            }
+        }
+        return parts
+    }
     // 括弧セグメントの検出（開き括弧から閉じ括弧までを1つの塊にする）
     val segs = mutableListOf<Pair<Boolean, List<String>>>()
     var bracketBuf = mutableListOf<String>()
@@ -769,7 +785,7 @@ fun PvLyricLine(
     for ((isBracket, segChunks) in segs) {
         if (isBracket) {
             flushRun()
-            rowsBuilt.add(segChunks)
+            rowsBuilt.addAll(splitLongBracket(segChunks))
         } else {
             runBuf.addAll(segChunks)
         }
