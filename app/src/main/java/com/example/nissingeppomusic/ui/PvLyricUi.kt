@@ -822,6 +822,7 @@ fun PvLyricLine(
     // 否定語（ない等）には打ち消し線ではなく☓アイコンを付ける（対象語の開始位置を塊ごとに探す）
     val negWords = listOf("なかった", "じゃない", "なくて", "なくな", "無い", "ない", "間違い", "誤り")
     val sandLine = text.contains("砂") || text.contains("消") || text.contains("壊") || text.contains("砕")
+    val dreamLine = text.contains("夢") || text.contains("思い出")
     val windLine = text.contains("風")
     val rippleWord = text.contains("響")
     if (exiting) {
@@ -841,6 +842,18 @@ fun PvLyricLine(
     }
     // 装飾エフェクト（親から渡される。前の行と被らないランダム）:
     // 0=下線スイープ / 1=波紋 / 2=白スワイプ / 3=点滅 / 4=グリッチ / 5=枠線 / 6=粒子バースト / 7=波打ち登場
+    val dreamTransition = rememberInfiniteTransition(label = "dreamBubble")
+    val dreamPhase by dreamTransition.animateFloat(
+        initialValue = 0f, targetValue = 6.2832f,
+        animationSpec = infiniteRepeatable(tween(durationMillis = 3400, easing = LinearEasing), RepeatMode.Restart),
+        label = "dreamPhase"
+    )
+    val waveTransition = rememberInfiniteTransition(label = "waveBg")
+    val wavePhase by waveTransition.animateFloat(
+        initialValue = 0f, targetValue = 6.2832f,
+        animationSpec = infiniteRepeatable(tween(durationMillis = 2600, easing = LinearEasing), RepeatMode.Restart),
+        label = "wavePhase"
+    )
     val barAnim = remember { Animatable(0f) }
     val rippleAnim = remember { Animatable(0f) }
     val fxAnim = remember { Animatable(0f) }
@@ -873,6 +886,73 @@ fun PvLyricLine(
                 // 「落」の行は文字ごとにバラバラに落下する（PvLyricUnit 側で処理）
             }
     ) {
+        if (dreamLine) {
+            // 「夢・思い出」の行は、行全体をもくもくした雲のフレームで囲う（しっぽなどのアイコンは付けない）
+            Canvas(modifier = Modifier.matchParentSize()) {
+                val fadeA = if (exiting) 1f - exitProgress.value else 1f
+                val col = Color.White.copy(alpha = 0.6f * fadeA)
+                val W = size.width
+                val H = size.height
+                val padX = 16.dp.toPx()
+                val padY = 12.dp.toPx()
+                val bw = W + padX * 2f
+                val bh = H + padY * 2f
+                // もくもく感: 輪郭に沿って大きめの膨らみを密に重ね、外向きの弧だけを描く。
+                // 各膨らみはサイン波で位相をずらしながら膨らんだりしぼんだりして、雲がうねって見える
+                val puffs = 26
+                val perimeter = (bw + bh) * 1.57f
+                for (i in 0 until puffs) {
+                    val t = i.toFloat() / puffs
+                    val ang = t * 6.2832f
+                    val wobble = kotlin.math.sin(dreamPhase + i * 0.85f)
+                    val push = 1f + 0.045f * kotlin.math.sin(dreamPhase * 1.0f + i * 1.7f)
+                    val cx = W / 2f + kotlin.math.cos(ang) * (bw / 2f) * push
+                    val cy = H / 2f + kotlin.math.sin(ang) * (bh / 2f) * push
+                    val baseR = perimeter / puffs * 0.66f * (0.8f + ((i * 37 + baseSeed) % 10) / 20f)
+                    val r = baseR * (1f + 0.13f * wobble)
+                    drawArc(
+                        color = col,
+                        startAngle = (ang * 57.2958f) - 62f,
+                        sweepAngle = 124f,
+                        useCenter = false,
+                        topLeft = Offset(cx - r, cy - r),
+                        size = Size(r * 2f, r * 2f),
+                        style = Stroke(width = 1.6.dp.toPx())
+                    )
+                }
+            }
+        }
+        if (text.contains("波") || text.contains("海")) {
+            Canvas(modifier = Modifier.matchParentSize()) {
+                val fadeA = if (exiting) 1f - exitProgress.value else fxAnim.value
+                val W = size.width
+                val H = size.height
+                for (k in 0 until 3) {
+                    val baseY = H * (0.22f + 0.26f * k)
+                    val amp = H * 0.055f * (1f + 0.25f * k)
+                    val wl = W * (0.55f - 0.08f * k)
+                    val ph = wavePhase + k * 1.15f
+                    val path = androidx.compose.ui.graphics.Path()
+                    var x = -8f
+                    var first = true
+                    while (x <= W + 8f) {
+                        val y = baseY + kotlin.math.sin(x / wl * 6.2832f + ph) * amp
+                        if (first) {
+                            path.moveTo(x, y)
+                            first = false
+                        } else {
+                            path.lineTo(x, y)
+                        }
+                        x += 14f
+                    }
+                    drawPath(
+                        path = path,
+                        color = accentColor.copy(alpha = (0.30f - 0.06f * k) * fadeA),
+                        style = Stroke(width = 1.6.dp.toPx())
+                    )
+                }
+            }
+        }
         if (effKind == 1) {
             Canvas(modifier = Modifier.matchParentSize()) {
                 val t = rippleAnim.value
