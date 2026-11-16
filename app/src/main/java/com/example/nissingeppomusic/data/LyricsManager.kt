@@ -153,6 +153,15 @@ object LyricsManager {
         }
     }
 
+    /**
+     * JSONの文字列フィールドを安全に取り出す。
+     * Androidの optString は、値が JSON null のときに文字列 "null" を返してしまうことがある。
+     * そのためインスト曲（syncedLyrics が null）でも歌詞があるように見えてしまい、
+     * タグ検索で実在しない候補が並んでいた。opt() で実物の型を見て、文字列のときだけ返す。
+     */
+    private fun JSONObject.optLyricsString(name: String): String? =
+        (opt(name) as? String)?.takeIf { it.isNotBlank() }
+
     private fun httpGetJson(urlString: String): JSONObject? {
         val connection = URL(urlString).openConnection() as HttpURLConnection
         return try {
@@ -278,7 +287,7 @@ object LyricsManager {
             "&album_name=${enc(album)}&duration=$durationSec"
         val getJson = httpGetJson(getUrl)
         val wantJapanese = containsJapanese(title) || containsJapanese(artist)
-        val synced = getJson?.optString("syncedLyrics", "")?.takeIf { it.isNotBlank() }
+        val synced = getJson?.optLyricsString("syncedLyrics")
         // 日本語の曲なのに日本語を含まない歌詞（ローマ字・翻訳など）は別バージョンとみなして採用しない
         if (synced != null && (!wantJapanese || containsJapanese(synced))) {
             val parsed = parseLrc(synced)
@@ -303,7 +312,7 @@ object LyricsManager {
             if (results == null) return
             for (i in 0 until results.length()) {
                 val item = results.optJSONObject(i) ?: continue
-                val candidate = item.optString("syncedLyrics", "").takeIf { it.isNotBlank() } ?: continue
+                val candidate = item.optLyricsString("syncedLyrics") ?: continue
                 // 候補の曲名自体が目的の曲と一致することも確認する（検索の曖昧さで別曲が混ざるため）
                 if (!titleMatches(item.optString("trackName", ""), queryTitle)) continue
                 if (wantJapanese && !containsJapanese(candidate)) continue
@@ -570,7 +579,9 @@ object LyricsManager {
                 if (arr != null) {
                     for (i in 0 until arr.length()) {
                         val item = arr.optJSONObject(i) ?: continue
-                        val synced = item.optString("syncedLyrics", "").takeIf { it.isNotBlank() } ?: continue
+                        // インスト曲として登録されているものは歌詞が無いので候補に入れない
+                        if (item.optBoolean("instrumental", false)) continue
+                        val synced = item.optLyricsString("syncedLyrics") ?: continue
                         results.add(
                             LyricCandidate(
                                 source = "LRCLIB",
