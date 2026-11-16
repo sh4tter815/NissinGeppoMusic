@@ -567,6 +567,9 @@ fun MainLauncherScreen() {
     }
 
     var selectedAppForOption by remember { mutableStateOf<AppInfo?>(null) }
+    // アルバム／アーティストの読み仮名登録ダイアログの対象（packageName に "album::名前" / "artist::名前"、customYomi に現在の読みが入る）
+    var nameYomiTarget by remember { mutableStateOf<AppInfo?>(null) }
+    var yomiVersion by remember { mutableIntStateOf(0) }
 
     var showSettingsScreen by remember { mutableStateOf(false) }
 
@@ -1143,7 +1146,7 @@ fun MainLauncherScreen() {
                         }
                     )
 
-                                        val displayedApps = remember(searchQuery, allApps, isHideMode, librarySortMode, selectedAlbumFilter, selectedArtistFilter) {
+                                        val displayedApps = remember(searchQuery, allApps, isHideMode, librarySortMode, selectedAlbumFilter, selectedArtistFilter, yomiVersion) {
                         when {
                             isHideMode -> allApps.filter { it.isHidden }
                             selectedAlbumFilter != null -> {
@@ -1179,42 +1182,52 @@ fun MainLauncherScreen() {
                                 }
                             }
                             librarySortMode == "album" -> {
+                                val yomiMap = repo.prefManager.getYomiMap()
                                 allApps.filter { !it.isHidden }
                                     .groupBy { it.album }
                                     .values
                                     .map { albumTracks ->
                                         val first = albumTracks.first()
-                                        val (jp, en) = initialsOfLabel(first.album)
+                                        // アルバム名の読み仮名が登録されていれば、頭文字と並びは読み優先
+                                        val albumYomi = yomiMap["album::" + first.album] ?: ""
+                                        val (jp, en) = initialsOfLabel(if (albumYomi.isNotBlank()) albumYomi else first.album)
                                         first.copy(
                                             label = first.album,
                                             packageName = "album::" + first.album,
                                             initialJapanese = jp,
-                                            initialEnglish = en
+                                            initialEnglish = en,
+                                            customYomi = albumYomi
                                         )
                                     }
                                     // 頭文字の行順（あ→ん→A→Z）で昇順に並べ、左ホイールのインデックスと一致させる
                                     .sortedWith(compareBy(
                                         { val i = INDEX_ITEMS.indexOf(it.initialJapanese); if (i < 0) INDEX_ITEMS.size else i },
+                                        { hiraganaSortKey(if (it.customYomi.isNotBlank()) it.customYomi else it.label) },
                                         { it.label.lowercase() }
                                     ))
                             }
                             librarySortMode == "artist" -> {
+                                val yomiMap = repo.prefManager.getYomiMap()
                                 allApps.filter { !it.isHidden }
                                     .groupBy { it.artist }
                                     .values
                                     .map { artistTracks ->
                                         val first = artistTracks.first()
-                                        val (jp, en) = initialsOfLabel(first.artist)
+                                        // アーティスト名の読み仮名が登録されていれば、頭文字と並びは読み優先
+                                        val artistYomi = yomiMap["artist::" + first.artist] ?: ""
+                                        val (jp, en) = initialsOfLabel(if (artistYomi.isNotBlank()) artistYomi else first.artist)
                                         first.copy(
                                             label = first.artist,
                                             packageName = "artist::" + first.artist,
                                             initialJapanese = jp,
-                                            initialEnglish = en
+                                            initialEnglish = en,
+                                            customYomi = artistYomi
                                         )
                                     }
                                     // 頭文字の行順（あ→ん→A→Z）で昇順に並べ、左ホイールのインデックスと一致させる
                                     .sortedWith(compareBy(
                                         { val i = INDEX_ITEMS.indexOf(it.initialJapanese); if (i < 0) INDEX_ITEMS.size else i },
+                                        { hiraganaSortKey(if (it.customYomi.isNotBlank()) it.customYomi else it.label) },
                                         { it.label.lowercase() }
                                     ))
                             }
@@ -1252,7 +1265,10 @@ fun MainLauncherScreen() {
                             }
                         },
                         onLongClick = { app ->
-                            if (!app.packageName.startsWith("album::") && !app.packageName.startsWith("artist::")) {
+                            if (app.packageName.startsWith("album::") || app.packageName.startsWith("artist::")) {
+                                // アルバム／アーティストを長押ししたら読み仮名の登録ダイアログを開く
+                                nameYomiTarget = app
+                            } else {
                                 selectedAppForOption = app
                             }
                         },
@@ -2242,6 +2258,14 @@ fun MainLauncherScreen() {
                     if (lyricsDisabledUri == musicPlayerManager.currentSongUri) lyricsDisabledUri = null
                     showLyrics = true
                 },
+                onCleared = {
+                    lyricsLines = null
+                    lyricsSongUri = null
+                    lyricsSource = ""
+                    lyricsNotFound = false
+                    if (lyricsDisabledUri == musicPlayerManager.currentSongUri) lyricsDisabledUri = null
+                    lyricsRefreshTick++
+                },
                 onDismiss = { showLyricSearch = false }
             )
         }
@@ -2304,6 +2328,21 @@ fun MainLauncherScreen() {
             )
         }
 
+        // 3.5 アルバム／アーティストの読み仮名登録ダイアログ
+        nameYomiTarget?.let { target ->
+            NameYomiDialog(
+                name = target.label,
+                kindLabel = if (target.packageName.startsWith("album::")) "アルバム" else "アーティスト",
+                currentYomi = target.customYomi,
+                onSave = { yomi ->
+                    repo.setYomi(target.packageName, yomi)
+                    yomiVersion++
+                    nameYomiTarget = null
+                },
+                onDismiss = { nameYomiTarget = null }
+            )
+        }
+
         // 4. アプリ長押し設定ダイアログ
         selectedAppForOption?.let { app ->
             AppOptionDialog(
@@ -2344,3 +2383,45 @@ fun MainLauncherScreen() {
  * 漢字は大きめ、ひらがなは小さめにするとバランスが良い。
  */
 /** 歌詞アイコン種別 */
+
+
+/** アルバム名／アーティスト名の読み仮名を登録するダイアログ（並び替えと頭文字インデックスに使う） */
+@Composable
+fun NameYomiDialog(
+    name: String,
+    kindLabel: String,
+    currentYomi: String,
+    onSave: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var yomi by remember { mutableStateOf(currentYomi) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("$kindLabel の読み仮名") },
+        text = {
+            Column {
+                Text(name, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = yomi,
+                    onValueChange = { yomi = it },
+                    label = { Text("読み仮名（ひらがな）") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "並び替えと頭文字の判定に使います。空にして保存すると登録を消します。",
+                    fontSize = 12.sp,
+                    color = Color.Gray
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(yomi) }) { Text("保存") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("キャンセル") }
+        }
+    )
+}
