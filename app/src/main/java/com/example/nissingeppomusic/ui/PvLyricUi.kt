@@ -788,8 +788,7 @@ fun PvLyricLine(
     // 単語で発火する入場・退場エフェクトの対象判定
     // 否定語（ない等）には打ち消し線ではなく☓アイコンを付ける（対象語の開始位置を塊ごとに探す）
     val negWords = listOf("なかった", "じゃない", "なくて", "なくな", "無い", "ない", "間違い", "誤り")
-    val mosaicLine = text.contains("隠") || text.contains("モザイク")
-    val sandLine = text.contains("砂") || text.contains("消") || text.contains("壊")
+    val sandLine = text.contains("砂") || text.contains("消") || text.contains("壊") || text.contains("砕")
     val windLine = text.contains("風")
     val rippleWord = text.contains("響")
     if (exiting) {
@@ -947,8 +946,8 @@ fun PvLyricLine(
                 }
             }
         }
-        // 単語で発火する入場・退場エフェクト: 響=波紋たくさん / 隠・モザイク=モザイク化 / 砂・消=粒子化して吹き飛ぶ
-        if (mosaicLine || sandLine || rippleWord) {
+        // 単語で発火する入場・退場エフェクト: 響=波紋たくさん / 砂・消・壊=粒子化して吹き飛ぶ（モザイクはユニット側で「隠」の文字だけにかける）
+        if (sandLine || rippleWord) {
             Canvas(modifier = Modifier.matchParentSize().zIndex(5f)) {
                 val W = size.width
                 val H = size.height
@@ -965,27 +964,16 @@ fun PvLyricLine(
                 }
                 val fp = exitProgress.value
                 if (exiting && fp > 0f) {
-                    if (mosaicLine) {
-                        val cell = 13.dp.toPx()
-                        val cols = (W / cell).toInt() + 1
-                        val rowsN = (H / cell).toInt() + 1
-                        for (gx in 0 until cols) for (gy in 0 until rowsN) {
-                            val h = (((gx * 73856093) xor (gy * 19349663) xor (baseSeed * 83492791)) and 0x7fffffff) % 100
-                            if (h < fp * 135f) {
-                                val c = when (h % 4) { 0 -> Color(0xFF9E9E9E); 1 -> accentColor; 2 -> Color(0xFF616161); else -> Color(0xFFBDBDBD) }
-                                drawRect(color = c.copy(alpha = 0.88f), topLeft = Offset(gx * cell, gy * cell), size = Size(cell, cell))
-                            }
-                        }
-                    }
                     if (sandLine) {
                         for (i in 0 until 240) {
                             val h1 = ((i * 2654435761L) xor (baseSeed * 97L)) and 0x7fffffffL
                             val sx = (h1 % 1000) / 1000f
                             val sy = ((h1 / 1000) % 1000) / 1000f
-                            val drift = fp * fp * (0.25f + (h1 % 50) / 100f) * W
-                            val rise = fp * ((h1 % 30) / 100f - 0.12f) * H
-                            val px = sx * W + drift
-                            val py = sy * H + rise + fp * fp * H * 0.25f
+                            // 粒子は重力で自然に落下する（進み具合の2乗で加速し、横はほんの少し揺れるだけ）
+                            val fall = fp * fp * (0.45f + (h1 % 40) / 100f) * H
+                            val swayX = sin(fp * 5f + (h1 % 628) / 100f) * 4f * fp
+                            val px = sx * W + swayX
+                            val py = sy * H + fall
                             val a = (1f - fp) * (0.35f + (h1 % 60) / 100f)
                             val c = when ((h1 % 5).toInt()) { 0 -> accentColor; 1 -> Color(0xFFE8D8A8); else -> Color.White }
                             drawCircle(color = c.copy(alpha = a.coerceIn(0f, 1f)), radius = (1.1f + (h1 % 20) / 10f).dp.toPx() * 0.55f, center = Offset(px, py))
@@ -1023,6 +1011,8 @@ fun PvLyricLine(
                 // 否定語の開始位置（この塊の中に否定語があれば、その文字に☓アイコンを付ける）
                 val chunkNegStart = negWords.mapNotNull { w -> chunk.indexOf(w).takeIf { it >= 0 } }.minOrNull() ?: -1
                 val chunkGhost = chunk.contains("透明")
+                val chunkMosaicStart = chunk.indexOf("隠")
+                val chunkMosaicWordStart = chunk.indexOf("モザイク")
                 // 複数文字の色ワード（希望・想い等）は塊単位で判定し、該当する文字だけに色を渡す
                 val chunkColorHit = (COLOR_WORDS + ASSOC_COLOR_WORDS).firstOrNull { (w, _) -> w.length > 1 && chunk.contains(w) }
                 val chunkColorStart = chunkColorHit?.let { chunk.indexOf(it.first) } ?: -1
@@ -1061,6 +1051,14 @@ fun PvLyricLine(
                         thisUnitIcon = LyricIcon.CROSS
                         negIconPlaced = true
                     }
+                    // 「隠」「モザイク」の文字にだけモザイクをかける
+                    val mosaicStart = when {
+                        chunkMosaicStart >= 0 -> chunkMosaicStart
+                        chunkMosaicWordStart >= 0 -> chunkMosaicWordStart
+                        else -> -1
+                    }
+                    val mosaicLen = if (chunkMosaicStart >= 0) 1 else if (chunkMosaicWordStart >= 0) 3 else 0
+                    val unitMosaic = mosaicStart >= 0 && unitStart < mosaicStart + mosaicLen && unitStart + ru.length > mosaicStart
                     val unitChunkColor = if (chunkColorHit != null && unitStart < chunkColorStart + chunkColorHit.first.length && unitStart + ru.length > chunkColorStart) chunkColorHit.second else null
                     PvLyricUnit(
                         bold = bold,
@@ -1079,6 +1077,7 @@ fun PvLyricLine(
                         iconKind = thisUnitIcon,
                         dimmed = chunkDim,
                         ghost = chunkGhost,
+                        mosaic = unitMosaic,
                         fallExit = fallLine,
                         windExit = windLine,
                         chunkColor = unitChunkColor,
@@ -1133,6 +1132,7 @@ fun PvLyricUnit(
     bold: Boolean = true,
     swayScale: Float = 1f,
     ghost: Boolean = false,
+    mosaic: Boolean = false,
     fallExit: Boolean = false,
     windExit: Boolean = false,
     chunkColor: Color? = null,
@@ -1318,6 +1318,24 @@ fun PvLyricUnit(
                         cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx()),
                         style = Stroke(width = 1.2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(7f, 6f), 0f))
                     )
+                }
+            }
+            if (mosaic && exiting) {
+                // 「隠」の文字だけをモザイク化する（退場に合わせてセルが増えていく）
+                Canvas(modifier = Modifier.matchParentSize()) {
+                    val fp = ((exitProgressValue * 720f - exitDelayMs) / 320f).coerceIn(0f, 1f)
+                    if (fp > 0f) {
+                        val cell = 6.dp.toPx()
+                        val cols = (size.width / cell).toInt() + 1
+                        val rowsN = (size.height / cell).toInt() + 1
+                        for (gx in 0 until cols) for (gy in 0 until rowsN) {
+                            val h = (((gx * 73856093) xor (gy * 19349663) xor (uSeed * 83492791)) and 0x7fffffff) % 100
+                            if (h < fp * 135f) {
+                                val c = when (h % 4) { 0 -> Color(0xFF9E9E9E); 1 -> accentColor; 2 -> Color(0xFF616161); else -> Color(0xFFBDBDBD) }
+                                drawRect(color = c.copy(alpha = 0.9f), topLeft = Offset(gx * cell, gy * cell), size = Size(cell, cell))
+                            }
+                        }
+                    }
                 }
             }
             if (arrowUnder) {
@@ -2145,6 +2163,7 @@ fun LyricsBrowseOverlay(
             }
             return acc - fracPart * stepDp(baseIdx)
         }
+        val browseWidthDp = maxWidth.value
         val firstIdx = maxOf(0, floor(virtualPos - 7f).toInt())
         val lastIdx = minOf(lines.size - 1, ceil(virtualPos + 7f).toInt())
         for (idx in firstIdx..lastIdx) {
@@ -2167,7 +2186,7 @@ fun LyricsBrowseOverlay(
                         positionMs = positionMs + lyricOffsetMs,
                         sungColor = accentColor,
                         baseColor = Color.White,
-                        fontSize = fitFontSizeSp(lines[idx].text, 26f, maxWidth.value * 0.85f).sp,
+                        fontSize = fitFontSizeSp(lines[idx].text, 26f, browseWidthDp * 0.85f).sp,
                         fontWeight = lyricWeight,
                         fontFamily = fontFamily,
                         letterSpacing = 1.0.sp,
@@ -2178,7 +2197,7 @@ fun LyricsBrowseOverlay(
                     Text(
                         text = lines[idx].text,
                         color = if (isFocusedLine) Color.White else Color.White.copy(alpha = 0.92f * fade),
-                        fontSize = fitFontSizeSp(lines[idx].text, if (isFocusedLine) 26f else 15f, maxWidth.value * 0.85f).sp,
+                        fontSize = fitFontSizeSp(lines[idx].text, if (isFocusedLine) 26f else 15f, browseWidthDp * 0.85f).sp,
                         fontWeight = if (isFocusedLine) lyricWeight else FontWeight.Normal,
                         letterSpacing = 1.0.sp,
                         textAlign = TextAlign.Start,
