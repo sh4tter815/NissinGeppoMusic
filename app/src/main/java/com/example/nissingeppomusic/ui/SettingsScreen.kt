@@ -258,6 +258,8 @@ fun SettingsScreen(
     var updateChecking by remember { mutableStateOf(false) }
     var updateMessage by remember { mutableStateOf<String?>(null) }
     var updateInfo by remember { mutableStateOf<com.example.nissingeppomusic.data.UpdateChecker.LatestRelease?>(null) }
+    var fxChecking by remember { mutableStateOf(false) }
+    var fxMessage by remember { mutableStateOf<String?>(null) }
     var showUpdateDialog by remember { mutableStateOf(false) }
     if (showUpdateDialog && updateInfo != null) {
         UpdateDialog(
@@ -637,6 +639,59 @@ fun SettingsScreen(
                                                             colors = switchColors
                                                         )
                                                     }
+                                    }
+                                }
+                            }
+                            item {
+                                Surface(
+                                    color = Color(0x99101728),
+                                    shape = RoundedCornerShape(20.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable(enabled = !fxChecking) {
+                                            fxMessage = null
+                                            fxChecking = true
+                                            settingsScope.launch {
+                                                val result = LyricEffectsData.refresh(context)
+                                                fxChecking = false
+                                                fxMessage = when (result) {
+                                                    1 -> "更新しました（データ v${LyricEffectsData.appliedVersion}）"
+                                                    0 -> "最新のデータです（データ v${LyricEffectsData.appliedVersion}）"
+                                                    else -> "確認に失敗しました"
+                                                }
+                                            }
+                                        }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(20.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text(
+                                                text = "歌詞エフェクトの更新",
+                                                color = Color.White,
+                                                fontSize = 16.sp,
+                                                fontWeight = FontWeight.Normal
+                                            )
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = when {
+                                                    fxChecking -> "確認中…"
+                                                    fxMessage != null -> fxMessage!!
+                                                    else -> "単語アイコンや色の対応表を最新にします"
+                                                },
+                                                color = Color.Gray,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.Light
+                                            )
+                                        }
+                                        Text(
+                                            text = "›",
+                                            color = Color.Gray,
+                                            fontSize = 22.sp,
+                                            fontWeight = FontWeight.Light
+                                        )
                                     }
                                 }
                             }
