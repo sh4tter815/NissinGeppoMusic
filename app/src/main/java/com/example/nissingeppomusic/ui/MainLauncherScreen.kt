@@ -420,6 +420,10 @@ fun MainLauncherScreen() {
             showUpdateDialog = true
         }
     }
+    // 歌詞エフェクトデータ: 端末キャッシュを読み込んでから、配信データの更新を確認する
+    LaunchedEffect(Unit) {
+        LyricEffectsData.init(context)
+    }
     val pvActivity = LocalContext.current as? android.app.Activity
     LaunchedEffect(pvFullscreen) {
         pvActivity?.requestedOrientation = if (pvFullscreen) {
