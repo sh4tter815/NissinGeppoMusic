@@ -63,6 +63,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.SolidColor
@@ -101,6 +102,7 @@ import androidx.compose.ui.zIndex
 import com.example.nissingeppomusic.data.AppInfo
 import com.example.nissingeppomusic.data.AppRepository
 import com.example.nissingeppomusic.data.LyricLine
+import com.example.nissingeppomusic.data.LyricWord
 import com.example.nissingeppomusic.data.LyricsManager
 import com.example.nissingeppomusic.data.MusicPlayerManager
 import com.example.nissingeppomusic.ui.components.*
@@ -575,6 +577,78 @@ fun PvInterludeArt(accentColor: Color, modifier: Modifier = Modifier) {
 }
 
 /** PV入場の8方向（上・右上・右・右下・下・左下・左・左上） */
+/**
+ * カラオケ式テロップ表示: 文字同期（words）がある行は、歌い終わった文字から sungColor に変わっていく。
+ * words が無い行は baseColor の通常テキストとして描く
+ */
+@Composable
+fun KaraokeLyricText(
+    line: LyricLine,
+    positionMs: Long,
+    sungColor: Color,
+    baseColor: Color,
+    fontSize: androidx.compose.ui.unit.TextUnit,
+    fontWeight: FontWeight = FontWeight.Normal,
+    fontFamily: FontFamily? = null,
+    letterSpacing: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
+    textAlign: TextAlign = TextAlign.Start,
+    shadow: Shadow? = null,
+    modifier: Modifier = Modifier
+) {
+    if (line.words.isEmpty()) {
+        Text(
+            text = line.text,
+            color = baseColor,
+            fontSize = fontSize,
+            fontWeight = fontWeight,
+            letterSpacing = letterSpacing,
+            textAlign = textAlign,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = LocalTextStyle.current.copy(fontFamily = fontFamily, shadow = shadow),
+            modifier = modifier
+        )
+        return
+    }
+    // 文字ごとの開始・終了時刻（セグメントの中は均等割りで補間する）
+    val timings = remember(line) {
+        val list = mutableListOf<Pair<Long, Long>>()
+        for (w in line.words) {
+            val n = w.text.length.coerceAtLeast(1)
+            val dur = (w.endMs - w.startMs).coerceAtLeast(0L)
+            for (i in 0 until n) {
+                list.add((w.startMs + dur * i / n) to (w.startMs + dur * (i + 1) / n))
+            }
+        }
+        list
+    }
+    val annotated = buildAnnotatedString {
+        var ci = 0
+        for (ch in line.text) {
+            val t = timings.getOrNull(ci)
+            val col = when {
+                t == null -> baseColor
+                positionMs >= t.second -> sungColor
+                positionMs <= t.first -> baseColor
+                else -> lerp(baseColor, sungColor, ((positionMs - t.first).toFloat() / (t.second - t.first).coerceAtLeast(1L).toFloat()).coerceIn(0f, 1f))
+            }
+            withStyle(SpanStyle(color = col)) { append(ch) }
+            ci++
+        }
+    }
+    Text(
+        text = annotated,
+        fontSize = fontSize,
+        fontWeight = fontWeight,
+        letterSpacing = letterSpacing,
+        textAlign = textAlign,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        style = LocalTextStyle.current.copy(fontFamily = fontFamily, shadow = shadow),
+        modifier = modifier
+    )
+}
+
 /** PVでカタカナ語の下に小さく添える英単語（歌詞でよく出る語だけの内蔵対応表） */
 @Composable
 fun PvLyricLine(
@@ -588,6 +662,8 @@ fun PvLyricLine(
     lineDurationMs: Long = Long.MAX_VALUE,
     screenWidthDp: Float,
     exiting: Boolean,
+    words: List<LyricWord> = emptyList(),
+    lineStartMs: Long = 0L,
     modifier: Modifier = Modifier
 ) {
     val pvEaseIn = CubicBezierEasing(0.42f, 0f, 1f, 1f)
@@ -595,6 +671,24 @@ fun PvLyricLine(
     val iconWord = findIconWord(text)
     val chunks = remember(text) { splitLyricUnits(text) }
     if (chunks.isEmpty()) return
+    // 文字同期（KRC）がある行用: 文字位置→その文字の開始時刻（絶対ms）のテーブル
+    val charStartArr = remember(text, words) {
+        if (words.isEmpty()) null else {
+            val arr = LongArray(text.length) { lineStartMs }
+            var p = 0
+            for (w in words) {
+                val end = minOf(p + w.text.length, text.length)
+                for (i in p until end) arr[i] = w.startMs
+                p = end
+            }
+            if (p in 1 until text.length) {
+                val last = words.last().startMs
+                for (i in p until text.length) arr[i] = last
+            }
+            arr
+        }
+    }
+    var pvCharCursor = 0
     fun isLatinWord(c: String): Boolean = c.isNotEmpty() && c.all { it.code < 0x300 }
     fun charEm(ch: Char): Float = when {
         ch in "ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ" -> 0.6f
@@ -695,7 +789,8 @@ fun PvLyricLine(
     // 否定語（ない等）には打ち消し線ではなく☓アイコンを付ける（対象語の開始位置を塊ごとに探す）
     val negWords = listOf("なかった", "じゃない", "なくて", "なくな", "無い", "ない", "間違い", "誤り")
     val mosaicLine = text.contains("隠") || text.contains("モザイク")
-    val sandLine = text.contains("砂") || text.contains("消")
+    val sandLine = text.contains("砂") || text.contains("消") || text.contains("壊")
+    val windLine = text.contains("風")
     val rippleWord = text.contains("響")
     if (exiting) {
         LaunchedEffect(Unit) {
@@ -955,6 +1050,12 @@ fun PvLyricLine(
                         else -> 0.98f
                     }
                     val unitStart = chunkCharPos; chunkCharPos += ru.length
+                    // 文字同期がある行では、このユニットの実時刻（行頭からの差分）で入場させる
+                    var unitDelayMs = -1L
+                    if (charStartArr != null) {
+                        charStartArr.getOrNull(pvCharCursor)?.let { unitDelayMs = (it - lineStartMs).coerceIn(0L, 6000L) }
+                        pvCharCursor += ru.length
+                    }
                     // 否定語の先頭文字には☓アイコン（既に別アイコンが付いている場合はそちらを優先）
                     if (!negIconPlaced && thisUnitIcon == null && chunkNegStart >= 0 && unitStart <= chunkNegStart && chunkNegStart < unitStart + ru.length) {
                         thisUnitIcon = LyricIcon.CROSS
@@ -979,10 +1080,12 @@ fun PvLyricLine(
                         dimmed = chunkDim,
                         ghost = chunkGhost,
                         fallExit = fallLine,
+                        windExit = windLine,
                         chunkColor = unitChunkColor,
                         arrowUnder = chunkArrow && ru == "行",
                         bubble = if (!chunkDream) 0 else if (unitIdxInChunk == chunkUnits.size) 2 else 1,
-                        swayScale = if (bigText) 2.8f else 1f
+                        swayScale = if (bigText) 2.8f else 1f,
+                        entryDelayMs = unitDelayMs
                     )
                 }
             }
@@ -1031,18 +1134,22 @@ fun PvLyricUnit(
     swayScale: Float = 1f,
     ghost: Boolean = false,
     fallExit: Boolean = false,
+    windExit: Boolean = false,
     chunkColor: Color? = null,
     arrowUnder: Boolean = false,
-    bubble: Int = 0
+    bubble: Int = 0,
+    entryDelayMs: Long = -1L
 ) {
     val pvEaseIn = CubicBezierEasing(0.42f, 0f, 1f, 1f)
+    // 文字同期がある行では実時刻ディレイ、無い行では従来の等間隔ディレイで入場する
+    val effDelayMs = if (entryDelayMs >= 0L) entryDelayMs else staggerIndex * 45L
     val uSeed = staggerIndex
     val uAnim = remember(staggerIndex) { Animatable(0f) }
     // 表示中ずっと、位置がごく小さくぐらぐら揺れる（角度は変えない）
     val sway = remember(staggerIndex) { Animatable(0f) }
     if (!exiting) {
         LaunchedEffect(staggerIndex) {
-            delay(staggerIndex * 45L)
+            delay(effDelayMs)
             uAnim.animateTo(1f, animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing))
         }
         LaunchedEffect(staggerIndex) {
@@ -1070,7 +1177,7 @@ fun PvLyricUnit(
     val ulAnim = remember(staggerIndex) { Animatable(0f) }
     if (!exiting) {
         LaunchedEffect(staggerIndex) {
-            delay(staggerIndex * 45L)
+            delay(effDelayMs)
             ulAnim.animateTo(1f, animationSpec = tween(durationMillis = 260, easing = FastOutSlowInEasing))
             ulAnim.animateTo(2f, animationSpec = tween(durationMillis = 260, easing = pvEaseIn))
         }
@@ -1093,7 +1200,7 @@ fun PvLyricUnit(
     val wipeT = remember { Animatable(0f) }
     if (colorHit != null) {
         LaunchedEffect(staggerIndex) {
-            delay(staggerIndex * 45L + 200L)
+            delay(effDelayMs + 200L)
             wipeT.animateTo(1f, animationSpec = tween(durationMillis = 650, easing = LinearEasing))
         }
     }
@@ -1101,7 +1208,7 @@ fun PvLyricUnit(
     val fxT = remember { Animatable(0f) }
     if (!exiting && (effectKind == 3 || effectKind == 4)) {
         LaunchedEffect(staggerIndex) {
-            delay(staggerIndex * 45L)
+            delay(effDelayMs)
             fxT.animateTo(1f, animationSpec = tween(durationMillis = 800, easing = LinearEasing))
         }
     }
@@ -1120,6 +1227,18 @@ fun PvLyricUnit(
                     rotationZ = uRot + dirR * pe * (22f + (uSeed % 38))
                     translationX = dirR * pe * pe * (14f + (uSeed % 26))
                     translationY = pe * pe * (560f + (uSeed % 30) * 9f)
+                } else if (exiting && windExit) {
+                    // 「風」の行: 風に吹かれて右へ飛んでいきながら薄れる
+                    val wx = ((exitProgressValue * 720f - exitDelayMs) / 520f).coerceIn(0f, 1f)
+                    val wd = wx * wx
+                    val wDir = if (uSeed % 2 == 0) 1f else -1f
+                    alpha = (if (wx < 0.55f) 1f else 1f - (wx - 0.55f) / 0.45f) * (if (ghost) 0.38f else 1f)
+                    rotationZ = uRot + wd * (55f + (uSeed % 50)) * wDir
+                    translationX = wd * (360f + (uSeed % 40) * 7f)
+                    translationY = wd * ((uSeed % 41) - 20) * 2.4f - wd * 26f
+                    val ws = 1f - wd * 0.15f
+                    scaleX = ws
+                    scaleY = ws
                 } else if (exiting) {
                     val localX = ((exitProgressValue * 720f - exitDelayMs) / 320f).coerceIn(0f, 1f)
                     val a = 1f - pvEaseIn.transform(localX)
@@ -1638,7 +1757,15 @@ fun LyricTagSearchDialog(
                                                     LyricsManager.saveLyricsOverride(
                                                         context, currentTitle, currentArtist, currentAlbum, lrc
                                                     )
-                                                    onApply(LyricsManager.parseLrc(lrc), cand.source)
+                                                    // Kugou候補は文字同期（KRC）も試し、取れたら文字タイミング付きで適用する
+                                                    val krc = if (cand.source == "Kugou") LyricsManager.fetchCandidateKrc(cand) else null
+                                                    val appliedLines = if (krc != null) {
+                                                        LyricsManager.saveKrcCache(context, currentTitle, currentArtist, currentAlbum, krc)
+                                                        LyricsManager.parseKrc(krc).ifEmpty { LyricsManager.parseLrc(lrc) }
+                                                    } else {
+                                                        LyricsManager.parseLrc(lrc)
+                                                    }
+                                                    onApply(appliedLines, cand.source)
                                                     onDismiss()
                                                 } else {
                                                     message = "その候補の歌詞を取得できませんでした"
@@ -1820,6 +1947,8 @@ fun LyricsPvLayer(
                                 accentColor = accentColor,
                                 screenWidthDp = screenWidthDp,
                                 exiting = false,
+                                words = lines[curIdx].words,
+                                lineStartMs = lines[curIdx].timeMs,
                                 effectKind = pvKindFor(curIdx, curText),
                                 lineDurationMs = lines.getOrNull(curIdx + 1)?.let { it.timeMs - lines[curIdx].timeMs } ?: Long.MAX_VALUE,
                                 modifier = Modifier
@@ -2022,26 +2151,48 @@ fun LyricsBrowseOverlay(
             val isFocusedLine = idx == focusedIdx
             val fade = (1f - (abs(relPos) - 4f) / 3f).coerceIn(0f, 1f)
             val myHeightDp = (lineHeightsPx[idx]?.let { it / densityNow.density } ?: 34f)
-            Text(
-                text = lines[idx].text,
-                color = if (isFocusedLine) Color.White else Color.White.copy(alpha = 0.92f * fade),
-                fontSize = fitFontSizeSp(lines[idx].text, if (isFocusedLine) 26f else 15f, maxWidth.value * 0.85f).sp,
-                fontWeight = if (isFocusedLine) lyricWeight else FontWeight.Normal,
-                letterSpacing = 1.0.sp,
-                textAlign = TextAlign.Start,
-                maxLines = 1,
-                style = LocalTextStyle.current.copy(
+            if (isFocusedLine && idx == browsePlayingIdx && lines[idx].words.isNotEmpty()) {
+                KaraokeLyricText(
+                    line = lines[idx],
+                    positionMs = positionMs + lyricOffsetMs,
+                    sungColor = accentColor,
+                    baseColor = Color.White,
+                    fontSize = fitFontSizeSp(lines[idx].text, 26f, maxWidth.value * 0.85f).sp,
+                    fontWeight = lyricWeight,
                     fontFamily = fontFamily,
-                    shadow = if (accentGlow && isFocusedLine) Shadow(color = accentColor, blurRadius = 14f) else Shadow(color = Color.Black.copy(alpha = 0.75f), blurRadius = 10f)
-                ),
-                modifier = Modifier
-                    .offset(
-                        x = (40f + relPos * 5f).dp,
-                        y = (centerYDp + offsetDpFor(idx) - myHeightDp / 2f).dp
-                    )
-                    .fillMaxWidth(0.85f)
-                    .onGloballyPositioned { lineHeightsPx[idx] = it.size.height }
-            )
+                    letterSpacing = 1.0.sp,
+                    textAlign = TextAlign.Start,
+                    shadow = if (accentGlow) Shadow(color = accentColor, blurRadius = 14f) else Shadow(color = Color.Black.copy(alpha = 0.75f), blurRadius = 10f),
+                    modifier = Modifier
+                        .offset(
+                            x = (40f + relPos * 5f).dp,
+                            y = (centerYDp + offsetDpFor(idx) - myHeightDp / 2f).dp
+                        )
+                        .fillMaxWidth(0.85f)
+                        .onGloballyPositioned { lineHeightsPx[idx] = it.size.height }
+                )
+            } else {
+                Text(
+                    text = lines[idx].text,
+                    color = if (isFocusedLine) Color.White else Color.White.copy(alpha = 0.92f * fade),
+                    fontSize = fitFontSizeSp(lines[idx].text, if (isFocusedLine) 26f else 15f, maxWidth.value * 0.85f).sp,
+                    fontWeight = if (isFocusedLine) lyricWeight else FontWeight.Normal,
+                    letterSpacing = 1.0.sp,
+                    textAlign = TextAlign.Start,
+                    maxLines = 1,
+                    style = LocalTextStyle.current.copy(
+                        fontFamily = fontFamily,
+                        shadow = if (accentGlow && isFocusedLine) Shadow(color = accentColor, blurRadius = 14f) else Shadow(color = Color.Black.copy(alpha = 0.75f), blurRadius = 10f)
+                    ),
+                    modifier = Modifier
+                        .offset(
+                            x = (40f + relPos * 5f).dp,
+                            y = (centerYDp + offsetDpFor(idx) - myHeightDp / 2f).dp
+                        )
+                        .fillMaxWidth(0.85f)
+                        .onGloballyPositioned { lineHeightsPx[idx] = it.size.height }
+                )
+            }
         }
     }
     // 下部ボタン: 移動（フォーカス行へジャンプ）／タイミング調整／閉じる
@@ -2318,6 +2469,8 @@ fun LyricsFullscreenOverlay(
                                 bigText = true,
                                 lineDurationMs = fsLines.getOrNull(curIdx + 1)?.let { it.timeMs - fsLines[curIdx].timeMs } ?: Long.MAX_VALUE,
                                 exiting = false,
+                                words = fsLines[curIdx].words,
+                                lineStartMs = fsLines[curIdx].timeMs,
                                 effectKind = Math.floorMod(Math.floorMod(curIdx * 31 + curText.hashCode(), 997), 8),
                                 modifier = Modifier
                             )
@@ -2371,19 +2524,35 @@ fun LyricsFullscreenOverlay(
                             Spacer(Modifier.height(14.dp))
                         }
                         if (curText.isNotEmpty()) {
-                            Text(
-                                curText,
-                                color = Color.White,
-                                fontSize = fitFontSizeSp(curText, 30f, fsWidth - 108f).sp,
-                                fontWeight = lyricWeight,
-                                letterSpacing = 3.sp,
-                                maxLines = 1,
-                                style = LocalTextStyle.current.copy(
+                            val fsCurK = fsCurLine
+                            if (!fsInterlude && fsCurK != null && fsCurK.words.isNotEmpty()) {
+                                KaraokeLyricText(
+                                    line = fsCurK,
+                                    positionMs = fsPos,
+                                    sungColor = accentColor,
+                                    baseColor = Color.White,
+                                    fontSize = fitFontSizeSp(curText, 30f, fsWidth - 108f).sp,
+                                    fontWeight = lyricWeight,
                                     fontFamily = fontFamily,
-                                    shadow = Shadow(color = Color.White.copy(alpha = 0.85f), blurRadius = 18f)
-                                ),
-                                modifier = Modifier.padding(start = 28.dp)
-                            )
+                                    letterSpacing = 3.sp,
+                                    shadow = Shadow(color = Color.White.copy(alpha = 0.85f), blurRadius = 18f),
+                                    modifier = Modifier.padding(start = 28.dp)
+                                )
+                            } else {
+                                Text(
+                                    curText,
+                                    color = Color.White,
+                                    fontSize = fitFontSizeSp(curText, 30f, fsWidth - 108f).sp,
+                                    fontWeight = lyricWeight,
+                                    letterSpacing = 3.sp,
+                                    maxLines = 1,
+                                    style = LocalTextStyle.current.copy(
+                                        fontFamily = fontFamily,
+                                        shadow = Shadow(color = Color.White.copy(alpha = 0.85f), blurRadius = 18f)
+                                    ),
+                                    modifier = Modifier.padding(start = 28.dp)
+                                )
+                            }
                         }
                         if (nextText.isNotEmpty()) {
                             Spacer(Modifier.height(14.dp))
@@ -2392,18 +2561,33 @@ fun LyricsFullscreenOverlay(
                     } else {
                         val lineText = if (fsIndex < 0) "" else if (fsInterlude) "♪" else (fsCurLine?.text ?: "")
                         if (lineText.isNotEmpty()) {
-                            Text(
-                                lineText,
-                                color = Color.White,
-                                fontSize = fitFontSizeSp(lineText, 26f, fsWidth - 80f).sp,
-                                fontWeight = lyricWeight,
-                                letterSpacing = 2.sp,
-                                maxLines = 1,
-                                style = LocalTextStyle.current.copy(
+                            val fsCurK2 = fsCurLine
+                            if (!fsInterlude && fsCurK2 != null && fsCurK2.words.isNotEmpty()) {
+                                KaraokeLyricText(
+                                    line = fsCurK2,
+                                    positionMs = fsPos,
+                                    sungColor = accentColor,
+                                    baseColor = Color.White,
+                                    fontSize = fitFontSizeSp(lineText, 26f, fsWidth - 80f).sp,
+                                    fontWeight = lyricWeight,
                                     fontFamily = fontFamily,
+                                    letterSpacing = 2.sp,
                                     shadow = Shadow(color = Color.White.copy(alpha = 0.85f), blurRadius = 18f)
                                 )
-                            )
+                            } else {
+                                Text(
+                                    lineText,
+                                    color = Color.White,
+                                    fontSize = fitFontSizeSp(lineText, 26f, fsWidth - 80f).sp,
+                                    fontWeight = lyricWeight,
+                                    letterSpacing = 2.sp,
+                                    maxLines = 1,
+                                    style = LocalTextStyle.current.copy(
+                                        fontFamily = fontFamily,
+                                        shadow = Shadow(color = Color.White.copy(alpha = 0.85f), blurRadius = 18f)
+                                    )
+                                )
+                            }
                         }
                     }
                 }

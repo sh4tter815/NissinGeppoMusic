@@ -856,17 +856,33 @@ fun MainLauncherScreen() {
                                 Spacer(Modifier.height(24.dp))
                             }
                             Spacer(Modifier.height(16.dp))
-                            Text(
-                                text = if (mInterlude) "♪" else (curText ?: ""),
-                                color = Color.White,
-                                fontSize = fitFontSizeSp(if (mInterlude) "♪" else (curText ?: ""), 30f, screenWidthDp - 76f).sp,
-                                fontWeight = lyricWeight,
-                                letterSpacing = 3.sp,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily, shadow = Shadow(color = accentColor.copy(alpha = 0.8f), blurRadius = 16f)),
-                                modifier = Modifier.padding(start = 28.dp)
-                            )
+                            val curLineObj = multiLines.getOrNull(rawIdx)
+                            if (!mInterlude && curLineObj != null && curLineObj.words.isNotEmpty()) {
+                                KaraokeLyricText(
+                                    line = curLineObj,
+                                    positionMs = musicPlayerManager.currentPosition + lyricOffsetMs,
+                                    sungColor = accentColor,
+                                    baseColor = Color.White,
+                                    fontSize = fitFontSizeSp(curLineObj.text, 30f, screenWidthDp - 76f).sp,
+                                    fontWeight = lyricWeight,
+                                    fontFamily = lyricsFontFamily,
+                                    letterSpacing = 3.sp,
+                                    shadow = Shadow(color = accentColor.copy(alpha = 0.8f), blurRadius = 16f),
+                                    modifier = Modifier.padding(start = 28.dp)
+                                )
+                            } else {
+                                Text(
+                                    text = if (mInterlude) "♪" else (curText ?: ""),
+                                    color = Color.White,
+                                    fontSize = fitFontSizeSp(if (mInterlude) "♪" else (curText ?: ""), 30f, screenWidthDp - 76f).sp,
+                                    fontWeight = lyricWeight,
+                                    letterSpacing = 3.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily, shadow = Shadow(color = accentColor.copy(alpha = 0.8f), blurRadius = 16f)),
+                                    modifier = Modifier.padding(start = 28.dp)
+                                )
+                            }
                             Spacer(Modifier.height(16.dp))
                             if (nextText != null) {
                                 Text(nextText, color = Color.White.copy(alpha = 0.45f), fontSize = fitFontSizeSp(nextText, 18f, screenWidthDp - 104f).sp, letterSpacing = 2.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily), modifier = Modifier.padding(start = 56.dp))
@@ -985,31 +1001,47 @@ fun MainLauncherScreen() {
                                         animationSpec = tween(durationMillis = 350),
                                         label = "lyricFade"
                                     ) { idx ->
-                                        Text(
-                                            text = when {
-                                                idx == -2 -> "♪"
-                                                idx >= 0 -> lines[idx].text
-                                                else -> ""
-                                            },
-                                            color = Color.White,
-                                            fontSize = fitFontSizeSp(
-                                                when {
+                                        val fadeLineObj = if (idx >= 0) lines.getOrNull(idx) else null
+                                        if (fadeLineObj != null && fadeLineObj.words.isNotEmpty()) {
+                                            KaraokeLyricText(
+                                                line = fadeLineObj,
+                                                positionMs = musicPlayerManager.currentPosition + lyricOffsetMs,
+                                                sungColor = accentColor,
+                                                baseColor = Color.White,
+                                                fontSize = fitFontSizeSp(fadeLineObj.text, 15f, screenWidthDp - 116f).sp,
+                                                fontWeight = lyricWeight,
+                                                fontFamily = lyricsFontFamily,
+                                                letterSpacing = 2.0.sp,
+                                                textAlign = TextAlign.Start,
+                                                shadow = Shadow(color = Color.White.copy(alpha = 0.85f), blurRadius = 16f)
+                                            )
+                                        } else {
+                                            Text(
+                                                text = when {
                                                     idx == -2 -> "♪"
                                                     idx >= 0 -> lines[idx].text
                                                     else -> ""
                                                 },
-                                                15f,
-                                                screenWidthDp - 116f
-                                            ).sp,
-                                            fontWeight = lyricWeight,
-                                            letterSpacing = 2.0.sp,
-                                            textAlign = TextAlign.Start,
-                                            maxLines = 1,
-                                            style = LocalTextStyle.current.copy(
-                                                fontFamily = lyricsFontFamily,
-                                                shadow = Shadow(color = Color.White.copy(alpha = 0.85f), blurRadius = 16f)
+                                                color = Color.White,
+                                                fontSize = fitFontSizeSp(
+                                                    when {
+                                                        idx == -2 -> "♪"
+                                                        idx >= 0 -> lines[idx].text
+                                                        else -> ""
+                                                    },
+                                                    15f,
+                                                    screenWidthDp - 116f
+                                                ).sp,
+                                                fontWeight = lyricWeight,
+                                                letterSpacing = 2.0.sp,
+                                                textAlign = TextAlign.Start,
+                                                maxLines = 1,
+                                                style = LocalTextStyle.current.copy(
+                                                    fontFamily = lyricsFontFamily,
+                                                    shadow = Shadow(color = Color.White.copy(alpha = 0.85f), blurRadius = 16f)
+                                                )
                                             )
-                                        )
+                                        }
                                     }
                                 }
                                 lyricsNotFound && notFoundMsgVisible -> {
