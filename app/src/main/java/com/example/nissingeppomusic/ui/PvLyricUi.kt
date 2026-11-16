@@ -728,6 +728,10 @@ fun PvLyricLine(
                 val diff = kotlin.math.abs(totalEm / 2f - acc)
                 if (diff < bestDiff) { bestDiff = diff; best = idx }
             }
+            // 行頭禁則: 次の行が「ー・小さいカナ・句読点・閉じ括弧」で始まる場合は、分割点をずらす
+            val noLineStart = "ーぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮ・、。，．！!？?）)】」』"
+            while (best > 1 && list[best].isNotEmpty() && list[best][0] in noLineStart) best--
+            while (best < list.size - 1 && list[best].isNotEmpty() && list[best][0] in noLineStart) best++
             return listOf(list.subList(0, best), list.subList(best, list.size))
         }
         return listOf(list)
@@ -1661,9 +1665,31 @@ fun chunkJapanese(span: String): List<String> {
             t == 2 -> cur.append(run) // 行頭のひらがなはそのまま塊の始まり
             t == 0 -> cur.append(run) // 句読点などは前の塊に付ける
             else -> {
-                // 漢字・カタカナは新しい塊の始まり
-                closeChunk()
-                cur.append(run)
+                if (t == 3 && run.length >= 6) {
+                    // 長いカタカナ語は「前の文字＋ー・小さいカナ」を1セットとして塊に分ける
+                    // （「ハッピーヘヴンリーバースデー」のような語を行で割れるようにし、ーが行頭に来ないようにするため）
+                    closeChunk()
+                    val unit = StringBuilder()
+                    fun flushUnit() {
+                        if (unit.isNotEmpty()) {
+                            chunks.add(unit.toString())
+                            unit.clear()
+                        }
+                    }
+                    for (ch in run) {
+                        if (ch == 'ー' || ch in "ァィゥェォッャュョヮ") {
+                            unit.append(ch)
+                        } else {
+                            flushUnit()
+                            unit.append(ch)
+                        }
+                    }
+                    flushUnit()
+                } else {
+                    // 漢字・カタカナは新しい塊の始まり
+                    closeChunk()
+                    cur.append(run)
+                }
             }
         }
     }
