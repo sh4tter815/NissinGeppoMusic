@@ -901,6 +901,19 @@ object LyricsManager {
                         if (hash.isBlank()) continue
                         val songName = info.optString("songname", "")
                             .ifBlank { info.optString("filename", "").substringAfterLast(" - ") }
+                        // 曲名が一致しないヒット（アルバム名などで引っかかった無関係な曲）は候補に出さない
+                        if (!titleMatches(songName, title)) continue
+                        // Kugou の曲カタログにあっても歌詞が登録されていない曲は、タップしても取得できないので候補に出さない
+                        val durMs = info.optInt("duration", 0) * 1000L
+                        val candUrl = "https://lyrics.kugou.com/search?ver=1&man=yes&client=pc" +
+                            "&keyword=${enc(songName)}&duration=$durMs&hash=$hash"
+                        val candText = httpGetText(candUrl, desktopUa) ?: continue
+                        val candArr = try {
+                            JSONObject(candText).optJSONArray("candidates")
+                        } catch (e: Exception) {
+                            null
+                        }
+                        if (candArr == null || candArr.length() == 0) continue
                         results.add(
                             LyricCandidate(
                                 source = "Kugou",
