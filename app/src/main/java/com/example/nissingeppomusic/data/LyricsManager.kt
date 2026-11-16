@@ -11,7 +11,10 @@ import java.net.URLEncoder
 import java.security.MessageDigest
 
 /** 歌詞の1行（同期歌詞用にタイムスタンプ付き） */
-data class LyricLine(val timeMs: Long, val text: String)
+data class LyricLine(val timeMs: Long, val text: String, val words: List<LyricWord> = emptyList())
+
+/** 文字同期の1セグメント（Kugou の KRC 由来。通常は1文字。開始・終了は曲頭からの絶対時刻ms） */
+data class LyricWord(val text: String, val startMs: Long, val endMs: Long)
 
 /**
  * 同期歌詞の取得まわり。
@@ -93,7 +96,154 @@ object LyricsManager {
                 result.add(LyricLine(min * 60_000L + sec * 1_000L + fracMs, text))
             }
         }
-        return result.sortedBy { it.timeMs }
+        return splitLongLines(result.sortedBy { it.timeMs })
+    }
+
+    /** KRC形式（文字単位の同期情報つき）をパースする。1行 = [開始ms,長さms]<オフセット,長さ,0>文字… の形式 */
+    private val krcLineRegex = Regex("""^\[(\d+),(\d+)\](.*)$""")
+    private val krcWordRegex = Regex("""<(\d+),(\d+),\d+>([^<]*)""")
+
+    fun parseKrc(krcText: String): List<LyricLine> {
+        val result = mutableListOf<LyricLine>()
+        for (rawLine in krcText.lineSequence()) {
+            val line = rawLine.trim()
+            val m = krcLineRegex.find(line) ?: continue
+            val lineStart = m.groupValues[1].toLongOrNull() ?: continue
+            val body = m.groupValues[3]
+            val words = mutableListOf<LyricWord>()
+            val sb = StringBuilder()
+            for (wm in krcWordRegex.findAll(body)) {
+                val off = wm.groupValues[1].toLongOrNull() ?: continue
+                val dur = wm.groupValues[2].toLongOrNull() ?: continue
+                val ch = toJapaneseKanji(wm.groupValues[3])
+                if (ch.isEmpty()) continue
+                words.add(LyricWord(ch, lineStart + off, lineStart + off + dur))
+                sb.append(ch)
+            }
+            // 文字位置と words をずらさないため、行テキストは trim しない（空白もセグメントとして数える）
+            val text = sb.toString()
+            if (words.isEmpty() || text.isBlank()) continue
+            if (PLACEHOLDER_LYRIC_MARKERS.any { text.contains(it) }) continue
+            result.add(LyricLine(lineStart, text, words))
+        }
+        return splitLongLines(result.sortedBy { it.timeMs })
+    }
+
+    /** KRC の暗号化（先頭4バイト "krc1" ＋ 16バイト周期XOR ＋ zlib）を復号してテキストに戻す。失敗したら null */
+    private fun decodeKrc(contentB64: String): String? {
+        val raw = try {
+            android.util.Base64.decode(contentB64, android.util.Base64.DEFAULT)
+        } catch (e: Exception) {
+            return null
+        }
+        if (raw.size < 5 || String(raw, 0, 4, Charsets.US_ASCII) != "krc1") return null
+        val key = intArrayOf(0x40, 0x47, 0x61, 0x77, 0x5e, 0x32, 0x74, 0x47, 0x51, 0x36, 0x31, 0x2d, 0xce, 0xd2, 0x6e, 0x69)
+        val xored = ByteArray(raw.size - 4) { i -> (raw[i + 4].toInt() xor key[i % 16]).toByte() }
+        return try {
+            java.util.zip.InflaterInputStream(java.io.ByteArrayInputStream(xored)).use { it.readBytes() }
+                .toString(Charsets.UTF_8)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /** 行の幅見積もり（半角は 0.55、全角は 1.0 として数える） */
+    private fun lyricEmWidth(s: String): Float =
+        s.fold(0f) { acc, ch -> acc + if (ch.code < 0x300) 0.55f else 1.0f }
+
+    /**
+     * 長すぎる行を、意味の切れ目で複数行に分割する（幅24を超える行が対象。再帰的に処理）。
+     * 分割点は「スペース ＞ 句読点の直後 ＞ 助詞の直後 ＞ 中央」の優先順で、中央付近から選ぶ。
+     * 文字同期がある行は単語境界で割り、後半の開始時刻は実時刻を使う
+     */
+    private fun splitLongLines(lines: List<LyricLine>): List<LyricLine> {
+        if (lines.isEmpty()) return lines
+        val out = mutableListOf<LyricLine>()
+        for (i in lines.indices) {
+            out.addAll(splitOneLine(lines[i], lines.getOrNull(i + 1)?.timeMs))
+        }
+        return out
+    }
+
+    private fun splitOneLine(line: LyricLine, nextStartMs: Long?): List<LyricLine> {
+        val text = line.text
+        if (text.length < 10 || lyricEmWidth(text) <= 24f) return listOf(line)
+        val mid = text.length / 2
+        val rangeStart = (text.length * 0.3f).toInt()
+        val rangeEnd = (text.length * 0.7f).toInt()
+        var best = -1
+        var bestScore = Int.MAX_VALUE
+        for (i in rangeStart..rangeEnd) {
+            if (i <= 0 || i >= text.length) continue
+            val prev = text[i - 1]
+            val priority = when {
+                prev == ' ' || prev == '　' -> 0
+                prev in "、。，．・：:；;！!？?）)】」』" -> 1
+                prev in "はがをにへとやのもで" -> 2
+                else -> continue
+            }
+            val score = priority * 1000 + kotlin.math.abs(i - mid)
+            if (score < bestScore) {
+                bestScore = score
+                best = i
+            }
+        }
+        var splitIdx = if (best >= 0) best else mid
+        // 英単語の途中では割らない（手前のスペースまで戻す）
+        if (splitIdx in 1 until text.length &&
+            text[splitIdx - 1] != ' ' && text[splitIdx] != ' ' &&
+            text[splitIdx - 1].code < 0x300 && text[splitIdx].code < 0x300
+        ) {
+            val back = text.lastIndexOf(' ', splitIdx - 1)
+            if (back >= rangeStart) splitIdx = back + 1
+        }
+        if (splitIdx <= 0 || splitIdx >= text.length) return listOf(line)
+        if (line.words.isNotEmpty()) {
+            var acc = 0
+            var wi = 0
+            while (wi < line.words.size && acc + line.words[wi].text.length <= splitIdx) {
+                acc += line.words[wi].text.length
+                wi++
+            }
+            if (wi <= 0 || wi >= line.words.size) return listOf(line)
+            val g1 = line.words.subList(0, wi).dropLastWhile { it.text.isBlank() }
+            val g2 = line.words.subList(wi, line.words.size).dropWhile { it.text.isBlank() }
+            if (g1.isEmpty() || g2.isEmpty()) return listOf(line)
+            val l1 = LyricLine(line.timeMs, g1.joinToString("") { it.text }, g1)
+            val l2 = LyricLine(g2.first().startMs, g2.joinToString("") { it.text }, g2)
+            return splitOneLine(l1, l2.timeMs) + splitOneLine(l2, nextStartMs)
+        }
+        val t1 = text.substring(0, splitIdx).trimEnd()
+        val t2 = text.substring(splitIdx).trimStart()
+        if (t1.isEmpty() || t2.isEmpty()) return listOf(line)
+        val endMs = nextStartMs ?: (line.timeMs + 4000L)
+        val span = (endMs - line.timeMs).coerceAtLeast(0L)
+        val t2Start = line.timeMs + (span * splitIdx / text.length).coerceIn(0L, span)
+        val l1 = LyricLine(line.timeMs, t1)
+        val l2 = LyricLine(t2Start, t2)
+        return splitOneLine(l1, t2Start) + splitOneLine(l2, nextStartMs)
+    }
+
+    /** 行リストを行単位の LRC テキストに変換する（通常キャッシュ保存用。文字タイミングは .krc 側に残す） */
+    private fun linesToLrc(lines: List<LyricLine>): String {
+        val sb = StringBuilder()
+        for (line in lines) {
+            val totalSec = line.timeMs / 1000
+            val mm = (totalSec / 60).toString().padStart(2, '0')
+            val ss = (totalSec % 60).toString().padStart(2, '0')
+            val cs = ((line.timeMs % 1000) / 10).toString().padStart(2, '0')
+            sb.append("[$mm:$ss.$cs]").append(line.text).append("\n")
+        }
+        return sb.toString()
+    }
+
+    /** 文字同期（KRC）のキャッシュを、通常キャッシュと並べて保存する */
+    fun saveKrcCache(context: Context, title: String, artist: String, album: String, krcText: String) {
+        try {
+            File(cacheFile(context, title, artist, album).absolutePath + ".krc").writeText(krcText, Charsets.UTF_8)
+        } catch (e: Exception) {
+            // 保存失敗は無視する
+        }
     }
 
     private fun cacheKey(title: String, artist: String, album: String): String {
@@ -148,6 +298,11 @@ object LyricsManager {
     fun invalidateCache(context: Context, title: String, artist: String, album: String) {
         try {
             cacheFile(context, title, artist, album).delete()
+        } catch (e: Exception) {
+            // 削除失敗は無視する
+        }
+        try {
+            File(cacheFile(context, title, artist, album).absolutePath + ".krc").delete()
         } catch (e: Exception) {
             // 削除失敗は無視する
         }
@@ -274,6 +429,16 @@ object LyricsManager {
             }
             if (parsed.isNotEmpty()) {
                 lastFetchSource = "キャッシュ"
+                // 文字同期（KRC）のキャッシュがあれば、文字タイミング付きの行で返す
+                val krcFile = File(cache.absolutePath + ".krc")
+                if (krcFile.exists()) {
+                    val krcParsed = try {
+                        parseKrc(krcFile.readText(Charsets.UTF_8))
+                    } catch (e: Exception) {
+                        emptyList()
+                    }
+                    if (krcParsed.isNotEmpty()) return@withContext krcParsed
+                }
                 return@withContext parsed
             }
         }
@@ -366,6 +531,25 @@ object LyricsManager {
         }
 
         // 5) Kugou（酷狗）: さらにマニアックな曲の候補
+        // まず文字同期つきの KRC を試す（取れたら文字単位のタイミングも一緒にキャッシュする）
+        val kugouKrc = try {
+            fetchKugouKrc(queryTitle, artist, durationMs)
+        } catch (e: Exception) {
+            null
+        }
+        if (!kugouKrc.isNullOrBlank()) {
+            val parsedKrc = parseKrc(kugouKrc)
+            if (parsedKrc.isNotEmpty()) {
+                try {
+                    cache.writeText(linesToLrc(parsedKrc), Charsets.UTF_8)
+                    File(cache.absolutePath + ".krc").writeText(kugouKrc, Charsets.UTF_8)
+                } catch (e: Exception) {
+                    // キャッシュ保存失敗は無視する
+                }
+                lastFetchSource = "Kugou"
+                return@withContext parsedKrc
+            }
+        }
         val kugouLrc = try {
             fetchKugouLrc(queryTitle, artist, durationMs)
         } catch (e: Exception) {
@@ -563,6 +747,97 @@ object LyricsManager {
         return null
     }
 
+    /** Kugou の非公式APIから文字同期つき歌詞（KRCテキスト）を復号して取得する。見つからなければ null */
+    private fun fetchKugouKrc(title: String, artist: String, durationMs: Long): String? {
+        fun enc(v: String) = URLEncoder.encode(v, "UTF-8")
+        val wantJapanese = containsJapanese(title) || containsJapanese(artist)
+        fun searchInfos(keyword: String): org.json.JSONArray? {
+            val url = "http://mobilecdn.kugou.com/api/v3/search/song?format=json" +
+                "&keyword=${enc(keyword)}&page=1&pagesize=30&showtype=1"
+            val text = httpGetText(url, desktopUa) ?: return null
+            return try {
+                JSONObject(text).optJSONObject("data")?.optJSONArray("info")
+            } catch (e: Exception) {
+                null
+            }
+        }
+        // 曲名が一致する候補だけを集める（別曲の歌詞を掴まないため）
+        fun collectHashes(infos: org.json.JSONArray?): MutableList<Triple<String, Long, Boolean>> {
+            val list = mutableListOf<Triple<String, Long, Boolean>>()
+            if (infos == null) return list
+            for (i in 0 until infos.length()) {
+                val info = infos.optJSONObject(i) ?: continue
+                val hash = info.optString("hash", "")
+                if (hash.isBlank()) continue
+                val songName = info.optString("songname", "")
+                    .ifBlank { info.optString("filename", "").substringAfterLast(" - ") }
+                if (!titleMatches(songName, title)) continue
+                val singer = info.optString("singername", "")
+                list.add(Triple(hash, info.optLong("duration", 0L), artistNameMatches(singer, artist)))
+            }
+            return list
+        }
+        // まず曲名だけで検索する。アーティスト名（特に feat. 表記）を混ぜると検索が汚染され、
+        // 目的の曲が結果から消えることが実測で分かったため
+        var hashes = collectHashes(searchInfos(title))
+        if (hashes.isEmpty() && artist.isNotBlank()) {
+            hashes = collectHashes(searchInfos("$title $artist"))
+        }
+        if (hashes.isEmpty()) return null
+        // 同名曲が大量にある場合に別アーティストの版を掴まないよう、アーティストが一致する候補を優先する
+        val artistPool = hashes.filter { it.third }
+        var pool = if (artistPool.isNotEmpty()) artistPool else hashes
+        // 長さが大きく違う候補（別バージョン・別曲）は除外する。ただし全滅する場合は元の候補に戻す
+        if (durationMs > 0) {
+            val gated = pool.filter { it.second <= 0 || kotlin.math.abs(it.second * 1000 - durationMs) <= 15_000 }
+            if (gated.isNotEmpty()) pool = gated
+        }
+        val ordered = if (durationMs > 0) {
+            pool.sortedBy { kotlin.math.abs(it.second * 1000 - durationMs) }
+        } else {
+            pool
+        }
+
+        for ((hash, durSec, _) in ordered.take(3)) {
+            val durMs = if (durSec > 0) durSec * 1000 else durationMs
+            val candUrl = "https://lyrics.kugou.com/search?ver=1&man=yes&client=pc" +
+                "&keyword=${enc(title)}&duration=$durMs&hash=$hash"
+            val candText = httpGetText(candUrl, desktopUa) ?: continue
+            val candidates = try {
+                JSONObject(candText).optJSONArray("candidates")
+            } catch (e: Exception) {
+                null
+            } ?: continue
+            if (candidates.length() == 0) continue
+            // 歌詞候補も曲名が一致するものを優先する（無ければ先頭）
+            var first = candidates.optJSONObject(0) ?: continue
+            for (j in 0 until candidates.length()) {
+                val cand = candidates.optJSONObject(j) ?: continue
+                if (titleMatches(cand.optString("song", ""), title)) {
+                    first = cand
+                    break
+                }
+            }
+            val candId = first.optString("id", "")
+            val accessKey = first.optString("accesskey", "")
+            if (candId.isBlank() || accessKey.isBlank()) continue
+            val dlUrl = "https://lyrics.kugou.com/download?ver=1&client=pc&id=$candId" +
+                "&accesskey=$accessKey&fmt=krc&charset=utf8"
+            val dlText = httpGetText(dlUrl, desktopUa) ?: continue
+            val contentB64 = try {
+                JSONObject(dlText).optString("content", "")
+            } catch (e: Exception) {
+                null
+            }
+            if (contentB64.isNullOrBlank()) continue
+            val krc = decodeKrc(contentB64) ?: continue
+            if (parseKrc(krc).isNotEmpty() &&
+                (!wantJapanese || containsJapanese(krc))
+            ) return krc
+        }
+        return null
+    }
+
     // ===== タグ指定検索（手動で候補から選んで適用する用） =====
 
     data class LyricCandidate(
@@ -691,10 +966,51 @@ object LyricsManager {
         lrc?.takeIf { parseLrc(it).isNotEmpty() }
     }
 
+    /** タグ検索の候補（Kugou）から文字同期つき歌詞（KRCテキスト）を復号して取得する。無ければ null */
+    suspend fun fetchCandidateKrc(candidate: LyricCandidate): String? = withContext(Dispatchers.IO) {
+        if (candidate.source != "Kugou") return@withContext null
+        val hash = candidate.kugouHash ?: return@withContext null
+        fun enc(v: String) = URLEncoder.encode(v, "UTF-8")
+        val durMs = if (candidate.durationSec > 0) candidate.durationSec * 1000L else 0L
+        val candUrl = "https://lyrics.kugou.com/search?ver=1&man=yes&client=pc" +
+            "&keyword=${enc(candidate.title)}&duration=$durMs&hash=$hash"
+        val candText = httpGetText(candUrl, desktopUa) ?: return@withContext null
+        val candidates = try {
+            JSONObject(candText).optJSONArray("candidates")
+        } catch (e: Exception) {
+            null
+        } ?: return@withContext null
+        if (candidates.length() == 0) return@withContext null
+        var first = candidates.optJSONObject(0) ?: return@withContext null
+        for (j in 0 until candidates.length()) {
+            val cand = candidates.optJSONObject(j) ?: continue
+            if (titleMatches(cand.optString("song", ""), candidate.title)) {
+                first = cand
+                break
+            }
+        }
+        val candId = first.optString("id", "")
+        val accessKey = first.optString("accesskey", "")
+        if (candId.isBlank() || accessKey.isBlank()) return@withContext null
+        val dlUrl = "https://lyrics.kugou.com/download?ver=1&client=pc&id=$candId" +
+            "&accesskey=$accessKey&fmt=krc&charset=utf8"
+        val dlText = httpGetText(dlUrl, desktopUa) ?: return@withContext null
+        val contentB64 = try {
+            JSONObject(dlText).optString("content", "")
+        } catch (e: Exception) {
+            ""
+        }
+        if (contentB64.isBlank()) return@withContext null
+        val krc = decodeKrc(contentB64) ?: return@withContext null
+        krc.takeIf { parseKrc(it).isNotEmpty() }
+    }
+
     /** 手動で選んだ歌詞を、その曲のキャッシュとして保存する（次回から自動でこれが出る） */
     fun saveLyricsOverride(context: Context, title: String, artist: String, album: String, lrcText: String) {
         // 歌詞を適用したら「歌詞なし」指定は外す
         try { instrumentalFile(context, title, artist, album).delete() } catch (e: Exception) { }
+        // 文字同期キャッシュも一旦消す（KRC候補を選んだ場合は、この後で保存し直される）
+        try { File(cacheFile(context, title, artist, album).absolutePath + ".krc").delete() } catch (e: Exception) { }
         try {
             cacheFile(context, title, artist, album).writeText(lrcText, Charsets.UTF_8)
         } catch (e: Exception) {
