@@ -258,6 +258,12 @@ object LyricsManager {
             }
         }
 
+        // 1.5) 「歌詞なし（インスト）」指定がある曲は、歌詞なしとして即座に返す
+        if (isInstrumentalOverride(context, title, artist, album)) {
+            lastFetchSource = "インスト（歌詞なし）"
+            return@withContext emptyList()
+        }
+
         // 2) 端末内キャッシュ
         val cache = cacheFile(context, title, artist, album)
         if (cache.exists()) {
@@ -565,7 +571,8 @@ object LyricsManager {
         val artist: String,
         val durationSec: Int,
         val syncedLyrics: String?,
-        val kugouHash: String?
+        val kugouHash: String?,
+        val instrumental: Boolean = false
     )
 
     /** 曲名・アーティスト名で歌詞候補を検索する（LRCLIBとKugouの両方を当たる） */
@@ -579,9 +586,11 @@ object LyricsManager {
                 if (arr != null) {
                     for (i in 0 until arr.length()) {
                         val item = arr.optJSONObject(i) ?: continue
-                        // インスト曲として登録されているものは歌詞が無いので候補に入れない
-                        if (item.optBoolean("instrumental", false)) continue
-                        val synced = item.optLyricsString("syncedLyrics") ?: continue
+                        val synced = item.optLyricsString("syncedLyrics")
+                        // インスト曲（歌詞なし）として登録されているものも候補に出す。
+                        // 選ぶと「この曲は歌詞なし」という指定として適用される
+                        val isInst = item.optBoolean("instrumental", false) && synced == null
+                        if (synced == null && !isInst) continue
                         results.add(
                             LyricCandidate(
                                 source = "LRCLIB",
@@ -589,7 +598,8 @@ object LyricsManager {
                                 artist = item.optString("artistName", ""),
                                 durationSec = item.optInt("duration", 0),
                                 syncedLyrics = synced,
-                                kugouHash = null
+                                kugouHash = null,
+                                instrumental = isInst
                             )
                         )
                         if (results.size >= 15) break
@@ -683,11 +693,44 @@ object LyricsManager {
 
     /** 手動で選んだ歌詞を、その曲のキャッシュとして保存する（次回から自動でこれが出る） */
     fun saveLyricsOverride(context: Context, title: String, artist: String, album: String, lrcText: String) {
+        // 歌詞を適用したら「歌詞なし」指定は外す
+        try { instrumentalFile(context, title, artist, album).delete() } catch (e: Exception) { }
         try {
             cacheFile(context, title, artist, album).writeText(lrcText, Charsets.UTF_8)
         } catch (e: Exception) {
             // 保存に失敗しても、表示への適用は呼び出し側で行う
         }
+    }
+
+    /** インスト曲（歌詞なし）指定を保存するマーカー */
+    private fun instrumentalFile(context: Context, title: String, artist: String, album: String): File {
+        val dir = File(context.filesDir, "lyrics")
+        if (!dir.exists()) dir.mkdirs()
+        return File(dir, cacheKey(title, artist, album) + ".inst")
+    }
+
+    /** この曲に「歌詞なし（インスト）」指定が付いているか */
+    fun isInstrumentalOverride(context: Context, title: String, artist: String, album: String): Boolean =
+        instrumentalFile(context, title, artist, album).exists()
+
+    /** 「歌詞なし（インスト）」として適用する。以後、この曲では歌詞を表示しない */
+    fun saveInstrumentalOverride(context: Context, title: String, artist: String, album: String) {
+        try {
+            instrumentalFile(context, title, artist, album).writeText("instrumental", Charsets.UTF_8)
+        } catch (e: Exception) {
+            // 保存に失敗しても、表示への適用は呼び出し側で行う
+        }
+    }
+
+    /** この曲に歌詞の指定（手動適用した歌詞キャッシュ、または歌詞なし指定）があるか */
+    fun hasLyricsOverride(context: Context, title: String, artist: String, album: String): Boolean =
+        cacheFile(context, title, artist, album).exists() || isInstrumentalOverride(context, title, artist, album)
+
+    /** 歌詞の指定をすべて解除して、自動取得に戻す */
+    fun clearLyricsOverride(context: Context, title: String, artist: String, album: String) {
+        try { cacheFile(context, title, artist, album).delete() } catch (e: Exception) { }
+        try { instrumentalFile(context, title, artist, album).delete() } catch (e: Exception) { }
+        try { File(cacheFile(context, title, artist, album).absolutePath + ".ja2").delete() } catch (e: Exception) { }
     }
 
     /** 歌詞の各行を日本語へ翻訳する（日本語を含む行は空文字＝訳なし）。結果はキャッシュする */
