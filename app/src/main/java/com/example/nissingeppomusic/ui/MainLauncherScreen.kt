@@ -852,6 +852,12 @@ fun MainLauncherScreen() {
                             val nextText = multiLines.getOrNull(rawIdx + 1)?.text
                             if (prevText != null) {
                                 Text(prevText, color = Color.White.copy(alpha = 0.45f), fontSize = fitFontSizeSp(prevText, 18f, screenWidthDp - 48f).sp, letterSpacing = 2.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily), modifier = Modifier.padding(start = 0.dp))
+                                if (translationEnabled) {
+                                    val trP = lyricTranslations?.getOrNull(rawIdx - 1)
+                                    if (!trP.isNullOrBlank()) {
+                                        Text(trP, color = Color.White.copy(alpha = 0.35f), fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily))
+                                    }
+                                }
                             } else {
                                 Spacer(Modifier.height(24.dp))
                             }
@@ -883,9 +889,21 @@ fun MainLauncherScreen() {
                                     modifier = Modifier.padding(start = 28.dp)
                                 )
                             }
+                            if (translationEnabled && !mInterlude) {
+                                val trC = lyricTranslations?.getOrNull(rawIdx)
+                                if (!trC.isNullOrBlank()) {
+                                    Text(trC, color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily), modifier = Modifier.padding(start = 28.dp, top = 4.dp))
+                                }
+                            }
                             Spacer(Modifier.height(16.dp))
                             if (nextText != null) {
                                 Text(nextText, color = Color.White.copy(alpha = 0.45f), fontSize = fitFontSizeSp(nextText, 18f, screenWidthDp - 104f).sp, letterSpacing = 2.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily), modifier = Modifier.padding(start = 56.dp))
+                                if (translationEnabled) {
+                                    val trN = lyricTranslations?.getOrNull(rawIdx + 1)
+                                    if (!trN.isNullOrBlank()) {
+                                        Text(trN, color = Color.White.copy(alpha = 0.35f), fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily), modifier = Modifier.padding(start = 56.dp))
+                                    }
+                                }
                             }
                         }
                     }
@@ -1043,6 +1061,23 @@ fun MainLauncherScreen() {
                                             )
                                         }
                                     }
+                                    if (translationEnabled && !inInterlude && currentLyricIndex >= 0) {
+                                        val tr = lyricTranslations?.getOrNull(currentLyricIndex)
+                                        if (!tr.isNullOrBlank()) {
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Text(
+                                                text = tr,
+                                                color = Color.White.copy(alpha = 0.7f),
+                                                fontSize = 11.sp,
+                                                letterSpacing = 1.0.sp,
+                                                textAlign = TextAlign.Start,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                style = LocalTextStyle.current.copy(fontFamily = lyricsFontFamily),
+                                                modifier = Modifier.padding(end = 76.dp)
+                                            )
+                                        }
+                                    }
                                 }
                                 lyricsNotFound && notFoundMsgVisible -> {
                                     Text(
@@ -1134,6 +1169,7 @@ fun MainLauncherScreen() {
                             topPaddingDp = topPaddingDp,
                             source = lyricsSource,
                             translationEnabled = translationEnabled,
+                            translations = lyricTranslations,
                             onToggleTranslation = {
                                 translationEnabled = !translationEnabled
                                 repo.prefManager.setLyricTranslationEnabled(translationEnabled)
