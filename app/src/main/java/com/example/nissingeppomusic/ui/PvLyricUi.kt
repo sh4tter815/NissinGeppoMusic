@@ -1543,7 +1543,8 @@ fun LyricTagSearchDialog(
     currentAlbum: String,
     currentLines: List<LyricLine>,
     onApply: (List<LyricLine>, String) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onCleared: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -1556,6 +1557,9 @@ fun LyricTagSearchDialog(
     var searched by remember { mutableStateOf(false) }
     var applyingIndex by remember { mutableIntStateOf(-1) }
     var message by remember { mutableStateOf<String?>(null) }
+    // この曲に付いている歌詞の指定（手動で適用した歌詞／歌詞なし）の状態。解除ボタンの表示に使う
+    var hasOverride by remember { mutableStateOf(LyricsManager.hasLyricsOverride(context, currentTitle, currentArtist, currentAlbum)) }
+    var instApplied by remember { mutableStateOf(LyricsManager.isInstrumentalOverride(context, currentTitle, currentArtist, currentAlbum)) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("タグを指定して検索") },
@@ -1590,6 +1594,19 @@ fun LyricTagSearchDialog(
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) { Text(if (searching) "検索中…" else "検索") }
+                if (hasOverride) {
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            LyricsManager.clearLyricsOverride(context, currentTitle, currentArtist, currentAlbum)
+                            hasOverride = false
+                            instApplied = false
+                            onCleared()
+                            onDismiss()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("歌詞の指定を解除（自動取得に戻す）") }
+                }
                 message?.let {
                     Spacer(Modifier.height(8.dp))
                     Text(it, color = MaterialTheme.colorScheme.error)
@@ -1607,18 +1624,25 @@ fun LyricTagSearchDialog(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clickable(enabled = applyingIndex < 0) {
-                                        applyingIndex = idx
-                                        scope.launch {
-                                            val lrc = LyricsManager.fetchCandidateLrc(cand)
-                                            applyingIndex = -1
-                                            if (lrc != null) {
-                                                LyricsManager.saveLyricsOverride(
-                                                    context, currentTitle, currentArtist, currentAlbum, lrc
-                                                )
-                                                onApply(LyricsManager.parseLrc(lrc), cand.source)
-                                                onDismiss()
-                                            } else {
-                                                message = "その候補の歌詞を取得できませんでした"
+                                        if (cand.instrumental) {
+                                            // インスト候補を選んだら「この曲は歌詞なし」という指定として適用する
+                                            LyricsManager.saveInstrumentalOverride(context, currentTitle, currentArtist, currentAlbum)
+                                            onApply(emptyList(), "インスト（歌詞なし）")
+                                            onDismiss()
+                                        } else {
+                                            applyingIndex = idx
+                                            scope.launch {
+                                                val lrc = LyricsManager.fetchCandidateLrc(cand)
+                                                applyingIndex = -1
+                                                if (lrc != null) {
+                                                    LyricsManager.saveLyricsOverride(
+                                                        context, currentTitle, currentArtist, currentAlbum, lrc
+                                                    )
+                                                    onApply(LyricsManager.parseLrc(lrc), cand.source)
+                                                    onDismiss()
+                                                } else {
+                                                    message = "その候補の歌詞を取得できませんでした"
+                                                }
                                             }
                                         }
                                     }
@@ -1634,7 +1658,7 @@ fun LyricTagSearchDialog(
                                     " ・ ${cand.durationSec / 60}:${(cand.durationSec % 60).toString().padStart(2, '0')}"
                                 } else ""
                                 Text(
-                                    text = "${cand.artist}$dur ・ ${cand.source}",
+                                    text = "${cand.artist}$dur ・ ${cand.source}" + if (cand.instrumental) " ・ インスト（歌詞なし）" else "",
                                     color = Color.Gray,
                                     fontSize = 12.sp,
                                     maxLines = 1,
@@ -1646,9 +1670,11 @@ fun LyricTagSearchDialog(
                                     else currentLines.joinToString("\n") { it.text }.hashCode()
                                 }
                                 var isCurrent by remember(cand) { mutableStateOf(false) }
-                                LaunchedEffect(cand, currentFp) {
+                                LaunchedEffect(cand, currentFp, instApplied) {
                                     isCurrent = false
-                                    if (currentFp != null) {
+                                    if (cand.instrumental) {
+                                        isCurrent = instApplied
+                                    } else if (currentFp != null) {
                                         val lrcText = cand.syncedLyrics
                                             ?: if (cand.source == "Kugou") LyricsManager.fetchCandidateLrc(cand) else null
                                         if (lrcText != null) {
