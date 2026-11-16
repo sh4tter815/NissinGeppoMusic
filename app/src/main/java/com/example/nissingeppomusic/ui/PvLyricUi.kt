@@ -692,12 +692,11 @@ fun PvLyricLine(
     // 「落」を含む行は、退場のときに文字をバラさず行ごと画面下へ落下させる
     val fallLine = text.contains("落")
     // 単語で発火する入場・退場エフェクトの対象判定
-    val negLine = text.contains("なかった") || text.contains("無い") || text.contains("ない") || text.contains("なくて") || text.contains("なくな") || text.contains("じゃない")
+    // 否定語（ない等）には打ち消し線ではなく☓アイコンを付ける（対象語の開始位置を塊ごとに探す）
+    val negWords = listOf("なかった", "じゃない", "なくて", "なくな", "無い", "ない", "間違い", "誤り")
     val mosaicLine = text.contains("隠") || text.contains("モザイク")
     val sandLine = text.contains("砂") || text.contains("消")
     val rippleWord = text.contains("響")
-    // 否定の打ち消し線: 表示の早い段階で白い実線をびーっと引く
-    val strikeAnim = remember { Animatable(if (exiting) 1f else 0f) }
     if (exiting) {
         LaunchedEffect(Unit) {
             exitProgress.animateTo(1f, animationSpec = tween(durationMillis = 720, easing = LinearEasing))
@@ -727,12 +726,6 @@ fun PvLyricLine(
         }
         LaunchedEffect(Unit) {
             fxAnim.animateTo(1f, animationSpec = tween(durationMillis = 1000, easing = LinearEasing))
-        }
-        LaunchedEffect(Unit) {
-            if (negLine) {
-                delay(400)
-                strikeAnim.animateTo(1f, animationSpec = tween(durationMillis = 450, easing = LinearEasing))
-            }
         }
     }
     // 下線: 入場と同時に、左から右へ伸びて（イーズアウト）、すぐに左から右へ消える（イーズイン）
@@ -859,8 +852,8 @@ fun PvLyricLine(
                 }
             }
         }
-        // 単語で発火する入場・退場エフェクト: 響=波紋たくさん / 否定=破線で打ち消し / 隠・モザイク=モザイク化 / 砂・消=粒子化して吹き飛ぶ
-        if (negLine || mosaicLine || sandLine || rippleWord) {
+        // 単語で発火する入場・退場エフェクト: 響=波紋たくさん / 隠・モザイク=モザイク化 / 砂・消=粒子化して吹き飛ぶ
+        if (mosaicLine || sandLine || rippleWord) {
             Canvas(modifier = Modifier.matchParentSize().zIndex(5f)) {
                 val W = size.width
                 val H = size.height
@@ -873,13 +866,6 @@ fun PvLyricLine(
                             val cx = W * (0.5f + ((baseSeed + i * 37) % 13 - 6) * 0.03f)
                             drawCircle(color = accentColor.copy(alpha = (1f - p) * 0.5f), radius = p * W * 0.34f, center = Offset(cx, H * 0.5f), style = Stroke(width = 1.6.dp.toPx()))
                         }
-                    }
-                }
-                if (negLine) {
-                    val sweep = strikeAnim.value
-                    if (sweep > 0f) {
-                        // 間違えた文字を消すように、白い実線で文字の上をびーっと消す
-                        drawLine(Color.White.copy(alpha = 0.92f), Offset(W * 0.02f, H * 0.55f), Offset(W * 0.02f + W * 0.96f * sweep, H * 0.45f), strokeWidth = 4.dp.toPx(), cap = StrokeCap.Round)
                     }
                 }
                 val fp = exitProgress.value
@@ -919,6 +905,7 @@ fun PvLyricLine(
         ) {
         var globalIndex = 0
         var iconPlaced = false
+        var negIconPlaced = false
         var inParen = false
         rows.forEachIndexed { rowIdx, rowChunks ->
         val unitsInRow = rowChunks.sumOf { renderUnitsOf(it).size }
@@ -938,6 +925,8 @@ fun PvLyricLine(
                 if (chunk.contains("（") || chunk.contains("(")) inParen = true
                 if (chunk.contains("）") || chunk.contains(")")) inParen = false
                 val chunkIconKind = if (!iconPlaced && iconWord != null && chunk.contains(iconWord.first)) iconWord.second else null
+                // 否定語の開始位置（この塊の中に否定語があれば、その文字に☓アイコンを付ける）
+                val chunkNegStart = negWords.mapNotNull { w -> chunk.indexOf(w).takeIf { it >= 0 } }.minOrNull() ?: -1
                 val chunkGhost = chunk.contains("透明")
                 // 複数文字の色ワード（希望・想い等）は塊単位で判定し、該当する文字だけに色を渡す
                 val chunkColorHit = (COLOR_WORDS + ASSOC_COLOR_WORDS).firstOrNull { (w, _) -> w.length > 1 && chunk.contains(w) }
@@ -949,7 +938,7 @@ fun PvLyricLine(
                 var unitIdxInChunk = 0
                 for (ru in chunkUnits) {
                     val gi = globalIndex++
-                    val thisUnitIcon = if (chunkIconKind != null && unitIdxInChunk == 0) chunkIconKind else null
+                    var thisUnitIcon = if (chunkIconKind != null && unitIdxInChunk == 0) chunkIconKind else null
                     if (thisUnitIcon != null) iconPlaced = true
                     unitIdxInChunk++
                     val rIdx = rowUnitIdx++
@@ -966,6 +955,11 @@ fun PvLyricLine(
                         else -> 0.98f
                     }
                     val unitStart = chunkCharPos; chunkCharPos += ru.length
+                    // 否定語の先頭文字には☓アイコン（既に別アイコンが付いている場合はそちらを優先）
+                    if (!negIconPlaced && thisUnitIcon == null && chunkNegStart >= 0 && unitStart <= chunkNegStart && chunkNegStart < unitStart + ru.length) {
+                        thisUnitIcon = LyricIcon.CROSS
+                        negIconPlaced = true
+                    }
                     val unitChunkColor = if (chunkColorHit != null && unitStart < chunkColorStart + chunkColorHit.first.length && unitStart + ru.length > chunkColorStart) chunkColorHit.second else null
                     PvLyricUnit(
                         bold = bold,
