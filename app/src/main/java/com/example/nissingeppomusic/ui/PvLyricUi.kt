@@ -2013,6 +2013,7 @@ fun LyricsBrowseOverlay(
     topPaddingDp: Dp,
     source: String,
     translationEnabled: Boolean,
+    translations: List<String>? = null,
     onToggleTranslation: () -> Unit,
     reverseScroll: Boolean,
     onSeek: (Long) -> Unit,
@@ -2151,47 +2152,58 @@ fun LyricsBrowseOverlay(
             val isFocusedLine = idx == focusedIdx
             val fade = (1f - (abs(relPos) - 4f) / 3f).coerceIn(0f, 1f)
             val myHeightDp = (lineHeightsPx[idx]?.let { it / densityNow.density } ?: 34f)
-            if (isFocusedLine && idx == browsePlayingIdx && lines[idx].words.isNotEmpty()) {
-                KaraokeLyricText(
-                    line = lines[idx],
-                    positionMs = positionMs + lyricOffsetMs,
-                    sungColor = accentColor,
-                    baseColor = Color.White,
-                    fontSize = fitFontSizeSp(lines[idx].text, 26f, maxWidth.value * 0.85f).sp,
-                    fontWeight = lyricWeight,
-                    fontFamily = fontFamily,
-                    letterSpacing = 1.0.sp,
-                    textAlign = TextAlign.Start,
-                    shadow = if (accentGlow) Shadow(color = accentColor, blurRadius = 14f) else Shadow(color = Color.Black.copy(alpha = 0.75f), blurRadius = 10f),
-                    modifier = Modifier
-                        .offset(
-                            x = (40f + relPos * 5f).dp,
-                            y = (centerYDp + offsetDpFor(idx) - myHeightDp / 2f).dp
-                        )
-                        .fillMaxWidth(0.85f)
-                        .onGloballyPositioned { lineHeightsPx[idx] = it.size.height }
-                )
-            } else {
-                Text(
-                    text = lines[idx].text,
-                    color = if (isFocusedLine) Color.White else Color.White.copy(alpha = 0.92f * fade),
-                    fontSize = fitFontSizeSp(lines[idx].text, if (isFocusedLine) 26f else 15f, maxWidth.value * 0.85f).sp,
-                    fontWeight = if (isFocusedLine) lyricWeight else FontWeight.Normal,
-                    letterSpacing = 1.0.sp,
-                    textAlign = TextAlign.Start,
-                    maxLines = 1,
-                    style = LocalTextStyle.current.copy(
+            Column(
+                modifier = Modifier
+                    .offset(
+                        x = (40f + relPos * 5f).dp,
+                        y = (centerYDp + offsetDpFor(idx) - myHeightDp / 2f).dp
+                    )
+                    .fillMaxWidth(0.85f)
+                    .onGloballyPositioned { lineHeightsPx[idx] = it.size.height }
+            ) {
+                if (isFocusedLine && idx == browsePlayingIdx && lines[idx].words.isNotEmpty()) {
+                    KaraokeLyricText(
+                        line = lines[idx],
+                        positionMs = positionMs + lyricOffsetMs,
+                        sungColor = accentColor,
+                        baseColor = Color.White,
+                        fontSize = fitFontSizeSp(lines[idx].text, 26f, maxWidth.value * 0.85f).sp,
+                        fontWeight = lyricWeight,
                         fontFamily = fontFamily,
-                        shadow = if (accentGlow && isFocusedLine) Shadow(color = accentColor, blurRadius = 14f) else Shadow(color = Color.Black.copy(alpha = 0.75f), blurRadius = 10f)
-                    ),
-                    modifier = Modifier
-                        .offset(
-                            x = (40f + relPos * 5f).dp,
-                            y = (centerYDp + offsetDpFor(idx) - myHeightDp / 2f).dp
+                        letterSpacing = 1.0.sp,
+                        textAlign = TextAlign.Start,
+                        shadow = if (accentGlow) Shadow(color = accentColor, blurRadius = 14f) else Shadow(color = Color.Black.copy(alpha = 0.75f), blurRadius = 10f)
+                    )
+                } else {
+                    Text(
+                        text = lines[idx].text,
+                        color = if (isFocusedLine) Color.White else Color.White.copy(alpha = 0.92f * fade),
+                        fontSize = fitFontSizeSp(lines[idx].text, if (isFocusedLine) 26f else 15f, maxWidth.value * 0.85f).sp,
+                        fontWeight = if (isFocusedLine) lyricWeight else FontWeight.Normal,
+                        letterSpacing = 1.0.sp,
+                        textAlign = TextAlign.Start,
+                        maxLines = 1,
+                        style = LocalTextStyle.current.copy(
+                            fontFamily = fontFamily,
+                            shadow = if (accentGlow && isFocusedLine) Shadow(color = accentColor, blurRadius = 14f) else Shadow(color = Color.Black.copy(alpha = 0.75f), blurRadius = 10f)
                         )
-                        .fillMaxWidth(0.85f)
-                        .onGloballyPositioned { lineHeightsPx[idx] = it.size.height }
-                )
+                    )
+                }
+                // 翻訳ONのときは、各行の下に小さく対訳を添える
+                if (translationEnabled) {
+                    val tr = translations?.getOrNull(idx)
+                    if (!tr.isNullOrBlank()) {
+                        Text(
+                            text = tr,
+                            color = Color.White.copy(alpha = if (isFocusedLine) 0.75f else 0.30f + 0.35f * fade),
+                            fontSize = if (isFocusedLine) 12.sp else 10.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = LocalTextStyle.current.copy(fontFamily = fontFamily),
+                            modifier = Modifier.padding(top = 2.dp)
+                        )
+                    }
+                }
             }
         }
     }
