@@ -650,6 +650,18 @@ fun KaraokeLyricText(
 }
 
 /** PVでカタカナ語の下に小さく添える英単語（歌詞でよく出る語だけの内蔵対応表） */
+// その行が、前の行から続く括弧の中から始まるかどうか（閉じ括弧だけの行もコーラス扱いにするために使う）
+private fun pvStartsInParen(lines: List<LyricLine>, index: Int): Boolean {
+    var depth = 0
+    for (i in 0 until index.coerceAtMost(lines.size)) {
+        for (ch in lines[i].text) {
+            if (ch == '（' || ch == '(') depth++
+            if (ch == '）' || ch == ')') depth--
+        }
+    }
+    return depth > 0
+}
+
 @Composable
 fun PvLyricLine(
     text: String,
@@ -663,6 +675,7 @@ fun PvLyricLine(
     screenWidthDp: Float,
     exiting: Boolean,
     words: List<LyricWord> = emptyList(),
+    startsInParen: Boolean = false,
     lineStartMs: Long = 0L,
     modifier: Modifier = Modifier
 ) {
@@ -1024,7 +1037,7 @@ fun PvLyricLine(
         var globalIndex = 0
         var iconPlaced = false
         var negIconPlaced = false
-        var inParen = false
+        var inParen = startsInParen
         rows.forEachIndexed { rowIdx, rowChunks ->
         val unitsInRow = rowChunks.sumOf { renderUnitsOf(it).size }
         var rowUnitIdx = 0
@@ -1991,6 +2004,7 @@ fun LyricsPvLayer(
                         exiting = true,
                         effectKind = pvKindFor(exIdx, exText),
                         lineDurationMs = lines.getOrNull(exIdx + 1)?.let { it.timeMs - lines[exIdx].timeMs } ?: Long.MAX_VALUE,
+                        startsInParen = pvStartsInParen(lines, exIdx),
                         modifier = Modifier.padding(top = pvTopDp)
                     )
                 }
@@ -2011,6 +2025,7 @@ fun LyricsPvLayer(
                                 lineStartMs = lines[curIdx].timeMs,
                                 effectKind = pvKindFor(curIdx, curText),
                                 lineDurationMs = lines.getOrNull(curIdx + 1)?.let { it.timeMs - lines[curIdx].timeMs } ?: Long.MAX_VALUE,
+                                startsInParen = pvStartsInParen(lines, curIdx),
                                 modifier = Modifier
                             )
                         }
@@ -2524,6 +2539,7 @@ fun LyricsFullscreenOverlay(
                                 screenWidthDp = fsWidth,
                                 bigText = true,
                                 lineDurationMs = fsLines.getOrNull(exIdx + 1)?.let { it.timeMs - fsLines[exIdx].timeMs } ?: Long.MAX_VALUE,
+                                startsInParen = pvStartsInParen(fsLines, exIdx),
                                 exiting = true,
                                 effectKind = Math.floorMod(Math.floorMod(exIdx * 31 + exText.hashCode(), 997), 8),
                                 modifier = Modifier
@@ -2541,6 +2557,7 @@ fun LyricsFullscreenOverlay(
                                 screenWidthDp = fsWidth,
                                 bigText = true,
                                 lineDurationMs = fsLines.getOrNull(curIdx + 1)?.let { it.timeMs - fsLines[curIdx].timeMs } ?: Long.MAX_VALUE,
+                                startsInParen = pvStartsInParen(fsLines, curIdx),
                                 exiting = false,
                                 words = fsLines[curIdx].words,
                                 lineStartMs = fsLines[curIdx].timeMs,
