@@ -1011,6 +1011,8 @@ fun PvLyricLine(
                 // 否定語の開始位置（この塊の中に否定語があれば、その文字に☓アイコンを付ける）
                 val chunkNegStart = negWords.mapNotNull { w -> chunk.indexOf(w).takeIf { it >= 0 } }.minOrNull() ?: -1
                 val chunkGhost = chunk.contains("透明")
+                val chunkPileWord = listOf("積み重な", "降り積も", "積も", "積み", "重な", "重ね", "堆積", "累積").firstOrNull { chunk.contains(it) }
+                val chunkPileStart = chunkPileWord?.let { chunk.indexOf(it) } ?: -1
                 val chunkMosaicStart = chunk.indexOf("隠")
                 val chunkMosaicWordStart = chunk.indexOf("モザイク")
                 // 複数文字の色ワード（希望・想い等）は塊単位で判定し、該当する文字だけに色を渡す
@@ -1059,6 +1061,8 @@ fun PvLyricLine(
                     }
                     val mosaicLen = if (chunkMosaicStart >= 0) 1 else if (chunkMosaicWordStart >= 0) 3 else 0
                     val unitMosaic = mosaicStart >= 0 && unitStart < mosaicStart + mosaicLen && unitStart + ru.length > mosaicStart
+                    // 「積もる・重なる」系の文字は、同じ文字を上に重ねて表現する
+                    val unitPile = chunkPileWord != null && unitStart < chunkPileStart + chunkPileWord.length && unitStart + ru.length > chunkPileStart
                     val unitChunkColor = if (chunkColorHit != null && unitStart < chunkColorStart + chunkColorHit.first.length && unitStart + ru.length > chunkColorStart) chunkColorHit.second else null
                     PvLyricUnit(
                         bold = bold,
@@ -1078,6 +1082,7 @@ fun PvLyricLine(
                         dimmed = chunkDim,
                         ghost = chunkGhost,
                         mosaic = unitMosaic,
+                        pile = unitPile,
                         fallExit = fallLine,
                         windExit = windLine,
                         chunkColor = unitChunkColor,
@@ -1133,6 +1138,7 @@ fun PvLyricUnit(
     swayScale: Float = 1f,
     ghost: Boolean = false,
     mosaic: Boolean = false,
+    pile: Boolean = false,
     fallExit: Boolean = false,
     windExit: Boolean = false,
     chunkColor: Color? = null,
@@ -1294,6 +1300,21 @@ fun PvLyricUnit(
                     style = LocalTextStyle.current.copy(fontFamily = fontFamily, lineHeight = uSize * 1.02f),
                     modifier = Modifier.offset(x = (-3.5).dp)
                 )
+            }
+            if (pile) {
+                // 積もる・重なる系の文字: 同じ文字を上に何枚も重ねて、積み重なりを表現する（上ほど薄く）
+                for (layer in 2 downTo 1) {
+                    Text(
+                        text = annotatedUnit,
+                        color = Color.White.copy(alpha = (if (dimmed) 0.40f else 0.92f) * (if (layer == 1) 0.38f else 0.20f)),
+                        fontSize = uSize,
+                        fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
+                        textAlign = TextAlign.Center,
+                        overflow = TextOverflow.Visible,
+                        style = LocalTextStyle.current.copy(fontFamily = fontFamily, lineHeight = uSize * 1.02f),
+                        modifier = Modifier.offset(x = (if (layer % 2 == 0) 1.5f else -1.5f).dp, y = (-(uSize.value * 0.20f * layer)).dp)
+                    )
+                }
             }
             Text(
                 text = annotatedUnit,
