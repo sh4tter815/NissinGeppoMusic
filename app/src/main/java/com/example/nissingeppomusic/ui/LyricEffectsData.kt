@@ -30,14 +30,10 @@ object LyricEffectsData {
     "太陽" to LyricIcon.SUN,
     "雲" to LyricIcon.CLOUD,
     "花" to LyricIcon.FLOWER,
-    "海" to LyricIcon.WAVES,
-    "波" to LyricIcon.WAVES,
     "心" to LyricIcon.HEART,
     "ハート" to LyricIcon.HEART,
     "恋" to LyricIcon.HEART,
     "愛" to LyricIcon.HEART,
-    "夢" to LyricIcon.CLOUD,
-    "思い出" to LyricIcon.CLOUD,
     "夜" to LyricIcon.MOON,
     "鍵" to LyricIcon.KEY,
     "音楽" to LyricIcon.NOTE,
@@ -103,7 +99,6 @@ object LyricEffectsData {
     "fish" to LyricIcon.FISH,
     "mountain" to LyricIcon.MOUNTAIN,
     "wind" to LyricIcon.WIND,
-    "dream" to LyricIcon.CLOUD,
     "eye" to LyricIcon.EYE,
     "bone" to LyricIcon.BONE,
     "map" to LyricIcon.MAP,
@@ -332,7 +327,7 @@ object LyricEffectsData {
     @Volatile var colorWords: List<Pair<String, Color>> = DEFAULT_COLOR_WORDS; private set
     @Volatile var assocColorWords: List<Pair<String, Color>> = DEFAULT_ASSOC_COLOR_WORDS; private set
     @Volatile var katakanaEn: Map<String, String> = DEFAULT_KATAKANA_EN; private set
-    @Volatile var appliedVersion: Int = 1; private set
+    @Volatile var appliedVersion: Int = 4; private set
     @Volatile private var appliedRaw: String = ""
 
     private val ICON_BY_NAME: Map<String, Int> = mapOf(
