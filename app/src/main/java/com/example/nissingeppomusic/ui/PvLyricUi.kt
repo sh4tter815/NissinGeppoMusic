@@ -838,6 +838,12 @@ fun PvLyricLine(
     }
     // 装飾エフェクト（親から渡される。前の行と被らないランダム）:
     // 0=下線スイープ / 1=波紋 / 2=白スワイプ / 3=点滅 / 4=グリッチ / 5=枠線 / 6=粒子バースト / 7=波打ち登場
+    val dreamTransition = rememberInfiniteTransition(label = "dreamBubble")
+    val dreamPhase by dreamTransition.animateFloat(
+        initialValue = 0f, targetValue = 6.2832f,
+        animationSpec = infiniteRepeatable(tween(durationMillis = 3400, easing = LinearEasing), RepeatMode.Restart),
+        label = "dreamPhase"
+    )
     val barAnim = remember { Animatable(0f) }
     val rippleAnim = remember { Animatable(0f) }
     val fxAnim = remember { Animatable(0f) }
@@ -871,37 +877,39 @@ fun PvLyricLine(
             }
     ) {
         if (dreamLine) {
-            // 「夢・思い出」の行は、行全体をもくもくした想像の吹き出しで囲う（文字ごとの吹き出しは廃止）
+            // 「夢・思い出」の行は、行全体をもくもくした雲のフレームで囲う（しっぽなどのアイコンは付けない）
             Canvas(modifier = Modifier.matchParentSize()) {
                 val fadeA = if (exiting) 1f - exitProgress.value else 1f
-                val col = Color.White.copy(alpha = 0.55f * fadeA)
+                val col = Color.White.copy(alpha = 0.6f * fadeA)
                 val W = size.width
                 val H = size.height
-                val padX = 14.dp.toPx()
-                val padY = 10.dp.toPx()
+                val padX = 16.dp.toPx()
+                val padY = 12.dp.toPx()
                 val bw = W + padX * 2f
                 val bh = H + padY * 2f
-                // もくもく感: 吹き出しの輪郭に沿って膨らみを並べ、外向きの弧だけを描く
-                val puffs = 16
+                // もくもく感: 輪郭に沿って大きめの膨らみを密に重ね、外向きの弧だけを描く。
+                // 各膨らみはサイン波で位相をずらしながら膨らんだりしぼんだりして、雲がうねって見える
+                val puffs = 26
+                val perimeter = (bw + bh) * 1.57f
                 for (i in 0 until puffs) {
                     val t = i.toFloat() / puffs
                     val ang = t * 6.2832f
-                    val cx = W / 2f + kotlin.math.cos(ang) * (bw / 2f)
-                    val cy = H / 2f + kotlin.math.sin(ang) * (bh / 2f)
-                    val r = (H * 0.17f) * (0.75f + ((i * 37 + baseSeed) % 10) / 22f)
+                    val wobble = kotlin.math.sin(dreamPhase + i * 0.85f)
+                    val push = 1f + 0.045f * kotlin.math.sin(dreamPhase * 1.0f + i * 1.7f)
+                    val cx = W / 2f + kotlin.math.cos(ang) * (bw / 2f) * push
+                    val cy = H / 2f + kotlin.math.sin(ang) * (bh / 2f) * push
+                    val baseR = perimeter / puffs * 0.66f * (0.8f + ((i * 37 + baseSeed) % 10) / 20f)
+                    val r = baseR * (1f + 0.13f * wobble)
                     drawArc(
                         color = col,
-                        startAngle = (ang * 57.2958f) - 55f,
-                        sweepAngle = 110f,
+                        startAngle = (ang * 57.2958f) - 62f,
+                        sweepAngle = 124f,
                         useCenter = false,
                         topLeft = Offset(cx - r, cy - r),
                         size = Size(r * 2f, r * 2f),
-                        style = Stroke(width = 1.4.dp.toPx())
+                        style = Stroke(width = 1.6.dp.toPx())
                     )
                 }
-                // 想像のしっぽ: 左下に小さい丸を2つ落とす
-                drawCircle(color = col, radius = 5.dp.toPx(), center = Offset(W * 0.16f, H + padY + 13.dp.toPx()), style = Stroke(width = 1.3.dp.toPx()))
-                drawCircle(color = col, radius = 3.2.dp.toPx(), center = Offset(W * 0.10f, H + padY + 25.dp.toPx()), style = Stroke(width = 1.2.dp.toPx()))
             }
         }
         if (effKind == 1) {
