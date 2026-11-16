@@ -3,7 +3,8 @@ package com.example.nissingeppomusic.ui
 import androidx.compose.ui.graphics.Color
 
 // 歌詞PVのデータ定義（単語アイコン対応表・除外リスト・色名・カタカナ英訳・コーラス判定・入場方向）。
-// 正本はこの音楽アプリ側。ランチャー側にも同じ内容のファイルがあるので、直したらランチャー側へもコピーすること。
+// 対応表の中身は LyricEffectsData が持つ。配信データ（ランチャーのリポジトリ直下の lyric_effects.json）が
+// 取得できればそちらが優先され、無ければ内蔵デフォルトが使われる。
 
 object LyricIcon {
     const val UMBRELLA = 0; const val RAIN = 1; const val SNOW = 2; const val STAR = 3
@@ -19,44 +20,15 @@ object LyricIcon {
 }
 
 /** 歌詞に出てきたらアイコンを出す単語（前にあるものが優先） */
-val LYRIC_ICON_WORDS: List<Pair<String, Int>> = listOf(
-    "傘" to LyricIcon.UMBRELLA, "桜" to LyricIcon.FLOWER, "雨" to LyricIcon.RAIN,
-    "凍" to LyricIcon.SNOW, "氷" to LyricIcon.SNOW, "雪" to LyricIcon.SNOW, "星" to LyricIcon.STAR, "月" to LyricIcon.MOON,
-    "太陽" to LyricIcon.SUN, "雲" to LyricIcon.CLOUD, "花" to LyricIcon.FLOWER,
-    "海" to LyricIcon.WAVES, "波" to LyricIcon.WAVES, "心" to LyricIcon.HEART,
-    "ハート" to LyricIcon.HEART, "恋" to LyricIcon.HEART, "愛" to LyricIcon.HEART,
-    "夢" to LyricIcon.BUBBLE, "夜" to LyricIcon.MOON, "鍵" to LyricIcon.KEY,
-    "音楽" to LyricIcon.NOTE, "歌" to LyricIcon.NOTE, "手紙" to LyricIcon.ENVELOPE,
-    "時計" to LyricIcon.CLOCK, "炎" to LyricIcon.FLAME, "火" to LyricIcon.FLAME,
-    "涙" to LyricIcon.DROP, "雫" to LyricIcon.DROP, "虹" to LyricIcon.RAINBOW,
-    "雷" to LyricIcon.LIGHTNING, "笑顔" to LyricIcon.SMILE, "魚" to LyricIcon.FISH,
-    "山" to LyricIcon.MOUNTAIN, "風" to LyricIcon.WIND,
-"音" to LyricIcon.NOTE, "濡" to LyricIcon.DROP,
-    "時間" to LyricIcon.CLOCK, "場所" to LyricIcon.MAP, "死" to LyricIcon.COFFIN,
-    "傷" to LyricIcon.BANDAGE, "キズ" to LyricIcon.BANDAGE, "駄目" to LyricIcon.CROSS, "ダメ" to LyricIcon.CROSS, "見ている" to LyricIcon.EYE, "見てる" to LyricIcon.EYE, "見る" to LyricIcon.EYE, "瞳" to LyricIcon.EYE, "目" to LyricIcon.EYE, "水" to LyricIcon.DROP, "増" to LyricIcon.PLUS,
-    "減" to LyricIcon.MINUS, "骨" to LyricIcon.BONE
-)
-val LYRIC_ICON_EXCLUSIONS: Map<String, List<String>> = mapOf(
-    "心" to listOf("心配"),
-    "山" to listOf("沢山")
-)
+val LYRIC_ICON_WORDS: List<Pair<String, Int>>
+    get() = LyricEffectsData.iconWords
+val LYRIC_ICON_EXCLUSIONS: Map<String, List<String>>
+    get() = LyricEffectsData.iconExclusions
 
 /** 行の中からアイコン対象の単語を探す。除外語の一部として現れる箇所は数えない */
 // 英語の単語→アイコン（単語境界＋大文字小文字なし。"rain" が "train" に当たらないように）
-val LYRIC_ICON_WORDS_EN: List<Pair<String, Int>> = listOf(
-    "umbrella" to LyricIcon.UMBRELLA, "rainbow" to LyricIcon.RAINBOW, "rain" to LyricIcon.RAIN,
-    "snow" to LyricIcon.SNOW, "star" to LyricIcon.STAR, "moon" to LyricIcon.MOON,
-    "sun" to LyricIcon.SUN, "cloud" to LyricIcon.CLOUD, "flower" to LyricIcon.FLOWER,
-    "sea" to LyricIcon.WAVES, "wave" to LyricIcon.WAVES, "heart" to LyricIcon.HEART,
-    "love" to LyricIcon.HEART, "night" to LyricIcon.MOON, "key" to LyricIcon.KEY,
-    "music" to LyricIcon.NOTE, "song" to LyricIcon.NOTE, "sound" to LyricIcon.NOTE,
-    "letter" to LyricIcon.ENVELOPE, "clock" to LyricIcon.CLOCK, "time" to LyricIcon.CLOCK,
-    "fire" to LyricIcon.FLAME, "flame" to LyricIcon.FLAME, "tear" to LyricIcon.DROP,
-    "thunder" to LyricIcon.LIGHTNING, "smile" to LyricIcon.SMILE, "fish" to LyricIcon.FISH,
-    "mountain" to LyricIcon.MOUNTAIN, "wind" to LyricIcon.WIND, "dream" to LyricIcon.BUBBLE,
-    "eye" to LyricIcon.EYE, "bone" to LyricIcon.BONE, "map" to LyricIcon.MAP,
-    "death" to LyricIcon.COFFIN
-)
+val LYRIC_ICON_WORDS_EN: List<Pair<String, Int>>
+    get() = LyricEffectsData.iconWordsEn
 fun findIconWord(text: String): Pair<String, Int>? {
     for ((word, kind) in LYRIC_ICON_WORDS) {
         // 「心」が単体で出てきたときはハートを出さない
@@ -93,73 +65,13 @@ fun isChorusWord(text: String): Boolean {
 }
 
 /** 色名が出てきたら、その文字をその色で塗るための対応表（長い語を先に判定） */
-val COLOR_WORDS: List<Pair<String, Color>> = listOf(
-    "水色" to Color(0xFF7FD4F2), "ピンク" to Color(0xFFFF8FBF), "オレンジ" to Color(0xFFFF9A3D),
-    "グレー" to Color(0xFF9AA0A6),
-    // 古い言い回しの伝統色（複合語は単字より先に置く）
-    "群青" to Color(0xFF3A5FCD), "瑠璃" to Color(0xFF1F4788), "翡翠" to Color(0xFF38B48B),
-    "琥珀" to Color(0xFFFFB000), "山吹" to Color(0xFFF8A500), "萌葱" to Color(0xFF2E9E6B),
-    "紅" to Color(0xFFE60033), "藍" to Color(0xFF2B4C9B), "朱" to Color(0xFFFF4D2E),
-    "緋" to Color(0xFFE8383F), "茜" to Color(0xFFB7282E), "藤" to Color(0xFFA58FCE),
-    "青" to Color(0xFF3D7BFF), "赤" to Color(0xFFFF4545), "白" to Color(0xFFF2F3F5),
-    "黒" to Color(0xFF26262C), "紫" to Color(0xFFB07FE8), "緑" to Color(0xFF4FC96B),
-    "黄" to Color(0xFFFFD94D), "金" to Color(0xFFFFC94D), "銀" to Color(0xFFC9CED6),
-    "茶" to Color(0xFFB07B4F), "灰" to Color(0xFF9AA0A6),
-    // 英語の色名（照合は単語単位・大文字小文字なし。PvLyricUnit側で境界判定する）
-    "red" to Color(0xFFFF4545), "blue" to Color(0xFF3D7BFF), "green" to Color(0xFF4FC96B),
-    "yellow" to Color(0xFFFFD94D), "pink" to Color(0xFFFF8FBF), "purple" to Color(0xFFB07FE8),
-    "violet" to Color(0xFF8A6FE8), "black" to Color(0xFF26262C), "white" to Color(0xFFF2F3F5),
-    "orange" to Color(0xFFFF9A3D), "gray" to Color(0xFF9AA0A6), "grey" to Color(0xFF9AA0A6),
-    "brown" to Color(0xFFB07B4F), "gold" to Color(0xFFFFC94D), "silver" to Color(0xFFC9CED6),
-    "cyan" to Color(0xFF4FD8E8), "magenta" to Color(0xFFFF4FD8), "crimson" to Color(0xFFE60033),
-    "indigo" to Color(0xFF2B4C9B), "emerald" to Color(0xFF38B48B), "scarlet" to Color(0xFFE8383F),
-    "amber" to Color(0xFFFFB000)
-)
+val COLOR_WORDS: List<Pair<String, Color>>
+    get() = LyricEffectsData.colorWords
 // 色名ではないけれど色を連想させる言葉 → 連想色で塗る（愛→ピンク、血→赤、夜→藍、月→金）
-val ASSOC_COLOR_WORDS: List<Pair<String, Color>> = listOf(
-    "恥" to Color(0xFFFF8FBF), "愛" to Color(0xFFFF8FBF), "恋" to Color(0xFFFF8FBF), "好" to Color(0xFFFF8FBF), "心" to Color(0xFFFF8FBF), "桜" to Color(0xFFFF8FBF),
-    "血" to Color(0xFFFF4545),
-    "宵闇" to Color(0xFF2B4C9B), "闇" to Color(0xFF000000), "夜" to Color(0xFF2B4C9B), "海" to Color(0xFF3D7BFF), "嫌" to Color(0xFF3D7BFF), "悲" to Color(0xFF3D7BFF), "哀" to Color(0xFF3D7BFF),
-    "月" to Color(0xFFFFC94D), "星" to Color(0xFFFFC94D),
-    "涙" to Color(0xFF7FD4F2), "空" to Color(0xFF7FD4F2), "凍" to Color(0xFF7FD4F2), "氷" to Color(0xFF7FD4F2), "想い" to Color(0xFFFF8FBF),
-    "炎" to Color(0xFFFF9A3D), "熱" to Color(0xFFFF9A3D), "火" to Color(0xFFFF9A3D),
-    "砂" to Color(0xFFFFC94D), "汚" to Color(0xFFA9744F), "希望" to Color(0xFFFFE14D),
-    "殺" to Color(0xFFFF4545), "死" to Color(0xFFFF4545), "地獄" to Color(0xFFFF4545), "行方不明" to Color(0xFFFF4545), "不明" to Color(0xFFFF4545), "不安" to Color(0xFFFF4545), "危険" to Color(0xFFFF4545), "怖" to Color(0xFFFF4545), "恐" to Color(0xFFFF4545),
-    "無事" to Color(0xFF4CD964), "安心" to Color(0xFF4CD964), "安全" to Color(0xFF4CD964), "大丈夫" to Color(0xFF4CD964),
-    "love" to Color(0xFFFF8FBF), "heart" to Color(0xFFFF8FBF), "blood" to Color(0xFFFF4545),
-    "night" to Color(0xFF2B4C9B), "moon" to Color(0xFFFFC94D), "star" to Color(0xFFFFC94D),
-    "sea" to Color(0xFF3D7BFF), "hate" to Color(0xFF3D7BFF), "sad" to Color(0xFF3D7BFF),
-    "sky" to Color(0xFF7FD4F2), "tear" to Color(0xFF7FD4F2), "tears" to Color(0xFF7FD4F2),
-    "fire" to Color(0xFFFF9A3D)
-)
-val KATAKANA_EN = mapOf(
-    "ハート" to "HEART", "ラブ" to "LOVE", "キス" to "KISS", "ドリーム" to "DREAM",
-    "ライト" to "LIGHT", "ナイト" to "NIGHT", "スター" to "STAR", "ムーン" to "MOON",
-    "スカイ" to "SKY", "ミュージック" to "MUSIC", "ソング" to "SONG", "ダンス" to "DANCE",
-    "ロック" to "ROCK", "ポップ" to "POP", "ビート" to "BEAT", "リズム" to "RHYTHM",
-    "メロディ" to "MELODY", "ハーモニー" to "HARMONY", "ボイス" to "VOICE", "サウンド" to "SOUND",
-    "ワールド" to "WORLD", "ライフ" to "LIFE", "タイム" to "TIME", "モーメント" to "MOMENT",
-    "メモリー" to "MEMORY", "ストーリー" to "STORY", "フューチャー" to "FUTURE", "プロミス" to "PROMISE",
-    "シークレット" to "SECRET", "ミステリー" to "MYSTERY", "マジック" to "MAGIC", "パワー" to "POWER",
-    "エナジー" to "ENERGY", "ファイア" to "FIRE", "ウォーター" to "WATER", "レイン" to "RAIN",
-    "スノー" to "SNOW", "フラワー" to "FLOWER", "バタフライ" to "BUTTERFLY", "エンジェル" to "ANGEL",
-    "デビル" to "DEVIL", "ゴースト" to "GHOST", "シャドウ" to "SHADOW", "シャイン" to "SHINE",
-    "ダーク" to "DARK", "カラー" to "COLOR", "ブルー" to "BLUE", "ピンク" to "PINK",
-    "ブラック" to "BLACK", "ホワイト" to "WHITE", "ゴールド" to "GOLD", "シルバー" to "SILVER",
-    "クリスタル" to "CRYSTAL", "ダイヤモンド" to "DIAMOND", "プラズマ" to "PLASMA", "ブラックアウト" to "BLACKOUT",
-    "テレビ" to "TV", "ラジオ" to "RADIO", "ゲーム" to "GAME", "ヒーロー" to "HERO",
-    "クイーン" to "QUEEN", "プリンセス" to "PRINCESS", "ベイビー" to "BABY", "ダーリン" to "DARLING",
-    "ハニー" to "HONEY", "フレンド" to "FRIEND", "ラバー" to "LOVER", "エンド" to "END",
-    "スタート" to "START", "ゴール" to "GOAL", "ドア" to "DOOR", "キー" to "KEY",
-    "ロード" to "ROAD", "シティ" to "CITY", "ホーム" to "HOME", "ミラー" to "MIRROR",
-    "スマイル" to "SMILE", "ソウル" to "SOUL", "マインド" to "MIND", "ステージ" to "STAGE",
-    "ライブ" to "LIVE", "パーティ" to "PARTY", "カフェ" to "CAFE", "ホテル" to "HOTEL",
-    "レター" to "LETTER", "カード" to "CARD", "チケット" to "TICKET", "ドレス" to "DRESS",
-    "リング" to "RING", "ブック" to "BOOK", "シーズン" to "SEASON", "サマー" to "SUMMER",
-    "ウィンター" to "WINTER", "モーニング" to "MORNING", "ミッドナイト" to "MIDNIGHT", "トゥモロー" to "TOMORROW",
-    "イエスタデイ" to "YESTERDAY", "フォーエバー" to "FOREVER", "パラダイス" to "PARADISE", "ヘブン" to "HEAVEN",
-    "アース" to "EARTH", "オーシャン" to "OCEAN", "リバー" to "RIVER", "フォレスト" to "FOREST"
-)
+val ASSOC_COLOR_WORDS: List<Pair<String, Color>>
+    get() = LyricEffectsData.assocColorWords
+val KATAKANA_EN: Map<String, String>
+    get() = LyricEffectsData.katakanaEn
 
 val PV_ENTRY_DIRS = listOf(
     0f to -1f, 0.72f to -0.72f, 1f to 0f, 0.72f to 0.72f,
