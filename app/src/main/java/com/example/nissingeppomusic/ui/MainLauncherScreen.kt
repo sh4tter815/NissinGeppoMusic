@@ -10,6 +10,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -344,6 +345,14 @@ fun MainLauncherScreen() {
     val lyricsPvMode = lyricsDisplayMode == "video"
     var lyricsPvFont by remember { mutableStateOf(repo.prefManager.getLyricsPvFont()) }
     var lyricsRefreshTick by remember { mutableStateOf(0) }
+    // 歌詞PVの色フラッシュ: 色名ヒットの行で一時的にアクセント色をその色へ寄せる
+    var pvFlashColor by remember { mutableStateOf<Color?>(null) }
+    LaunchedEffect(pvFlashColor) {
+        if (pvFlashColor != null) {
+            delay(2400)
+            pvFlashColor = null
+        }
+    }
     var artworkAccent by remember { mutableStateOf<Color?>(null) }
     var artworkBackground by remember { mutableStateOf<Color?>(null) }
     LaunchedEffect(musicPlayerManager.currentAlbumArt, matchArtwork) {
@@ -382,6 +391,12 @@ fun MainLauncherScreen() {
     } else {
         manualAccentColor
     }
+    // 色フラッシュ中はフラッシュ色へなめらかに寄せたアクセント色を使う
+    val effectiveAccent by animateColorAsState(
+        targetValue = pvFlashColor ?: accentColor,
+        animationSpec = tween(durationMillis = 800),
+        label = "pvAccentFlash"
+    )
 
     // 抽出アクセント色と背景色のコントラストが低いときは、アクセント色の
     // アイコンや文字にグロー（発光）をかけて見やすくする
@@ -773,11 +788,14 @@ fun MainLauncherScreen() {
                 currentAlbumArt = musicPlayerManager.currentAlbumArt,
                 dynamicBackground = if (matchArtwork) artworkBackground else null,
                 liquidEnabled = liquidBackground,
-                liquidAccent = accentColor
+                liquidAccent = effectiveAccent
             )
 
             // 文字PV風レイヤー: 背景のすぐ上（他の要素の奥）に、行ごとに大きさ・傾き・位置を変えて大きく表示
             val lyricsFontFamily = parseFontFamily(lyricsPvFont, if (lyricsPvFont == "custom") customFontPath else null)
+            val lyricsEnFontChoice = repo.prefManager.getLyricsEnFont()
+            val lyricsEnFontFamily = if (lyricsEnFontChoice == "same") lyricsFontFamily else parseFontFamily(lyricsEnFontChoice, if (lyricsEnFontChoice == "custom") repo.prefManager.getLyricsEnCustomFontPath() else null)
+            val pvPartsEntry = repo.prefManager.isPvPartsEntryEnabled()
             val lyricsBold = repo.prefManager.isLyricsBold()
             val lyricWeight = if (lyricsBold) FontWeight.Bold else FontWeight.Normal
             if (lyricsPvMode && showLyrics && currentLauncherPage == 1 && !isLyricsBrowsing) {
@@ -789,13 +807,16 @@ fun MainLauncherScreen() {
                         lyricOffsetMs = lyricOffsetMs,
                         bold = lyricsBold,
                         fontFamily = lyricsFontFamily,
-                        accentColor = accentColor,
+                        accentColor = effectiveAccent,
                         screenWidthDp = screenWidthDp,
                         translationEnabled = translationEnabled,
                         translations = lyricTranslations,
                         pvTopDp = 195.dp,
                         interludeTopDp = 175.dp,
-                        translationTopDp = 350.dp
+                        translationTopDp = 350.dp,
+                        partsEntry = pvPartsEntry,
+                        enFontFamily = lyricsEnFontFamily,
+                        onAccentFlash = { pvFlashColor = it }
                     )
                 }
             }
@@ -843,6 +864,7 @@ fun MainLauncherScreen() {
                         translationEnabled = translationEnabled,
                         translations = lyricTranslations,
                         fontFamily = lyricsFontFamily,
+                        enFontFamily = lyricsEnFontFamily,
                         lyricWeight = lyricWeight,
                         accentColor = accentColor,
                         screenWidthDp = screenWidthDp
@@ -969,6 +991,7 @@ fun MainLauncherScreen() {
                                                 fontSize = fitFontSizeSp(fadeLineObj.text, 15f, screenWidthDp - 116f).sp,
                                                 fontWeight = lyricWeight,
                                                 fontFamily = lyricsFontFamily,
+                                                enFontFamily = lyricsEnFontFamily,
                                                 letterSpacing = 2.0.sp,
                                                 textAlign = TextAlign.Start,
                                                 shadow = Shadow(color = Color.White.copy(alpha = 0.85f), blurRadius = 16f)
@@ -1124,6 +1147,20 @@ fun MainLauncherScreen() {
                                 isLyricsBrowsing = false
                             },
                             onOpenSearch = { showLyricSearch = true },
+                            enFontFamily = lyricsEnFontFamily,
+                            onSaveEditedLyrics = { editedText ->
+                                LyricsManager.saveEditedLyrics(context, musicPlayerManager.currentTitle, musicPlayerManager.currentArtist, musicPlayerManager.currentAlbum, editedText)
+                                lyricsRefreshTick++
+                            },
+                            onPublishLyrics = { lrcText, report ->
+                                coroutineScope.launch {
+                                    val err = LyricsManager.publishToLrclib(
+                                        musicPlayerManager.currentTitle, musicPlayerManager.currentArtist, musicPlayerManager.currentAlbum,
+                                        (musicPlayerManager.duration / 1000).toInt(), lrcText
+                                    )
+                                    report(if (err == null) "OK" else err)
+                                }
+                            },
                             onClose = { isLyricsBrowsing = false }
                         )
                     }
@@ -1595,6 +1632,8 @@ fun MainLauncherScreen() {
                 displayMode = lyricsDisplayMode,
                 bold = lyricsBold,
                 fontFamily = lyricsFontFamily,
+                enFontFamily = lyricsEnFontFamily,
+                partsEntry = pvPartsEntry,
                 lyricWeight = lyricWeight,
                 accentColor = accentColor,
                 artwork = musicPlayerManager.currentAlbumArt,
@@ -2443,6 +2482,7 @@ private fun MusicMultiLineLyrics(
     translationEnabled: Boolean,
     translations: List<String>?,
     fontFamily: FontFamily?,
+    enFontFamily: FontFamily? = null,
     lyricWeight: FontWeight,
     accentColor: Color,
     screenWidthDp: Float
@@ -2487,6 +2527,7 @@ private fun MusicMultiLineLyrics(
                     fontSize = fitFontSizeSp(curLineObj.text, 30f, screenWidthDp - 76f).sp,
                     fontWeight = lyricWeight,
                     fontFamily = fontFamily,
+                    enFontFamily = enFontFamily,
                     letterSpacing = 3.sp,
                     shadow = Shadow(color = accentColor.copy(alpha = 0.8f), blurRadius = 16f),
                     modifier = Modifier.padding(start = 28.dp)
