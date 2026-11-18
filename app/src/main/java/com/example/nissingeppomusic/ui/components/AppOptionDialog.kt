@@ -2,6 +2,8 @@ package com.example.nissingeppomusic.ui.components
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,6 +13,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -190,14 +196,38 @@ fun AppOptionDialog(
                     Text("閉じる", color = Color.Gray, fontFamily = fontFamily, fontWeight = fontWeight)
                 }
             },
-            title = { Text(text = app.label, fontSize = 20.sp, fontFamily = fontFamily, fontWeight = fontWeight) },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val bmp = app.iconBitmap
+                    if (bmp != null) {
+                        Image(
+                            bitmap = bmp,
+                            contentDescription = null,
+                            modifier = Modifier.size(40.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                    }
+                    Column {
+                        Text(text = app.label, fontSize = 19.sp, fontFamily = fontFamily, fontWeight = fontWeight)
+                        Text(
+                            text = listOf(app.artist, app.album).filter { it.isNotBlank() }.joinToString(" • ").ifBlank { app.packageName },
+                            fontSize = 11.sp,
+                            color = Color.Gray,
+                            fontFamily = fontFamily,
+                            fontWeight = fontWeight
+                        )
+                    }
+                }
+            },
             text = {
                 Column(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     DialogOptionItem(
+                        kind = "favorite",
                         text = if (app.isFavorite) "お気に入りを解除" else "お気に入りに登録する",
+                        subtitle = if (app.isFavorite) "お気に入りから外します" else "お気に入りに登録します",
                         fontFamily = fontFamily,
                         fontWeight = fontWeight
                     ) {
@@ -206,7 +236,9 @@ fun AppOptionDialog(
                     }
 
                     DialogOptionItem(
-                        text = if (app.customYomi.isNotBlank()) "よみがな変更 (${app.customYomi})" else "よみがな登録",
+                        kind = "yomi",
+                        text = if (app.customYomi.isNotBlank()) "よみがな変更" else "よみがな登録",
+                        subtitle = if (app.customYomi.isNotBlank()) "現在: ${app.customYomi}" else "読み方を登録して並び順や検索に使います",
                         fontFamily = fontFamily,
                         fontWeight = fontWeight
                     ) {
@@ -214,7 +246,9 @@ fun AppOptionDialog(
                     }
 
                     DialogOptionItem(
-                        text = if (app.searchAliases.isNotEmpty()) "検索可能な別名 (${app.searchAliases.size}件)" else "検索可能な別名を追加する",
+                        kind = "alias",
+                        text = "検索可能な別名",
+                        subtitle = if (app.searchAliases.isNotEmpty()) "登録済み ${app.searchAliases.size}件" else "別の呼び方でも検索にヒットさせます",
                         fontFamily = fontFamily,
                         fontWeight = fontWeight
                     ) {
@@ -222,7 +256,10 @@ fun AppOptionDialog(
                     }
 
                     DialogOptionItem(
+                        kind = "hide",
                         text = if (app.isHidden) "非表示を解除" else "非表示にする",
+                        subtitle = if (app.isHidden) "一覧に再び表示します" else "一覧から隠します",
+                        danger = true,
                         fontFamily = fontFamily,
                         fontWeight = fontWeight
                     ) {
@@ -230,7 +267,13 @@ fun AppOptionDialog(
                         onDismiss()
                     }
 
-                    DialogOptionItem(text = "アプリ情報", fontFamily = fontFamily, fontWeight = fontWeight) {
+                    DialogOptionItem(
+                        kind = "info",
+                        text = "アプリ情報",
+                        subtitle = app.filePath.ifBlank { app.packageName },
+                        fontFamily = fontFamily,
+                        fontWeight = fontWeight
+                    ) {
                         val intent = Intent(
                             Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                             "package:${app.packageName}".toUri()
@@ -248,26 +291,98 @@ fun AppOptionDialog(
 
 @Composable
 private fun DialogOptionItem(
+    kind: String,
     text: String,
+    subtitle: String,
+    danger: Boolean = false,
     fontFamily: androidx.compose.ui.text.font.FontFamily,
     fontWeight: androidx.compose.ui.text.font.FontWeight,
     onClick: () -> Unit
 ) {
     Surface(
         color = Color(0xFF1E283D),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(14.dp),
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
     ) {
-        Box(modifier = Modifier.padding(vertical = 12.dp, horizontal = 16.dp)) {
-            Text(
-                text = text,
-                color = Color.White,
-                fontSize = 16.sp,
-                fontFamily = fontFamily,
-                fontWeight = fontWeight
-            )
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OptionKindIcon(kind = kind, danger = danger)
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(
+                    text = text,
+                    color = if (danger) Color(0xFFFFB4B4) else Color.White,
+                    fontSize = 15.5.sp,
+                    fontFamily = fontFamily,
+                    fontWeight = fontWeight
+                )
+                Text(
+                    text = subtitle,
+                    color = Color.Gray,
+                    fontSize = 11.5.sp,
+                    fontFamily = fontFamily,
+                    fontWeight = fontWeight
+                )
+            }
+        }
+    }
+}
+
+// 長押しメニューの小さな線画アイコン（設定画面のカテゴリアイコンと同じタッチ）
+@Composable
+private fun OptionKindIcon(kind: String, danger: Boolean) {
+    val accent = if (danger) Color(0xFFFF9E9E) else Color(0xFF88C0FF)
+    Canvas(modifier = Modifier.size(30.dp)) {
+        val w = size.width
+        val h = size.height
+        val sw = w * 0.055f
+        when (kind) {
+            "favorite" -> {
+                val cx = w * 0.5f
+                val cy = h * 0.52f
+                val rO = w * 0.40f
+                val rI = w * 0.17f
+                val path = Path()
+                for (i in 0 until 10) {
+                    val r = if (i % 2 == 0) rO else rI
+                    val a = Math.toRadians(-90.0 + i * 36.0)
+                    val x = cx + (r * kotlin.math.cos(a)).toFloat()
+                    val y = cy + (r * kotlin.math.sin(a)).toFloat()
+                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                path.close()
+                drawPath(path, color = accent, style = Stroke(width = sw, cap = StrokeCap.Round))
+            }
+            "yomi" -> {
+                // 鉛筆: 斜めの軸と三角の芯先、下線
+                drawLine(accent, Offset(w * 0.30f, h * 0.74f), Offset(w * 0.68f, h * 0.36f), strokeWidth = sw * 1.5f, cap = StrokeCap.Round)
+                drawLine(accent, Offset(w * 0.68f, h * 0.36f), Offset(w * 0.76f, h * 0.24f), strokeWidth = sw * 1.5f, cap = StrokeCap.Round)
+                drawLine(accent, Offset(w * 0.76f, h * 0.24f), Offset(w * 0.38f, h * 0.82f), strokeWidth = sw, cap = StrokeCap.Round)
+                drawLine(accent, Offset(w * 0.16f, h * 0.88f), Offset(w * 0.84f, h * 0.88f), strokeWidth = sw, cap = StrokeCap.Round)
+            }
+            "alias" -> {
+                drawCircle(color = accent, radius = w * 0.24f, center = Offset(w * 0.42f, h * 0.42f), style = Stroke(width = sw))
+                drawLine(accent, Offset(w * 0.60f, h * 0.60f), Offset(w * 0.82f, h * 0.82f), strokeWidth = sw * 1.4f, cap = StrokeCap.Round)
+            }
+            "hide" -> {
+                val path = Path()
+                path.moveTo(w * 0.08f, h * 0.52f)
+                path.cubicTo(w * 0.30f, h * 0.08f, w * 0.70f, h * 0.08f, w * 0.92f, h * 0.52f)
+                path.cubicTo(w * 0.70f, h * 0.96f, w * 0.30f, h * 0.96f, w * 0.08f, h * 0.52f)
+                drawPath(path, color = accent, style = Stroke(width = sw, cap = StrokeCap.Round))
+                drawCircle(color = accent, radius = w * 0.09f, center = Offset(w * 0.5f, h * 0.52f), style = Stroke(width = sw))
+                drawLine(accent, Offset(w * 0.18f, h * 0.86f), Offset(w * 0.82f, h * 0.18f), strokeWidth = sw * 1.3f, cap = StrokeCap.Round)
+            }
+            else -> {
+                // info: 円と「i」
+                drawCircle(color = accent, radius = w * 0.38f, center = Offset(w * 0.5f, h * 0.5f), style = Stroke(width = sw))
+                drawCircle(color = accent, radius = w * 0.045f, center = Offset(w * 0.5f, h * 0.33f))
+                drawLine(accent, Offset(w * 0.5f, h * 0.47f), Offset(w * 0.5f, h * 0.70f), strokeWidth = sw * 1.4f, cap = StrokeCap.Round)
+            }
         }
     }
 }
