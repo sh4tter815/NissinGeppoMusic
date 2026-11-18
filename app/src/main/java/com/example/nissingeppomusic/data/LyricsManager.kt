@@ -4,6 +4,7 @@ import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import com.example.nissingeppomusic.ui.LyricEffectsData
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -25,37 +26,20 @@ object LyricsManager {
 
     private val timestampRegex = Regex("""\[(\d+):(\d+)(?:\.(\d{1,3}))?\]""")
 
-    /** 簡体字・繁体字を日本の漢字（新字体）に寄せる変換表。中国ソースの歌詞の見た目を日本の表記にそろえる */
-    private val kanjiConvertMap: Map<Char, Char> = mapOf(
-        '编' to '編', '词' to '詞', '爱' to '愛', '乐' to '楽', '声' to '声', '风' to '風', '云' to '雲',
-        '龙' to '竜', '马' to '馬', '车' to '車', '门' to '門', '开' to '開', '关' to '関',
-        '时' to '時', '间' to '間', '线' to '線', '红' to '紅', '绿' to '緑', '蓝' to '藍',
-        '银' to '銀', '铁' to '鉄', '飞' to '飛', '鸟' to '鳥', '鱼' to '魚', '长' to '長',
-        '发' to '発', '后' to '後', '过' to '過', '还' to '還', '这' to '這', '个' to '個',
-        '们' to '們', '为' to '為', '对' to '対', '说' to '説', '读' to '読', '听' to '聴',
-        '买' to '買', '卖' to '売', '现' to '現', '见' to '見', '觉' to '覚', '远' to '遠',
-        '进' to '進', '运' to '運', '动' to '動', '气' to '気', '压' to '圧', '电' to '電',
-        '视' to '視', '圆' to '円', '团' to '団', '园' to '園', '图' to '図', '书' to '書',
-        '贝' to '貝', '页' to '頁', '阳' to '陽', '阴' to '陰', '梦' to '夢', '伤' to '傷',
-        '泪' to '涙', '让' to '譲', '给' to '給', '话' to '話', '语' to '語', '调' to '調',
-        '谁' to '誰', '岁' to '歳', '尘' to '塵', '净' to '浄', '飘' to '飄', '摇' to '揺',
-        '摆' to '擺', '脸' to '顔', '湿' to '湿', '干' to '乾', '挂' to '掛', '牵' to '牽',
-        '怀' to '懷', '转' to '転', '轮' to '輪', '响' to '響', '应' to '応', '传' to '伝',
-        '统' to '統', '续' to '続', '烧' to '焼', '毁' to '毀', '灭' to '滅', '烟' to '煙',
-        '雾' to '霧', '凉' to '涼', '热' to '熱', '闷' to '悶', '恼' to '悩', '烦' to '煩',
-        '忧' to '憂', '欢' to '歓', '惊' to '驚', '吓' to '嚇', '怜' to '憐', '义' to '義',
-        '节' to '節', '钟' to '鐘', '针' to '針', '钱' to '銭', '铜' to '銅', '铅' to '鉛',
-        '镜' to '鏡', '锁' to '鎖', '窗' to '窓', '户' to '戸', '桥' to '橋', '墙' to '壁',
-        '弹' to '弾', '诗' to '詩', '谱' to '譜', '韵' to '韻', '愿' to '願', '够' to '夠',
-        '麼' to '麼', '來' to '来', '說' to '説', '話' to '話', '語' to '語', '樂' to '楽',
-        '聲' to '声', '聽' to '聴', '寫' to '写', '讀' to '読', '覺' to '覚', '氣' to '気',
-        '壓' to '圧', '畫' to '画', '圓' to '円', '團' to '団', '圖' to '図', '淚' to '涙',
-        '讓' to '譲', '鐵' to '鉄', '髮' to '髪', '臉' to '顔', '綠' to '緑', '關' to '関',
-        '時' to '時', '紅' to '紅', '愛' to '愛', '夢' to '夢', '傷' to '傷', '還' to '還',
-        '過' to '過', '個' to '個', '為' to '為', '這' to '這', '們' to '們'
-    )
+    /** 簡体字・繁体字を日本の漢字（新字体）に寄せる変換表。正本は配信データ（LyricEffectsData）で、未取得時は内蔵デフォルトを使う */
+    private val kanjiConvertMap: Map<Char, Char> get() = LyricEffectsData.kanjiMap
 
     /** 簡体字・繁体字を日本の漢字に変換する */
+    /**
+     * 歌詞本文（クレジット行を除く）に簡体字・繁体字（日本の漢字への変換対象）が含まれているか。
+     * Kugou の歌詞は中国語版や簡体字混じりのことがあるため、優先判定に使う
+     */
+    private fun bodyHasSimplified(text: String): Boolean {
+        return text.lines().any { line ->
+            !isCreditLine(line) && line.any { ch -> kanjiConvertMap.containsKey(ch) }
+        }
+    }
+
     private fun toJapaneseKanji(text: String): String {
         if (text.none { kanjiConvertMap.containsKey(it) }) return text
         val sb = StringBuilder(text.length)
@@ -66,12 +50,10 @@ object LyricsManager {
 
     /** LRC形式テキストをパースする。タイムスタンプのない行は無視する */
     // インスト曲のダミー歌詞や「歌詞なし」通知の断片（簡体字・繁体字・日本語表記のゆれをまとめて拾う）
-    private val PLACEHOLDER_LYRIC_MARKERS = listOf(
-        "纯音乐", "純音樂", "纯音樂", "請欣賞", "请欣赏", "暫無歌詞", "暂无歌词"
-    )
+    private val PLACEHOLDER_LYRIC_MARKERS: List<String> get() = LyricEffectsData.placeholderMarkers
 
     fun parseLrc(lrcText: String): List<LyricLine> {
-        val result = mutableListOf<LyricLine>()
+        val raw = mutableListOf<LyricLine>()
         for (rawLine in lrcText.lineSequence()) {
             val line = rawLine.trim()
             if (line.isEmpty()) continue
@@ -81,8 +63,6 @@ object LyricsManager {
             if (rawText.isEmpty()) continue
             // 中国ソースがインスト曲に付けるダミー行（「纯音乐，请欣赏」＝純音楽、ご鑑賞ください）は歌詞ではないので除外する
             if (PLACEHOLDER_LYRIC_MARKERS.any { rawText.contains(it) }) continue
-            // 中国ソース由来の簡体字・繁体字は日本の漢字にそろえる（詞：〜等のクレジット行は残す）
-            val text = toJapaneseKanji(rawText)
             for (m in matches) {
                 val min = m.groupValues[1].toLongOrNull() ?: continue
                 val sec = m.groupValues[2].toLongOrNull() ?: continue
@@ -93,9 +73,15 @@ object LyricsManager {
                     2 -> (fracRaw.toLongOrNull() ?: 0L) * 10L
                     else -> (fracRaw.toLongOrNull() ?: 0L)
                 }
-                result.add(LyricLine(min * 60_000L + sec * 1_000L + fracMs, text))
+                raw.add(LyricLine(min * 60_000L + sec * 1_000L + fracMs, rawText))
             }
         }
+        // 簡体字・繁体字の手直しは「日本語の歌詞」のときだけ行う（かなを含む行があるかで判定する。中国語の歌詞は原文のまま使う）。
+        // クレジット行（作词：〜等）も、ラベル部分が簡体字のまま残らないよう一緒に変換する
+        val hasKana = raw.any { line -> line.text.any { it in '\u3040'..'\u30FF' } }
+        val result = if (hasKana) {
+            raw.map { line -> LyricLine(line.timeMs, toJapaneseKanji(line.text)) }
+        } else raw
         return splitLongLines(result.sortedBy { it.timeMs })
     }
 
@@ -104,7 +90,7 @@ object LyricsManager {
     private val krcWordRegex = Regex("""<(\d+),(\d+),\d+>([^<]*)""")
 
     fun parseKrc(krcText: String): List<LyricLine> {
-        val result = mutableListOf<LyricLine>()
+        val raw = mutableListOf<LyricLine>()
         for (rawLine in krcText.lineSequence()) {
             val line = rawLine.trim()
             val m = krcLineRegex.find(line) ?: continue
@@ -115,7 +101,7 @@ object LyricsManager {
             for (wm in krcWordRegex.findAll(body)) {
                 val off = wm.groupValues[1].toLongOrNull() ?: continue
                 val dur = wm.groupValues[2].toLongOrNull() ?: continue
-                val ch = toJapaneseKanji(wm.groupValues[3])
+                val ch = wm.groupValues[3]
                 if (ch.isEmpty()) continue
                 words.add(LyricWord(ch, lineStart + off, lineStart + off + dur))
                 sb.append(ch)
@@ -124,8 +110,19 @@ object LyricsManager {
             val text = sb.toString()
             if (words.isEmpty() || text.isBlank()) continue
             if (PLACEHOLDER_LYRIC_MARKERS.any { text.contains(it) }) continue
-            result.add(LyricLine(lineStart, text, words))
+            raw.add(LyricLine(lineStart, text, words))
         }
+        // 日本語の歌詞のときだけ簡体字・繁体字を日本の漢字にそろえる（クレジット行も含む。中国語の歌詞は原文のまま使う）
+        val hasKana = raw.any { line -> line.text.any { it in '\u3040'..'\u30FF' } }
+        val result = if (hasKana) {
+            raw.map { line ->
+                LyricLine(
+                    line.timeMs,
+                    toJapaneseKanji(line.text),
+                    line.words.map { w -> LyricWord(toJapaneseKanji(w.text), w.startMs, w.endMs) }
+                )
+            }
+        } else raw
         return splitLongLines(result.sortedBy { it.timeMs })
     }
 
@@ -306,6 +303,11 @@ object LyricsManager {
         } catch (e: Exception) {
             // 削除失敗は無視する
         }
+        try {
+            File(cacheFile(context, title, artist, album).absolutePath + ".nokrc").delete()
+        } catch (e: Exception) {
+            // 削除失敗は無視する
+        }
     }
 
     /**
@@ -388,6 +390,10 @@ object LyricsManager {
     @Volatile
     var lastFetchSource: String = ""
 
+    /** 直近の fetchKugouKrc が、アーティスト名の一致する候補から取得したかどうか */
+    @Volatile
+    var lastKugouKrcArtistMatched: Boolean = false
+
     suspend fun getSyncedLyrics(
         context: Context,
         title: String,
@@ -439,6 +445,40 @@ object LyricsManager {
                     }
                     if (krcParsed.isNotEmpty()) return@withContext krcParsed
                 }
+                // 文字同期なしのキャッシュ（LRCLIB由来など）の場合は、Kugouに文字同期（KRC）が
+                // ないか一度だけ確認し、あればそちらへ差し替える。無いことを確認したら
+                // .nokrc マーカーを残し、次回からは確認しない
+                val noKrcFile = File(cache.absolutePath + ".nokrc")
+                if (!noKrcFile.exists() && title.isNotBlank()) {
+                    val qTitle = title.replace(Regex("""^\\s*\\d{1,3}\\s*[.．、:：_\\-]\\s*"""), "").ifBlank { title }
+                    val krcText = try {
+                        fetchKugouKrc(qTitle, artist, durationMs)
+                    } catch (e: Exception) {
+                        null
+                    }
+                    if (!krcText.isNullOrBlank()) {
+                        val krcParsed2 = try {
+                            parseKrc(krcText)
+                        } catch (e: Exception) {
+                            emptyList()
+                        }
+                        if (krcParsed2.isNotEmpty() && krcParsed2.any { it.words.isNotEmpty() } && lastKugouKrcArtistMatched && !bodyHasSimplified(krcText)) {
+                            try {
+                                cache.writeText(linesToLrc(krcParsed2), Charsets.UTF_8)
+                                File(cache.absolutePath + ".krc").writeText(krcText, Charsets.UTF_8)
+                            } catch (e: Exception) {
+                                // キャッシュ保存失敗は無視する
+                            }
+                            lastFetchSource = "Kugou"
+                            return@withContext krcParsed2
+                        }
+                    }
+                    try {
+                        noKrcFile.writeText("1", Charsets.UTF_8)
+                    } catch (e: Exception) {
+                        // マーカー保存失敗は無視する
+                    }
+                }
                 return@withContext parsed
             }
         }
@@ -451,6 +491,43 @@ object LyricsManager {
         // データベース側の曲名には番号が付いていないため、そのままだと照合で不利になる。
         // 表示やキャッシュのキーは元のタイトルのままにする
         val queryTitle = title.replace(Regex("""^\\s*\\d{1,3}\\s*[.．、:：_\\-]\\s*"""), "").ifBlank { title }
+
+        // 2.5) Kugouに文字同期（KRC）がある場合は、LRCLIBより優先する。
+        // ただしアーティストが一致していないKRCは即採用せず保留し、LRCLIBにアーティスト一致の
+        // 歌詞（行同期）があればそちらを優先する（同名曲の別アーティスト版を掴まないため）
+        var pendingKrc: Pair<String, List<LyricLine>>? = null
+        var pendingStrict = false
+        val kugouKrcFirst = try {
+            fetchKugouKrc(queryTitle, artist, durationMs)
+        } catch (e: Exception) {
+            null
+        }
+        if (!kugouKrcFirst.isNullOrBlank()) {
+            val parsedKrcFirst = try {
+                parseKrc(kugouKrcFirst)
+            } catch (e: Exception) {
+                emptyList()
+            }
+            if (parsedKrcFirst.isNotEmpty() && parsedKrcFirst.any { it.words.isNotEmpty() }) {
+                // 本文に簡体字が混ざっているKRCも即採用しない（LRCLIBを優先する）
+                val krcSimplified = bodyHasSimplified(kugouKrcFirst)
+                if (lastKugouKrcArtistMatched && !krcSimplified) {
+                    try {
+                        cache.writeText(linesToLrc(parsedKrcFirst), Charsets.UTF_8)
+                        File(cache.absolutePath + ".krc").writeText(kugouKrcFirst, Charsets.UTF_8)
+                    } catch (e: Exception) {
+                        // キャッシュ保存失敗は無視する
+                    }
+                    lastFetchSource = "Kugou"
+                    return@withContext parsedKrcFirst
+                } else {
+                    pendingKrc = kugouKrcFirst to parsedKrcFirst
+                    // LRCLIB側にアーティスト一致を要求するのは「アーティスト不一致だけ」が理由のとき。
+                    // 簡体字が理由のときは、LRCLIBの通常の採用基準で優先する
+                    pendingStrict = !lastKugouKrcArtistMatched && !krcSimplified
+                }
+            }
+        }
 
         // 3) LRCLIB /api/get（タイトル・アーティスト・アルバム・長さで照合）
         val durationSec = if (durationMs > 0) durationMs / 1000 else 0
@@ -516,7 +593,8 @@ object LyricsManager {
             val titleOnlyUrl = "https://lrclib.net/api/search?track_name=${enc(queryTitle)}"
             consider(httpGetJsonArray(titleOnlyUrl), requireCloseDuration = true)
         }
-        val chosen = bestArtistText ?: bestText
+        // アーティスト不一致だけが理由でKRCを保留している間は、LRCLIB側もアーティスト一致の候補だけを採用する
+        val chosen = if (pendingKrc != null && pendingStrict) bestArtistText else (bestArtistText ?: bestText)
         if (chosen != null) {
             val parsed = parseLrc(chosen)
             if (parsed.isNotEmpty()) {
@@ -530,26 +608,21 @@ object LyricsManager {
             }
         }
 
-        // 5) Kugou（酷狗）: さらにマニアックな曲の候補
-        // まず文字同期つきの KRC を試す（取れたら文字単位のタイミングも一緒にキャッシュする）
-        val kugouKrc = try {
-            fetchKugouKrc(queryTitle, artist, durationMs)
-        } catch (e: Exception) {
-            null
-        }
-        if (!kugouKrc.isNullOrBlank()) {
-            val parsedKrc = parseKrc(kugouKrc)
-            if (parsedKrc.isNotEmpty()) {
-                try {
-                    cache.writeText(linesToLrc(parsedKrc), Charsets.UTF_8)
-                    File(cache.absolutePath + ".krc").writeText(kugouKrc, Charsets.UTF_8)
-                } catch (e: Exception) {
-                    // キャッシュ保存失敗は無視する
-                }
-                lastFetchSource = "Kugou"
-                return@withContext parsedKrc
+        // 保留していたKRC: LRCLIBにアーティスト一致の歌詞が無かったので、ここで採用する
+        val pk = pendingKrc
+        if (pk != null) {
+            val (krcText, krcLines) = pk
+            try {
+                cache.writeText(linesToLrc(krcLines), Charsets.UTF_8)
+                File(cache.absolutePath + ".krc").writeText(krcText, Charsets.UTF_8)
+            } catch (e: Exception) {
+                // キャッシュ保存失敗は無視する
             }
+            lastFetchSource = "Kugou"
+            return@withContext krcLines
         }
+
+        // 5) Kugou（酷狗）: さらにマニアックな曲の候補（KRCは 2.5 で試し済みなので、ここではLRCのみ）
         val kugouLrc = try {
             fetchKugouLrc(queryTitle, artist, durationMs)
         } catch (e: Exception) {
@@ -749,6 +822,7 @@ object LyricsManager {
 
     /** Kugou の非公式APIから文字同期つき歌詞（KRCテキスト）を復号して取得する。見つからなければ null */
     private fun fetchKugouKrc(title: String, artist: String, durationMs: Long): String? {
+        lastKugouKrcArtistMatched = false
         fun enc(v: String) = URLEncoder.encode(v, "UTF-8")
         val wantJapanese = containsJapanese(title) || containsJapanese(artist)
         fun searchInfos(keyword: String): org.json.JSONArray? {
@@ -798,7 +872,7 @@ object LyricsManager {
             pool
         }
 
-        for ((hash, durSec, _) in ordered.take(3)) {
+        for ((hash, durSec, artistMatched) in ordered.take(3)) {
             val durMs = if (durSec > 0) durSec * 1000 else durationMs
             val candUrl = "https://lyrics.kugou.com/search?ver=1&man=yes&client=pc" +
                 "&keyword=${enc(title)}&duration=$durMs&hash=$hash"
@@ -833,7 +907,10 @@ object LyricsManager {
             val krc = decodeKrc(contentB64) ?: continue
             if (parseKrc(krc).isNotEmpty() &&
                 (!wantJapanese || containsJapanese(krc))
-            ) return krc
+            ) {
+                lastKugouKrcArtistMatched = artistMatched
+                return krc
+            }
         }
         return null
     }
@@ -847,7 +924,9 @@ object LyricsManager {
         val durationSec: Int,
         val syncedLyrics: String?,
         val kugouHash: String?,
-        val instrumental: Boolean = false
+        val instrumental: Boolean = false,
+        /** 文字単位の同期（カラオケ）がある候補か。Kugou候補は検索時にKRCの実在を確認して埋める */
+        val wordSync: Boolean = false
     )
 
     /** 曲名・アーティスト名で歌詞候補を検索する（LRCLIBとKugouの両方を当たる） */
@@ -914,6 +993,8 @@ object LyricsManager {
                             null
                         }
                         if (candArr == null || candArr.length() == 0) continue
+                        // チップ表示用に、文字同期（KRC）があるかも先に確認しておく
+                        val hasWordSync = kugouCandidateHasWordSync(candArr, songName)
                         results.add(
                             LyricCandidate(
                                 source = "Kugou",
@@ -921,7 +1002,8 @@ object LyricsManager {
                                 artist = info.optString("singername", ""),
                                 durationSec = info.optInt("duration", 0),
                                 syncedLyrics = null,
-                                kugouHash = hash
+                                kugouHash = hash,
+                                wordSync = hasWordSync
                             )
                         )
                         added++
@@ -933,6 +1015,45 @@ object LyricsManager {
             }
             results
         }
+
+    /**
+     * Kugouの歌詞候補リストに、文字同期つき（KRC）の歌詞があるかを確認する。
+     * 候補チップ表示用。ダウンロードまで試して、実際に文字タイミングが取れたときだけ true
+     */
+    private fun kugouCandidateHasWordSync(candidates: org.json.JSONArray, songTitle: String): Boolean {
+        return try {
+            fun enc(v: String) = URLEncoder.encode(v, "UTF-8")
+            var first = candidates.optJSONObject(0) ?: return false
+            for (j in 0 until candidates.length()) {
+                val cand = candidates.optJSONObject(j) ?: continue
+                if (titleMatches(cand.optString("song", ""), songTitle)) {
+                    first = cand
+                    break
+                }
+            }
+            val candId = first.optString("id", "")
+            val accessKey = first.optString("accesskey", "")
+            if (candId.isBlank() || accessKey.isBlank()) return false
+            val dlUrl = "https://lyrics.kugou.com/download?ver=1&client=pc&id=$candId" +
+                "&accesskey=$accessKey&fmt=krc&charset=utf8"
+            val dlText = httpGetText(dlUrl, desktopUa) ?: return false
+            val contentB64 = try {
+                JSONObject(dlText).optString("content", "")
+            } catch (e: Exception) {
+                ""
+            }
+            if (contentB64.isBlank()) return false
+            val krc = decodeKrc(contentB64) ?: return false
+            val parsed = try {
+                parseKrc(krc)
+            } catch (e: Exception) {
+                emptyList()
+            }
+            parsed.isNotEmpty() && parsed.any { it.words.isNotEmpty() }
+        } catch (e: Exception) {
+            false
+        }
+    }
 
     /** 候補の歌詞本文（LRC）を取得する */
     suspend fun fetchCandidateLrc(candidate: LyricCandidate): String? = withContext(Dispatchers.IO) {
@@ -1031,6 +1152,100 @@ object LyricsManager {
         }
     }
 
+    /**
+     * 編集した歌詞を LRCLIB へ投稿する（公開データベースへの書き込み）。
+     * スパム防止の計算パズル（SHA-256 の Proof of Work）を解いてから POST する。
+     * 戻り値: null = 成功、それ以外はエラーメッセージ。
+     */
+    suspend fun publishToLrclib(title: String, artist: String, album: String, durationSec: Int, syncedLyrics: String): String? {
+        if (durationSec <= 0) return "曲の長さが分からないため投稿できません"
+        return withContext(Dispatchers.IO) {
+            try {
+                val ua = "NissinGeppoMusic/1.2 (https://github.com/sh4tter815/NissinGeppoMusic)"
+                // 1) チャレンジ取得
+                val chConn = (URL("https://lrclib.net/api/request-challenge").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    doOutput = true
+                    setRequestProperty("User-Agent", ua)
+                    connectTimeout = 15000
+                    readTimeout = 15000
+                }
+                chConn.outputStream.use { it.write(ByteArray(0)) }
+                if (chConn.responseCode != 200) return@withContext "チャレンジ取得に失敗しました (${chConn.responseCode})"
+                val chJson = JSONObject(chConn.inputStream.bufferedReader().readText())
+                val prefix = chJson.getString("prefix")
+                val target = hexToBytes(chJson.getString("target")) ?: return@withContext "チャレンジの形式が不正です"
+                // 2) Proof of Work: SHA-256(prefix + nonce) が target 未満になる nonce を探す（最大約4分）
+                val md = MessageDigest.getInstance("SHA-256")
+                var nonce = 0L
+                var solved: String? = null
+                val deadline = System.currentTimeMillis() + 240_000L
+                while (System.currentTimeMillis() < deadline) {
+                    val hash = md.digest((prefix + nonce).toByteArray(Charsets.UTF_8))
+                    if (isLessThanUnsigned(hash, target)) {
+                        solved = nonce.toString()
+                        break
+                    }
+                    nonce++
+                }
+                val solvedNonce = solved ?: return@withContext "計算が時間切れになりました。もう一度お試しください"
+                // 3) 投稿
+                val plain = syncedLyrics.lines()
+                    .map { it.replace(Regex("^\\[[^\\]]*\\]"), "").trim() }
+                    .filter { it.isNotEmpty() }
+                    .joinToString("\n")
+                val body = JSONObject()
+                    .put("trackName", title)
+                    .put("artistName", artist)
+                    .put("albumName", album)
+                    .put("duration", durationSec)
+                    .put("plainLyrics", plain)
+                    .put("syncedLyrics", syncedLyrics)
+                    .toString()
+                val conn = (URL("https://lrclib.net/api/publish").openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    doOutput = true
+                    setRequestProperty("Content-Type", "application/json")
+                    setRequestProperty("X-Publish-Token", "$prefix:$solvedNonce")
+                    setRequestProperty("User-Agent", ua)
+                    connectTimeout = 15000
+                    readTimeout = 30000
+                }
+                conn.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
+                val code = conn.responseCode
+                if (code == 201) null else "投稿に失敗しました ($code)"
+            } catch (e: Exception) {
+                "投稿に失敗しました (${e.javaClass.simpleName})"
+            }
+        }
+    }
+
+    private fun hexToBytes(hex: String): ByteArray? {
+        if (hex.length % 2 != 0) return null
+        val out = ByteArray(hex.length / 2)
+        for (i in out.indices) {
+            val v = hex.substring(i * 2, i * 2 + 2).toIntOrNull(16) ?: return null
+            out[i] = v.toByte()
+        }
+        return out
+    }
+
+    private fun isLessThanUnsigned(a: ByteArray, b: ByteArray): Boolean {
+        val n = minOf(a.size, b.size)
+        for (i in 0 until n) {
+            val av = a[i].toInt() and 0xFF
+            val bv = b[i].toInt() and 0xFF
+            if (av != bv) return av < bv
+        }
+        return a.size < b.size
+    }
+
+    /** 手編集した歌詞をキャッシュへ保存する（対訳キャッシュは行対応がずれるので消す） */
+    fun saveEditedLyrics(context: Context, title: String, artist: String, album: String, lrcText: String) {
+        saveLyricsOverride(context, title, artist, album, lrcText)
+        try { File(cacheFile(context, title, artist, album).absolutePath + ".ja3").delete() } catch (e: Exception) { }
+    }
+
     /** インスト曲（歌詞なし）指定を保存するマーカー */
     private fun instrumentalFile(context: Context, title: String, artist: String, album: String): File {
         val dir = File(context.filesDir, "lyrics")
@@ -1059,10 +1274,17 @@ object LyricsManager {
     fun clearLyricsOverride(context: Context, title: String, artist: String, album: String) {
         try { cacheFile(context, title, artist, album).delete() } catch (e: Exception) { }
         try { instrumentalFile(context, title, artist, album).delete() } catch (e: Exception) { }
-        try { File(cacheFile(context, title, artist, album).absolutePath + ".ja2").delete() } catch (e: Exception) { }
+        try { File(cacheFile(context, title, artist, album).absolutePath + ".ja3").delete() } catch (e: Exception) { }
+        try { File(cacheFile(context, title, artist, album).absolutePath + ".nokrc").delete() } catch (e: Exception) { }
     }
 
     /** 歌詞の各行を日本語へ翻訳する（日本語を含む行は空文字＝訳なし）。結果はキャッシュする */
+    // 冒頭のクレジット行（作詞・作曲など）は人名が誤訳されるので翻訳対象にしない
+    private fun isCreditLine(text: String): Boolean {
+        val t = text.trim()
+        return LyricEffectsData.creditKeywords.any { t.contains(it) }
+    }
+
     suspend fun translateToJapanese(
         context: Context,
         title: String,
@@ -1070,7 +1292,7 @@ object LyricsManager {
         album: String,
         lines: List<LyricLine>
     ): List<String> = withContext(Dispatchers.IO) {
-        val cache = File(cacheFile(context, title, artist, album).absolutePath + ".ja2")
+        val cache = File(cacheFile(context, title, artist, album).absolutePath + ".ja3")
         if (cache.exists()) {
             try {
                 val cached = cache.readText(Charsets.UTF_8).split("\n")
@@ -1083,7 +1305,7 @@ object LyricsManager {
         val targets = lines.mapIndexedNotNull { i, l ->
             // かなを含む行は日本語として翻訳しない。漢字だけの行は中国語の
             // 可能性があるので対象にする（日本語なら訳が原文と一致して消える）
-            if (l.text.isBlank() || l.text.any { it in '\u3040'..'\u30FF' }) null else i to l.text
+            if (l.text.isBlank() || l.text.any { it in '\u3040'..'\u30FF' } || isCreditLine(l.text)) null else i to l.text
         }
         if (targets.isEmpty()) return@withContext result
         var idx = 0
