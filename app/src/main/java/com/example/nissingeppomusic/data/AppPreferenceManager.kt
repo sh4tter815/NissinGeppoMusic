@@ -225,6 +225,16 @@ class AppPreferenceManager(private val context: Context) {
     fun setLyricsPvMode(enabled: Boolean) { prefs.edit().putBoolean("lyrics_pv_mode", enabled).apply() }
     fun getLyricsPvFont(): String = prefs.getString("lyrics_pv_font", "default") ?: "default"
     fun setLyricsPvFont(value: String) { prefs.edit().putString("lyrics_pv_font", value).apply() }
+    fun getLyricsEnFont(): String = prefs.getString("lyrics_pv_font_en", "same") ?: "same"
+    fun setLyricsEnFont(value: String) { prefs.edit().putString("lyrics_pv_font_en", value).apply() }
+    fun getLyricsEnCustomFontPath(): String? = prefs.getString("lyrics_en_custom_font_path", null)
+    fun setLyricsEnCustomFontPath(value: String?) { prefs.edit().putString("lyrics_en_custom_font_path", value).apply() }
+    fun isPvPartsEntryEnabled(): Boolean = prefs.getBoolean("pv_parts_entry", false)
+    fun setPvPartsEntryEnabled(value: Boolean) { prefs.edit().putBoolean("pv_parts_entry", value).apply() }
+    fun isDisc3dEnabled(): Boolean = prefs.getBoolean("disc_3d", false)
+    fun setDisc3dEnabled(enabled: Boolean) { prefs.edit().putBoolean("disc_3d", enabled).apply() }
+    fun isDisc3dTiltEnabled(): Boolean = prefs.getBoolean("disc_3d_tilt", false)
+    fun setDisc3dTiltEnabled(enabled: Boolean) { prefs.edit().putBoolean("disc_3d_tilt", enabled).apply() }
     fun isLyricsBold(): Boolean = prefs.getBoolean("lyrics_bold", false)
     fun setLyricsBold(value: Boolean) { prefs.edit().putBoolean("lyrics_bold", value).apply() }
 
