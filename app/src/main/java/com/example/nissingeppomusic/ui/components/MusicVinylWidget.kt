@@ -54,6 +54,7 @@ fun MusicVinylWidget(
     accentColor: Color = Color(0xFFE53935),
     accentGlow: Boolean = false,
     topZoneReserved: Boolean = false,
+    artworkTilt3d: Boolean = false,
     onPlayTrack: (AppInfo) -> Unit = {},
     onFocusTrackChanged: (AppInfo?) -> Unit = {},
     onRackVisibilityChanged: (Boolean) -> Unit = {}
@@ -398,6 +399,15 @@ fun MusicVinylWidget(
                     )
                 }
 
+                if (artworkTilt3d) {
+                    // 薄い立体感: アートワークの真下に暗い円を少しずらして敷き、厚みとして見せる
+                    Box(
+                        modifier = Modifier
+                            .size((discRadiusDp * 2f * 0.92f).dp)
+                            .offset(y = 3.5.dp)
+                            .background(Color.Black.copy(alpha = 0.45f), CircleShape)
+                    )
+                }
                 Box(
                     modifier = Modifier
                         .size((discRadiusDp * 2f * 0.92f).dp)
