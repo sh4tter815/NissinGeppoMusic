@@ -1412,7 +1412,14 @@ fun MainLauncherScreen() {
                         // 左側: フォルダ選択ダイヤル
                         RotatableFolderWheel(
                             folders = folderList,
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.fillMaxSize().graphicsLayer {
+                                if (disc3d) {
+                                    transformOrigin = TransformOrigin((animatedDisc1CenterX / screenWidthDp).coerceIn(-2f, 3f), (disc1CenterY / screenHeightDp).coerceIn(-2f, 3f))
+                                    rotationX = 27f + discTiltX.value
+                                    rotationY = discTiltY.value
+                                    cameraDistance = 6.5f * density
+                                }
+                            },
                             discCenterXDp = animatedDisc1CenterX,
                             discCenterYDp = disc1CenterY,
                             discRadiusDp = disc1RadiusDp,
