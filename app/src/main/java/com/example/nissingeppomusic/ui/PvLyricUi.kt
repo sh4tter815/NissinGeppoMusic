@@ -35,6 +35,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.gestures.drag
@@ -45,6 +47,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
 import androidx.compose.material.icons.filled.Lyrics
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Shuffle
@@ -74,6 +78,10 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.PathEffect
@@ -89,6 +97,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -100,11 +109,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.example.nissingeppomusic.data.AppInfo
-import com.example.nissingeppomusic.data.AppRepository
 import com.example.nissingeppomusic.data.LyricLine
 import com.example.nissingeppomusic.data.LyricWord
 import com.example.nissingeppomusic.data.LyricsManager
-import com.example.nissingeppomusic.data.MusicPlayerManager
 import com.example.nissingeppomusic.ui.components.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -123,7 +130,10 @@ import com.example.nissingeppomusic.ui.components.parseFontFamily
 import kotlin.math.roundToInt
 import androidx.core.graphics.toColorInt
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.Search
@@ -134,7 +144,7 @@ import kotlin.math.ceil
 import androidx.compose.animation.core.exponentialDecay
 
 // 歌詞PVの描画まわり一式（文字PV・間奏アート・アイコン描画・自動フィット・設定のプレビューカード）。
-// 正本はこの音楽アプリ側。ランチャー側にも同じ内容のファイルがあるので、直したらランチャー側へもコピーすること。
+// 正本は音楽アプリ（NissinGeppoMusic）側。変更は音楽側でしてから、こちらへコピーすること。
 
 /** 白い枠線だけの小さな線画アイコンを描く（キャンバスは正方形前提） */
 fun DrawScope.drawLyricIcon(kind: Int) {
@@ -255,14 +265,28 @@ fun DrawScope.drawLyricIcon(kind: Int) {
             drawLine(col, pt(0f, 0f), pt(11f, 6f), strokeWidth = 3.0f * u, cap = StrokeCap.Round)
         }
         LyricIcon.FLAME -> {
-            val path = Path().apply {
-                moveTo(cx, cy - 32f * u)
-                cubicTo(cx + 20f * u, cy - 8f * u, cx + 22f * u, cy + 6f * u, cx + 14f * u, cy + 18f * u)
-                cubicTo(cx + 8f * u, cy + 29f * u, cx - 8f * u, cy + 29f * u, cx - 14f * u, cy + 18f * u)
-                cubicTo(cx - 22f * u, cy + 6f * u, cx - 13f * u, cy - 10f * u, cx, cy - 32f * u)
+            // 炎: 先端を右へ倒し、左側に小さな flick（はね）を入れた非対称な輪郭＋内側の芯。
+            // 左右対称な涙型（DROP）と見間違えないようにする
+            val outer = Path().apply {
+                moveTo(cx + 2f * u, cy - 34f * u)
+                cubicTo(cx + 10f * u, cy - 20f * u, cx + 20f * u, cy - 14f * u, cx + 21f * u, cy - 2f * u)
+                cubicTo(cx + 22f * u, cy + 8f * u, cx + 16f * u, cy + 14f * u, cx + 15f * u, cy + 20f * u)
+                cubicTo(cx + 13f * u, cy + 30f * u, cx + 6f * u, cy + 33f * u, cx, cy + 33f * u)
+                cubicTo(cx - 10f * u, cy + 33f * u, cx - 18f * u, cy + 27f * u, cx - 19f * u, cy + 16f * u)
+                cubicTo(cx - 20f * u, cy + 6f * u, cx - 12f * u, cy, cx - 11f * u, cy - 8f * u)
+                cubicTo(cx - 10f * u, cy - 15f * u, cx - 4f * u, cy - 18f * u, cx - 3f * u, cy - 24f * u)
+                cubicTo(cx - 2f * u, cy - 28f * u, cx, cy - 31f * u, cx + 2f * u, cy - 34f * u)
                 close()
             }
-            drawPath(path, col, style = st)
+            drawPath(outer, col, style = st)
+            val core = Path().apply {
+                moveTo(cx, cy + 4f * u)
+                cubicTo(cx + 6f * u, cy + 12f * u, cx + 9f * u, cy + 17f * u, cx + 9f * u, cy + 22f * u)
+                cubicTo(cx + 9f * u, cy + 28f * u, cx - 9f * u, cy + 28f * u, cx - 9f * u, cy + 22f * u)
+                cubicTo(cx - 9f * u, cy + 17f * u, cx - 5f * u, cy + 11f * u, cx, cy + 4f * u)
+                close()
+            }
+            drawPath(core, col, style = st)
         }
         LyricIcon.DROP -> {
             val path = Path().apply {
@@ -563,16 +587,7 @@ fun PvInterludeArt(accentColor: Color, modifier: Modifier = Modifier) {
             }
             drawPath(path, colr, style = Stroke(width = 2.2f + (i % 3) * 0.9f, cap = StrokeCap.Round))
         }
-        for (i in 0 until 3) {
-            val cxp = w * (0.25f + 0.25f * i) + sin(ph * 0.7f + i * 2.1f) * w * 0.03f
-            val cyp = h * (0.35f + 0.15f * i) + kotlin.math.cos(ph * 0.6f + i * 1.3f) * h * 0.05f
-            drawCircle(
-                color = Color.White.copy(alpha = 0.22f),
-                radius = h * (0.10f + 0.04f * i) * (0.9f + 0.1f * sin(ph + i)),
-                center = Offset(cxp, cyp),
-                style = Stroke(width = 1.8f)
-            )
-        }
+        // 円は出さない（波の線だけにする）
     }
 }
 
@@ -581,6 +596,46 @@ fun PvInterludeArt(accentColor: Color, modifier: Modifier = Modifier) {
  * カラオケ式テロップ表示: 文字同期（words）がある行は、歌い終わった文字から sungColor に変わっていく。
  * words が無い行は baseColor の通常テキストとして描く
  */
+// 英字（半角ASCII）の範囲だけ別フォントで描くための混合フォント文字列を作る。
+// enFontFamily が null のときは通常の文字列として返す。
+// 半角記号（？！括弧など）だけの並びは英語扱いにせず、直前の文のフォントに合わせる
+// （日本語の文中に出てくる半角記号は日本語フォント、英語の文中の記号は英語フォントになる）
+fun lyricMixedFontText(text: String, enFontFamily: FontFamily?): androidx.compose.ui.text.AnnotatedString {
+    if (enFontFamily == null) return androidx.compose.ui.text.AnnotatedString(text)
+    // 半角／全角のランに分ける
+    val runs = mutableListOf<Triple<Int, Int, Boolean>>()
+    var i = 0
+    while (i < text.length) {
+        val ascii = text[i] in ' '..'~'
+        var j = i
+        while (j < text.length && (text[j] in ' '..'~') == ascii) j++
+        runs.add(Triple(i, j, ascii))
+        i = j
+    }
+    // 英字・数字を含むランだけを「英語」として英語フォントにする
+    val useEn = BooleanArray(runs.size)
+    for (k in runs.indices) {
+        val (s, e, ascii) = runs[k]
+        if (!ascii) continue
+        if (text.substring(s, e).any { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' }) useEn[k] = true
+    }
+    // 記号だけのランは直前のランの扱いに合わせる（先頭にある場合は直後を見る）
+    for (k in runs.indices) {
+        if (!runs[k].third || useEn[k]) continue
+        useEn[k] = if (k > 0) useEn[k - 1] else (if (runs.size > 1) useEn[k + 1] else false)
+    }
+    return buildAnnotatedString {
+        for (k in runs.indices) {
+            val (s, e, _) = runs[k]
+            if (useEn[k]) {
+                withStyle(SpanStyle(fontFamily = enFontFamily)) { append(text.substring(s, e)) }
+            } else {
+                append(text.substring(s, e))
+            }
+        }
+    }
+}
+
 @Composable
 fun KaraokeLyricText(
     line: LyricLine,
@@ -590,6 +645,7 @@ fun KaraokeLyricText(
     fontSize: androidx.compose.ui.unit.TextUnit,
     fontWeight: FontWeight = FontWeight.Normal,
     fontFamily: FontFamily? = null,
+    enFontFamily: FontFamily? = null,
     letterSpacing: androidx.compose.ui.unit.TextUnit = androidx.compose.ui.unit.TextUnit.Unspecified,
     textAlign: TextAlign = TextAlign.Start,
     shadow: Shadow? = null,
@@ -597,7 +653,7 @@ fun KaraokeLyricText(
 ) {
     if (line.words.isEmpty()) {
         Text(
-            text = line.text,
+            text = lyricMixedFontText(line.text, enFontFamily),
             color = baseColor,
             fontSize = fontSize,
             fontWeight = fontWeight,
@@ -632,7 +688,7 @@ fun KaraokeLyricText(
                 positionMs <= t.first -> baseColor
                 else -> lerp(baseColor, sungColor, ((positionMs - t.first).toFloat() / (t.second - t.first).coerceAtLeast(1L).toFloat()).coerceIn(0f, 1f))
             }
-            withStyle(SpanStyle(color = col)) { append(ch) }
+            withStyle(SpanStyle(color = col, fontFamily = if (enFontFamily != null && ch in ' '..'~') enFontFamily else null)) { append(ch) }
             ci++
         }
     }
@@ -662,6 +718,11 @@ private fun pvStartsInParen(lines: List<LyricLine>, index: Int): Boolean {
     return depth > 0
 }
 
+// PV全体の「カメラの手ブレ」用の共有時計（行が切り替わってもカメラの位相が飛ばないよう、開始時刻を全体で共有する）
+private object PvCamClock {
+    val startMs: Long = System.currentTimeMillis()
+}
+
 @Composable
 fun PvLyricLine(
     text: String,
@@ -677,13 +738,21 @@ fun PvLyricLine(
     words: List<LyricWord> = emptyList(),
     startsInParen: Boolean = false,
     lineStartMs: Long = 0L,
+    partsEntry: Boolean = false,
+    enFontFamily: FontFamily? = null,
+    camFlow: Int = -1,
+    tilt3d: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val pvEaseIn = CubicBezierEasing(0.42f, 0f, 1f, 1f)
     // 改行位置は塊（文節・英単語）の境界で決める。描画とアニメーションは文字ごと（英単語だけ単語ごと）
-    val iconWord = findIconWord(text)
     val chunks = remember(text) { splitLyricUnits(text) }
     if (chunks.isEmpty()) return
+    // 行頭の1・2文字目が両方ひらがなの行は、先頭文字だけを大きくして行の入りを読みやすくする
+    val leadHiraganaBoost = remember(text) {
+        val head = text.trimStart(' ', '　', '（', '(', '「')
+        head.length >= 2 && head[0] in 'ぁ'..'ゟ' && head[1] in 'ぁ'..'ゟ'
+    }
     // 文字同期（KRC）がある行用: 文字位置→その文字の開始時刻（絶対ms）のテーブル
     val charStartArr = remember(text, words) {
         if (words.isEmpty()) null else {
@@ -718,6 +787,40 @@ fun PvLyricLine(
     // ただし「」や（）で囲まれた部分は丸ごと1行で表示する（閉じ括弧がこの行に無い場合は通常扱い）
     val totalChars = text.count { it != ' ' && it != '　' }
     fun splitChunks(list: List<String>): List<List<String>> {
+        // 塊が1つしかない長い行（助詞で始まらない長いひらがな文など）は、文字単位で2つに割る
+        if (list.size == 1) {
+            val s = list[0]
+            if (s.length >= 6 && chunkEm(s) > 12f) {
+                val total = chunkEm(s)
+                val particles = "はがをにへとやのもでからまでよりばねよわ"
+                var bestI = -1
+                var bestD = Float.MAX_VALUE
+                var acc = 0f
+                for (i in 1 until s.length) {
+                    acc += charEm(s[i - 1]) * 1.02f
+                    if (i >= 2 && i <= s.length - 2 && (s[i - 1] in particles || s[i - 1] == ' ' || s[i - 1] == '　')) {
+                        val d = kotlin.math.abs(total / 2f - acc)
+                        if (d < bestD) { bestD = d; bestI = i }
+                    }
+                }
+                if (bestI < 0) {
+                    acc = 0f
+                    bestD = Float.MAX_VALUE
+                    for (i in 1 until s.length) {
+                        acc += charEm(s[i - 1]) * 1.02f
+                        val d = kotlin.math.abs(total / 2f - acc)
+                        if (d < bestD) { bestD = d; bestI = i }
+                    }
+                }
+                val noStart = "ーぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮ・、。，．！!？?）)】」』"
+                while (bestI > 1 && bestI < s.length && s[bestI] in noStart) bestI--
+                while (bestI < s.length - 1 && bestI > 0 && s[bestI] in noStart) bestI++
+                if (bestI in 1 until s.length) {
+                    return listOf(listOf(s.substring(0, bestI)), listOf(s.substring(bestI)))
+                }
+            }
+            return listOf(list)
+        }
         if (list.size >= 2 && list.sumOf { it.count { ch -> ch != ' ' && ch != '　' } } >= 6) {
             val totalEm = list.sumOf { chunkEm(it).toDouble() }.toFloat() + gapEm * (list.size - 1)
             var acc = 0f
@@ -728,10 +831,48 @@ fun PvLyricLine(
                 val diff = kotlin.math.abs(totalEm / 2f - acc)
                 if (diff < bestDiff) { bestDiff = diff; best = idx }
             }
+            // スペースで区切られている場合は、その区切りを改行位置として優先する（極端に偏る場合を除く）
+            var spaceBest = -1
+            var spaceDiff = Float.MAX_VALUE
+            var sAcc = 0f
+            for (idx in 1 until list.size) {
+                sAcc += chunkEm(list[idx - 1]) + gapEm
+                val prev = list[idx - 1]
+                if (prev.endsWith(" ") || prev.endsWith("　")) {
+                    val diff = kotlin.math.abs(totalEm / 2f - sAcc)
+                    if (diff < spaceDiff) { spaceDiff = diff; spaceBest = idx }
+                }
+            }
+            if (spaceBest > 0 && spaceDiff <= totalEm * 0.30f) best = spaceBest
+            // て形＋補助動詞の境界（取り消して／しまった）も改行位置として優先する
+            var auxBest = -1
+            var auxDiff = Float.MAX_VALUE
+            var aAcc = 0f
+            val auxHeads = listOf("しまった", "しまう", "しちゃ", "ちゃった", "いる", "いた", "いく", "くる", "くれる", "もらう", "あげる", "ある", "おく", "みる", "みた", "みたい", "ほしい")
+            for (idx in 1 until list.size) {
+                aAcc += chunkEm(list[idx - 1]) + gapEm
+                val prevEndsTe = list[idx - 1].endsWith("て") || list[idx - 1].endsWith("で")
+                if (prevEndsTe && auxHeads.any { list[idx].startsWith(it) }) {
+                    val diff = kotlin.math.abs(totalEm / 2f - aAcc)
+                    if (diff < auxDiff) { auxDiff = diff; auxBest = idx }
+                }
+            }
+            if (auxBest > 0 && auxDiff <= totalEm * 0.35f) best = auxBest
             // 行頭禁則: 次の行が「ー・小さいカナ・句読点・閉じ括弧」で始まる場合は、分割点をずらす
             val noLineStart = "ーぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮ・、。，．！!？?）)】」』"
             while (best > 1 && list[best].isNotEmpty() && list[best][0] in noLineStart) best--
             while (best < list.size - 1 && list[best].isNotEmpty() && list[best][0] in noLineStart) best++
+            // 丁寧語の「お・ご」は後ろの単語と切り離さない（お別れ、ごはん等）
+            if (best in 1 until list.size) {
+                val prevChunk = list[best - 1]
+                if (prevChunk == "お" || prevChunk == "ご") {
+                    // お・ご単体の塊は、後ろの単語と同じ行へ送る
+                    if (best > 1) best--
+                } else if (prevChunk.length >= 2 && (prevChunk.endsWith("お") || prevChunk.endsWith("ご"))) {
+                    // 塊の末尾のお・ごは、後ろの単語の塊を引き上げて同じ行にする（無理なら塊ごと次の行へ）
+                    if (best < list.size - 1) best++ else if (best > 1) best--
+                }
+            }
             return listOf(list.subList(0, best), list.subList(best, list.size))
         }
         return listOf(list)
@@ -796,12 +937,66 @@ fun PvLyricLine(
     }
     flushRun()
     // 改行は最大3行まで。括弧を1行にすると3行を超える場合は、括弧ルールを無視して通常分割にする
-    val rows: List<List<String>> = when {
+    val baseRows: List<List<String>> = when {
         rowsBuilt.isEmpty() -> listOf(chunks)
         rowsBuilt.size > 3 -> splitChunks(chunks)
         else -> rowsBuilt
     }
+    // クレジット行（作詞・作曲・編曲など）は「：」の直後を改行位置にする
+    val creditWords = listOf("作詞", "作曲", "編曲", "作词", "编曲", "歌唱", "演唱", "ボーカル", "Vocal", "Lyrics", "Composer", "Arranger", "詞：", "曲：")
+    val colonChunkIdx = if (creditWords.any { text.contains(it) }) chunks.indexOfFirst { it.contains("：") || it.contains(":") } else -1
+    val rowsRaw: List<List<String>> = if (colonChunkIdx in 0 until chunks.size - 1) {
+        listOf(chunks.subList(0, colonChunkIdx + 1), chunks.subList(colonChunkIdx + 1, chunks.size))
+    } else baseRows
+    // 1文字だけの行は作らない: 隣の行と合体させる（「お／膳立て」のように割れるのを防ぐ）
+    val rows: List<List<String>> = run {
+        val fixed = rowsRaw.toMutableList()
+        var ri = 0
+        while (fixed.size > 1 && ri < fixed.size) {
+            val charCount = fixed[ri].sumOf { it.count { ch -> ch != ' ' && ch != '　' } }
+            if (charCount == 1) {
+                if (ri < fixed.size - 1) {
+                    fixed[ri] = fixed[ri] + fixed[ri + 1]
+                    fixed.removeAt(ri + 1)
+                } else {
+                    fixed[ri - 1] = fixed[ri - 1] + fixed[ri]
+                    fixed.removeAt(ri)
+                }
+            } else {
+                ri++
+            }
+        }
+        fixed
+    }
     fun rowEm(row: List<String>): Float = row.sumOf { chunkEm(it).toDouble() }.toFloat() + gapEm * (row.size - 1).coerceAtLeast(0)
+    // ユニットごとの英字フォント適用フラグ。半角でも英字・数字を含むユニットだけを英字フォントにし、
+    // 記号だけのユニット（() 等）は直前のユニットの扱いに合わせる（先頭にある場合は直後を見る）。
+    // 日本語の文中で半角記号が英字フォントになってしまうのを防ぐ
+    val unitEnFlags: List<Boolean> = if (enFontFamily == null) emptyList() else {
+        val flat = rows.flatten().flatMap { renderUnitsOf(it) }
+        // -1 = 記号のみ（未定）, 0 = 日本語フォント, 1 = 英字フォント
+        val state = IntArray(flat.size) { idx ->
+            val u = flat[idx]
+            when {
+                u.isEmpty() || u.any { it !in ' '..'~' } -> 0
+                u.any { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' } -> 1
+                else -> -1
+            }
+        }
+        var prevFlag = -1
+        for (idx in state.indices) {
+            if (state[idx] == -1) {
+                if (prevFlag != -1) state[idx] = prevFlag
+            } else {
+                prevFlag = state[idx]
+            }
+        }
+        var nextFlag = 0
+        for (idx in state.indices.reversed()) {
+            if (state[idx] == -1) state[idx] = nextFlag else nextFlag = state[idx]
+        }
+        state.map { it == 1 }
+    }
     val longestRowEm = rows.maxOf { rowEm(it) }.coerceAtLeast(1f)
     // 行ごとの大きさを均等に: どの行も「枠いっぱいに広がるサイズ」を基本にし、短い行だけ高さ上限で止める
     val heightCapBase = when {
@@ -817,14 +1012,13 @@ fun PvLyricLine(
     // 退場は1本の時計（exitProgress）で全文字を駆動する（位相だけ文字ごとにずらす）
     val exitProgress = remember { Animatable(0f) }
     // 「落」を含む行は、退場のときに文字をバラさず行ごと画面下へ落下させる
-    val fallLine = text.contains("落")
+    val fallLine = FALL_WORDS.any { text.contains(it) }
     // 単語で発火する入場・退場エフェクトの対象判定
     // 否定語（ない等）には打ち消し線ではなく☓アイコンを付ける（対象語の開始位置を塊ごとに探す）
-    val negWords = listOf("なかった", "じゃない", "なくて", "なくな", "無い", "ない", "間違い", "誤り")
-    val sandLine = text.contains("砂") || text.contains("消") || text.contains("壊") || text.contains("砕")
-    val dreamLine = text.contains("夢") || text.contains("思い出")
-    val windLine = text.contains("風")
-    val rippleWord = text.contains("響")
+    val sandLine = SAND_WORDS.any { text.contains(it) }
+    val dreamLine = DREAM_WORDS.any { text.contains(it) }
+    val windLine = WIND_WORDS.any { text.contains(it) }
+    val rippleWord = RIPPLE_WORDS.any { text.contains(it) }
     if (exiting) {
         LaunchedEffect(Unit) {
             exitProgress.animateTo(1f, animationSpec = tween(durationMillis = 720, easing = LinearEasing))
@@ -854,6 +1048,73 @@ fun PvLyricLine(
         animationSpec = infiniteRepeatable(tween(durationMillis = 2600, easing = LinearEasing), RepeatMode.Restart),
         label = "wavePhase"
     )
+    // カメラワーク: 全行に、入場と退場がつながるカメラの流れを付ける。
+    // camFlow: 0=右へ流れる（退場は右へ・入場は左から） 1=左へ 2=上へ 3=下へ 4=押し込む（ズームイン系） 5=引く（ズームアウト系）
+    // -1 のときは baseSeed から決める。入場はイーズアウト、退場はイーズインで、退場と次の入場が同じ流れを共有する
+    val camFlowEff = if (camFlow >= 0) camFlow else Math.floorMod(baseSeed * 13 + 7, 6)
+    val camAnim = remember { Animatable(if (exiting) 1f else 0f) }
+    if (!exiting) {
+        LaunchedEffect(Unit) {
+            camAnim.animateTo(1f, animationSpec = tween(durationMillis = if (camFlowEff >= 4) 1100 else 800, easing = FastOutSlowInEasing))
+        }
+    }
+    val camDensity = LocalDensity.current
+    val camSlideXPx = with(camDensity) { (screenWidthDp * 0.24f).dp.toPx() }
+    val camSlideYPx = with(camDensity) { (fitSize * 1.7f).dp.toPx() }
+    val camDriftAmpXPx = with(camDensity) { 5.dp.toPx() }
+    val camDriftAmpYPx = with(camDensity) { 3.5.dp.toPx() }
+    // 規制の白塗りは行全体で1つの時計を共有し、連なった伏せ字を一気に覆う
+    val censorProgress = remember { Animatable(if (exiting) 1f else 0f) }
+    if (!exiting) {
+        LaunchedEffect(Unit) {
+            delay(600)
+            censorProgress.animateTo(1f, animationSpec = tween(durationMillis = 650, easing = FastOutSlowInEasing))
+        }
+    }
+    // カメラの手ブレ: 周期の違うサイン波を重ね、座標がずっとゆるく漂う（位相は共有時計で全行共通）
+    // 初期値も現在時刻から入れる（0で始めると、行が切り替わる瞬間にカメラ位置が飛んでガタつくため）
+    val camDriftMs = remember { mutableStateOf(System.currentTimeMillis() - PvCamClock.startMs) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            camDriftMs.value = System.currentTimeMillis() - PvCamClock.startMs
+            delay(16)
+        }
+    }
+    // 疑似視差用: この行のカメラ平行移動量（スライド＋手ブレ）を状態として共有する。
+    // 文字ごとに「大きさ＝奥行き」ぶんのズレを足すことで、カメラが動いたときに視差が出る。
+    // 値は PvLyricUnit の graphicsLayer 内でのみ読むので、再コンポーズは走らない
+    val camFlowState = rememberUpdatedState(camFlowEff)
+    val camExitingState = rememberUpdatedState(exiting)
+    val camTransState = remember {
+        derivedStateOf {
+            val flow = camFlowState.value
+            val ex = camExitingState.value
+            val camP = if (ex) pvEaseIn.transform(exitProgress.value) else camAnim.value
+            var tx = 0f
+            var ty = 0f
+            when (flow) {
+                0 -> tx = (if (ex) camP else camP - 1f) * camSlideXPx
+                1 -> tx = (if (ex) -camP else 1f - camP) * camSlideXPx
+                2 -> ty = (if (ex) -camP else 1f - camP) * camSlideYPx
+                3 -> ty = (if (ex) camP else camP - 1f) * camSlideYPx
+            }
+            val driftT = camDriftMs.value / 1000f
+            val driftX = (Math.sin(driftT * 1.185) * 0.7 + Math.sin(driftT * 0.706 + 1.7) * 0.3).toFloat()
+            val driftY = (Math.sin(driftT * 0.938 + 0.6) * 0.7 + Math.sin(driftT * 0.556 + 3.1) * 0.3).toFloat()
+            tx += driftX * camDriftAmpXPx
+            ty += driftY * camDriftAmpYPx
+            Offset(tx, ty)
+        }
+    }
+    // 「深」は縦に下へ、「長」は横に伸びる（時計は行全体で共有し、隣の文字を押す動きと同期させる）
+    val hasStretch = STRETCH_VERTICAL_WORDS.any { text.contains(it) } || STRETCH_HORIZONTAL_WORDS.any { text.contains(it) }
+    val stretchAnim = remember { Animatable(if (exiting) 1f else 0f) }
+    if (!exiting && hasStretch) {
+        LaunchedEffect(Unit) {
+            delay(450)
+            stretchAnim.animateTo(1f, animationSpec = tween(durationMillis = 1100, easing = FastOutSlowInEasing))
+        }
+    }
     val barAnim = remember { Animatable(0f) }
     val rippleAnim = remember { Animatable(0f) }
     val fxAnim = remember { Animatable(0f) }
@@ -883,6 +1144,28 @@ fun PvLyricLine(
             .graphicsLayer {
                 // 退場の最後は行ごとフェードアウトして残像を残さない
                 alpha = if (exiting) 1f - ((exitProgress.value - 0.6f) / 0.4f).coerceIn(0f, 1f) else 1f
+                // カメラワーク（入場はイーズアウト済みの camAnim、退場は exitProgress をイーズイン変換し、同じ流れで動かす）
+                val camP = if (exiting) pvEaseIn.transform(exitProgress.value) else camAnim.value
+                when (camFlowEff) {
+                    0 -> translationX = (if (exiting) camP else camP - 1f) * camSlideXPx
+                    1 -> translationX = (if (exiting) -camP else 1f - camP) * camSlideXPx
+                    2 -> translationY = (if (exiting) -camP else 1f - camP) * camSlideYPx
+                    3 -> translationY = (if (exiting) camP else camP - 1f) * camSlideYPx
+                    4 -> { val s = if (exiting) 1f + 0.5f * camP else 0.72f + 0.28f * camP; scaleX = s; scaleY = s }
+                    else -> { val s = if (exiting) 1f - 0.3f * camP else 1.45f - 0.45f * camP; scaleX = s; scaleY = s }
+                }
+                // 手ブレ（サイン波の重ね合わせで、ゆるく漂い続ける）
+                val driftT = camDriftMs.value / 1000f
+                val driftX = (Math.sin(driftT * 1.185) * 0.7 + Math.sin(driftT * 0.706 + 1.7) * 0.3).toFloat()
+                val driftY = (Math.sin(driftT * 0.938 + 0.6) * 0.7 + Math.sin(driftT * 0.556 + 3.1) * 0.3).toFloat()
+                translationX += driftX * camDriftAmpXPx
+                translationY += driftY * camDriftAmpYPx
+                rotationZ = (Math.sin(driftT * 0.647 + 2.0) * 0.35).toFloat()
+                // 3Dモード: 行全体を1枚の面として少し奥へ倒す
+                if (tilt3d) {
+                    rotationX = 15f
+                    cameraDistance = 9f * camDensity.density
+                }
                 // 「落」の行は文字ごとにバラバラに落下する（PvLyricUnit 側で処理）
             }
     ) {
@@ -922,36 +1205,13 @@ fun PvLyricLine(
                 }
             }
         }
-        if (text.contains("波") || text.contains("海")) {
-            Canvas(modifier = Modifier.matchParentSize()) {
-                val fadeA = if (exiting) 1f - exitProgress.value else fxAnim.value
-                val W = size.width
-                val H = size.height
-                for (k in 0 until 3) {
-                    val baseY = H * (0.22f + 0.26f * k)
-                    val amp = H * 0.055f * (1f + 0.25f * k)
-                    val wl = W * (0.55f - 0.08f * k)
-                    val ph = wavePhase + k * 1.15f
-                    val path = androidx.compose.ui.graphics.Path()
-                    var x = -8f
-                    var first = true
-                    while (x <= W + 8f) {
-                        val y = baseY + kotlin.math.sin(x / wl * 6.2832f + ph) * amp
-                        if (first) {
-                            path.moveTo(x, y)
-                            first = false
-                        } else {
-                            path.lineTo(x, y)
-                        }
-                        x += 14f
-                    }
-                    drawPath(
-                        path = path,
-                        color = accentColor.copy(alpha = (0.30f - 0.06f * k) * fadeA),
-                        style = Stroke(width = 1.6.dp.toPx())
-                    )
-                }
-            }
+        if (WAVE_WORDS.any { text.contains(it) }) {
+            // 流・波・海は、間奏アートと同じベジェ曲線の波を文字の後ろに敷く
+            val waveFade = if (exiting) 1f - exitProgress.value else fxAnim.value
+            PvInterludeArt(
+                accentColor = accentColor,
+                modifier = Modifier.matchParentSize().graphicsLayer { alpha = waveFade.coerceIn(0f, 1f) }
+            )
         }
         if (effKind == 1) {
             Canvas(modifier = Modifier.matchParentSize()) {
@@ -1075,24 +1335,7 @@ fun PvLyricLine(
                         }
                     }
                 }
-                val fp = exitProgress.value
-                if (exiting && fp > 0f) {
-                    if (sandLine) {
-                        for (i in 0 until 240) {
-                            val h1 = ((i * 2654435761L) xor (baseSeed * 97L)) and 0x7fffffffL
-                            val sx = (h1 % 1000) / 1000f
-                            val sy = ((h1 / 1000) % 1000) / 1000f
-                            // 粒子は重力で自然に落下する（進み具合の2乗で加速し、横はほんの少し揺れるだけ）
-                            val fall = fp * fp * (0.45f + (h1 % 40) / 100f) * H
-                            val swayX = sin(fp * 5f + (h1 % 628) / 100f) * 4f * fp
-                            val px = sx * W + swayX
-                            val py = sy * H + fall
-                            val a = (1f - fp) * (0.35f + (h1 % 60) / 100f)
-                            val c = when ((h1 % 5).toInt()) { 0 -> accentColor; 1 -> Color(0xFFE8D8A8); else -> Color.White }
-                            drawCircle(color = c.copy(alpha = a.coerceIn(0f, 1f)), radius = (1.1f + (h1 % 20) / 10f).dp.toPx() * 0.55f, center = Offset(px, py))
-                        }
-                    }
-                }
+
             }
         }
         Column(
@@ -1100,17 +1343,228 @@ fun PvLyricLine(
             modifier = Modifier.fillMaxWidth()
         ) {
         var globalIndex = 0
-        var iconPlaced = false
+        var prevUnitGi = -1
+        var prevCharFactor = 1f
         var negIconPlaced = false
         var inParen = startsInParen
         rows.forEachIndexed { rowIdx, rowChunks ->
         val unitsInRow = rowChunks.sumOf { renderUnitsOf(it).size }
         var rowUnitIdx = 0
+        // 同じ1文字が3つ以上連続する並び（超超超…など）を行単位で先に検出しておく。
+        // 対象ユニットは横に詰めて重ね、先頭ほど薄くする
+        val rowUnitTexts = rowChunks.flatMap { renderUnitsOf(it) }
+        val repeatIdxArr = IntArray(rowUnitTexts.size) { -1 }
+        val repeatLenArr = IntArray(rowUnitTexts.size) { 0 }
+        val repeatStartArr = IntArray(rowUnitTexts.size) { -1 }
+        val repeatSpanArr = IntArray(rowUnitTexts.size) { 0 }
+        // 「長」が横に伸びたとき、隣の文字が押される量（近いほど大きく、2つ先まで）
+        // 規制表現（伏せ字）の検出: ワード全体ではなく、規制された部分のユニットだけを白塗り対象にする
+        val censorStartArr = FloatArray(rowUnitTexts.size) { 0f }
+        val censorEndArr = FloatArray(rowUnitTexts.size) { 0f }
+        // 連なった伏せ字を一気に覆うため、ユニットの規制区間が「ラン全体の何割〜何割」かも持つ
+        val censorRunAArr = FloatArray(rowUnitTexts.size) { 0f }
+        val censorRunBArr = FloatArray(rowUnitTexts.size) { 1f }
+        run {
+            val rowText = rowUnitTexts.joinToString("")
+            val ranges = mutableListOf<IntRange>()
+            // 「自主規制」は前後の括弧ごと対象にする
+            var si = rowText.indexOf("自主規制")
+            while (si >= 0) {
+                var st = si
+                var en = si + 4
+                if (st > 0 && rowText[st - 1] in "（(【［") st--
+                if (en < rowText.length && rowText[en] in "）)】］") en++
+                ranges.add(st until en)
+                si = rowText.indexOf("自主規制", en)
+            }
+            // 伏せ字グリフの連続: 〇○●■□は伏せ字専用に近いので1文字でも対象、*・―・-・×等は2文字以上の連続だけ対象
+            val strongMask = setOf('〇', '○', '●', '■', '□')
+            val weakMask = setOf('*', '＊', '―', '—', '－', '-', '×', '✕', '✖')
+            var mi = 0
+            while (mi < rowText.length) {
+                if (rowText[mi] in strongMask || rowText[mi] in weakMask) {
+                    var mj = mi
+                    var hasStrong = false
+                    while (mj < rowText.length && (rowText[mj] in strongMask || rowText[mj] in weakMask)) {
+                        if (rowText[mj] in strongMask) hasStrong = true
+                        mj++
+                    }
+                    if (hasStrong || mj - mi >= 2) ranges.add(mi until mj)
+                    mi = mj
+                } else mi++
+            }
+            if (ranges.isNotEmpty()) {
+                var pos = 0
+                for (idx in rowUnitTexts.indices) {
+                    val uLen = rowUnitTexts[idx].length
+                    val uEnd = pos + uLen
+                    if (uLen > 0) {
+                        for (r in ranges) {
+                            val oStart = maxOf(pos, r.first)
+                            val oEnd = minOf(uEnd, r.last + 1)
+                            if (oEnd > oStart) {
+                                val sf = (oStart - pos).toFloat() / uLen
+                                val ef = (oEnd - pos).toFloat() / uLen
+                                val censorFirst = censorEndArr[idx] == 0f
+                                if (censorFirst || sf < censorStartArr[idx]) censorStartArr[idx] = sf
+                                if (ef > censorEndArr[idx]) censorEndArr[idx] = ef
+                                if (censorFirst) {
+                                    val runLenChars = (r.last - r.first + 1).toFloat()
+                                    censorRunAArr[idx] = (oStart - r.first).toFloat() / runLenChars
+                                    censorRunBArr[idx] = (oEnd - r.first).toFloat() / runLenChars
+                                }
+                            }
+                        }
+                    }
+                    pos = uEnd
+                }
+            }
+        }
+        // ルビ（漢字の直後に括弧書きされた読み仮名）の検出。
+        // コーラス括弧と誤認しないよう、直前が漢字・中身は全部かな・短い・読みが漢字数以上、の全部を満たす時だけルビ扱いにする
+        // （例: 「恋情（イエス）」のようなカナだけのコーラスは誤判定しうるが、それは仕様として許容する）
+        val rubyModeArr = IntArray(rowUnitTexts.size) // 0=なし 1=括弧（表示しない） 2=ルビのかな
+        val rubyShiftArr = FloatArray(rowUnitTexts.size)
+        run {
+            val rowText = rowUnitTexts.joinToString("")
+            val unitStartArr = IntArray(rowUnitTexts.size)
+            var upos = 0
+            for (i in rowUnitTexts.indices) { unitStartArr[i] = upos; upos += rowUnitTexts[i].length }
+            fun unitIndexAt(charPos: Int): Int {
+                var lo = 0
+                for (i in rowUnitTexts.indices) { if (unitStartArr[i] <= charPos) lo = i else break }
+                return lo
+            }
+            fun isKanjiCh(c: Char): Boolean = c in '一'..'鿿' || c == '々' || c == '〆'
+            var i = 0
+            while (i < rowText.length) {
+                val open = rowText[i]
+                if (open == '（' || open == '(') {
+                    val closeCh = if (open == '（') '）' else ')'
+                    val close = rowText.indexOf(closeCh, i + 1)
+                    if (close > i + 1 && i > 0 && isKanjiCh(rowText[i - 1])) {
+                        val content = rowText.substring(i + 1, close)
+                        val allKana = content.all { it in 'ぁ'..'ゟ' || it in 'ァ'..'ヶ' || it == 'ー' || it == '・' }
+                        if (allKana && content.length in 1..8) {
+                            var b = i
+                            while (b > 0 && isKanjiCh(rowText[b - 1])) b--
+                            val baseLen = i - b
+                            if (baseLen in 1..6 && content.length >= baseLen) {
+                                rubyModeArr[unitIndexAt(i)] = 1
+                                rubyModeArr[unitIndexAt(close)] = 1
+                                var baseEm = 0f
+                                for (u in unitIndexAt(b)..unitIndexAt(i - 1)) baseEm += rowUnitTexts[u].sumOf { ch -> charEm(ch).toDouble() }.toFloat()
+                                var rubyEm = 0f
+                                val firstRubyUnit = unitIndexAt(i + 1)
+                                val lastRubyUnit = unitIndexAt(close - 1)
+                                for (u in firstRubyUnit..lastRubyUnit) {
+                                    rubyModeArr[u] = 2
+                                    rubyEm += rowUnitTexts[u].sumOf { ch -> charEm(ch).toDouble() }.toFloat()
+                                }
+                                // ルビ全体が漢字の真上に来るよう、全ルビ文字を同じ量だけ左へ寄せる
+                                val shift = -(baseEm + rubyEm * 0.52f) / 2f * fitSize
+                                for (u in firstRubyUnit..lastRubyUnit) rubyShiftArr[u] = shift
+                                i = close
+                            }
+                        }
+                    }
+                }
+                i++
+            }
+        }
+        val stretchPushArr = FloatArray(rowUnitTexts.size) { r ->
+            var f = 0f
+            for (s in rowUnitTexts.indices) {
+                if (s != r && STRETCH_HORIZONTAL_WORDS.any { w -> rowUnitTexts[s].contains(w) }) {
+                    val d = kotlin.math.abs(r - s)
+                    val fall = when (d) { 1 -> 1.0f; 2 -> 0.45f; else -> 0f }
+                    f += (if (r > s) 1f else -1f) * fall
+                }
+            }
+            f
+        }
+        run {
+            var runStart = 0
+            while (runStart < rowUnitTexts.size) {
+                val t = rowUnitTexts[runStart]
+                var runEnd = runStart + 1
+                while (runEnd < rowUnitTexts.size && rowUnitTexts[runEnd] == t) runEnd++
+                val runLen = runEnd - runStart
+                val ch = t.singleOrNull()
+                // 四字熟語（堂々・戦々恐々など）や通常語の誤反応を避けるため、文字の種類を問わず3連続から対象にする
+                val need = 3
+                if (runLen >= need && ch != null && !ch.isWhitespace() && ch !in "。、・…‥！？!?ー") {
+                    for (k in runStart until runEnd) {
+                        repeatIdxArr[k] = k - runStart
+                        repeatLenArr[k] = runLen
+                        repeatStartArr[k] = runStart
+                        repeatSpanArr[k] = runLen
+                    }
+                }
+                runStart = runEnd
+            }
+        }
+        // 単語・フレーズ単位の繰り返し（誰も誰も誰も、のような型）も重ね表示の対象にする。
+        // 1文字の連続は上の処理が担当するので、ここでは2ユニット以上の型だけを見る
+        run {
+            var s = 0
+            while (s < rowUnitTexts.size) {
+                if (repeatLenArr[s] > 0) {
+                    s++
+                    continue
+                }
+                var placed = false
+                for (blockLen in 2..6) {
+                    if (s + blockLen * 2 > rowUnitTexts.size) break
+                    val block = rowUnitTexts.subList(s, s + blockLen)
+                    // 句読点・空白・長音を含む型と、全て同じユニットの型（1文字連続側で処理）は対象外
+                    if (block.any { it.isBlank() || it in listOf("。", "、", "・", "…", "‥", "！", "？", "!", "?", "ー") }) continue
+                    if (block.all { it == block[0] }) continue
+                    // 繰り返しの間にスペースが挟まっていてもよい（ズキリ ズキリ、のような表記ゆれ対応）
+                    val starts = mutableListOf(s)
+                    var cursor = s + blockLen
+                    while (true) {
+                        var probe = cursor
+                        while (probe < rowUnitTexts.size && rowUnitTexts[probe].isBlank()) probe++
+                        if (probe + blockLen > rowUnitTexts.size) break
+                        if (rowUnitTexts.subList(probe, probe + blockLen) != block) break
+                        starts.add(probe)
+                        cursor = probe + blockLen
+                    }
+                    val occ = starts.size
+                    // 2回だけの繰り返しは、四字熟語やオノマトペの定型（ABAB）と区別がつかないため対象外。
+                    // 強調の繰り返しとして扱うのは3回以上だけにする
+                    if (occ < 3) continue
+                    val spanEnd = cursor
+                    // 型の途中に、すでに1文字連続で割り当て済みのユニットが混ざっていたらやめる
+                    if ((s until spanEnd).any { repeatLenArr[it] > 0 }) continue
+                    starts.forEachIndexed { oi, st ->
+                        for (k in st until st + blockLen) {
+                            repeatIdxArr[k] = oi
+                            repeatLenArr[k] = occ
+                            repeatStartArr[k] = s
+                            repeatSpanArr[k] = spanEnd - s
+                        }
+                    }
+                    s = spanEnd
+                    placed = true
+                    break
+                }
+                if (!placed) s++
+            }
+        }
+        // 規制範囲にかかるユニットは、繰り返しの重ねエフェクトを解除して規制の白塗りを優先する
+        for (idx in rowUnitTexts.indices) {
+            if (censorEndArr[idx] > censorStartArr[idx]) {
+                repeatIdxArr[idx] = -1
+                repeatLenArr[idx] = 0
+            }
+        }
         Box {
         Row(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
-            modifier = if (rowIdx > 0) Modifier.padding(start = row2Indent, top = 0.dp) else Modifier
+            modifier = if (rowIdx > 0) Modifier.padding(start = row2Indent, top = (if ((0 until rowIdx).any { rd -> rows[rd].any { c -> STRETCH_VERTICAL_WORDS.any { w -> c.contains(w) } } }) (stretchAnim.value * fitSize * 0.45f).dp else 0.dp)) else Modifier
         ) {
             rowChunks.forEachIndexed { posInRow, chunk ->
                 if (posInRow > 0 && latinDominant) {
@@ -1120,14 +1574,37 @@ fun PvLyricLine(
                 val chunkDim = inParen || chunk.startsWith("（") || chunk.startsWith("(") || isChorusWord(chunk)
                 if (chunk.contains("（") || chunk.contains("(")) inParen = true
                 if (chunk.contains("）") || chunk.contains(")")) inParen = false
-                val chunkIconKind = if (!iconPlaced && iconWord != null && chunk.contains(iconWord.first)) iconWord.second else null
+                val chunkIconMatches = findIconWords(chunk)
                 // 否定語の開始位置（この塊の中に否定語があれば、その文字に☓アイコンを付ける）
-                val chunkNegStart = negWords.mapNotNull { w -> chunk.indexOf(w).takeIf { it >= 0 } }.minOrNull() ?: -1
-                val chunkGhost = chunk.contains("透明")
-                val chunkPileWord = listOf("積み重な", "降り積も", "積も", "積み", "重な", "重ね", "堆積", "累積").firstOrNull { chunk.contains(it) }
+                val chunkNegStart = NEG_WORDS.mapNotNull { w -> chunk.indexOf(w).takeIf { it >= 0 } }.minOrNull() ?: -1
+                val chunkGhost = GHOST_WORDS.any { chunk.contains(it) }
+                val chunkPileWord = PILE_WORDS.firstOrNull { chunk.contains(it) }
                 val chunkPileStart = chunkPileWord?.let { chunk.indexOf(it) } ?: -1
-                val chunkMosaicStart = chunk.indexOf("隠")
-                val chunkMosaicWordStart = chunk.indexOf("モザイク")
+                // 液体っぽい単語は、文字の下端から液が垂れるエフェクトにする（対象語と色はデータ配信側で管理）
+                var dripStartFound = -1
+                val chunkDrip: Pair<String, Color>? = DRIP_WORDS.firstOrNull { (w, _) ->
+                    val ex = DRIP_EXCLUSIONS[w] ?: emptyList()
+                    var from = 0
+                    var ok = false
+                    while (true) {
+                        val i = chunk.indexOf(w, from)
+                        if (i < 0) break
+                        if (ex.any { chunk.startsWith(it, i) }) {
+                            from = i + 1
+                            continue
+                        }
+                        dripStartFound = i
+                        ok = true
+                        break
+                    }
+                    ok
+                }
+                val chunkDripStart = if (chunkDrip != null) dripStartFound else -1
+                // バラバラ・壊れる系の単語は、設定に関係なく文字をパーツに分解したまま揺らす
+                val chunkPartsWord = PARTS_WORDS.firstOrNull { chunk.contains(it) }
+                val chunkPartsStart = chunkPartsWord?.let { chunk.indexOf(it) } ?: -1
+                val chunkMosaicWord = MOSAIC_WORDS.firstOrNull { chunk.contains(it) }
+                val chunkMosaicStart = chunkMosaicWord?.let { chunk.indexOf(it) } ?: -1
                 // 複数文字の色ワード（希望・想い等）は塊単位で判定し、該当する文字だけに色を渡す
                 val chunkColorHit = (COLOR_WORDS + ASSOC_COLOR_WORDS).firstOrNull { (w, _) -> w.length > 1 && chunk.contains(w) }
                 val chunkColorStart = chunkColorHit?.let { chunk.indexOf(it.first) } ?: -1
@@ -1137,13 +1614,28 @@ fun PvLyricLine(
                 var unitIdxInChunk = 0
                 for (ru in chunkUnits) {
                     val gi = globalIndex++
-                    var thisUnitIcon = if (chunkIconKind != null && unitIdxInChunk == 0) chunkIconKind else null
-                    if (thisUnitIcon != null) iconPlaced = true
+                    var thisUnitIcon: Int? = null
                     unitIdxInChunk++
                     val rIdx = rowUnitIdx++
                     // 文字同士がほんの少し被るくらいに、行の中心へ向けて詰める（画面外へのはみ出しは増やさない）
                     val uXShift = ((unitsInRow - 1) / 2f - rIdx) * fitSize * 0.05f
-                    val uSeed = Math.floorMod(baseSeed * 7 + gi * 131, 997)
+                    // 同字連続のユニットは並びの中心へさらに寄せて、横に重なるようにする
+                    val repeatIdxHere = repeatIdxArr.getOrElse(rIdx) { -1 }
+                    val repeatLenHere = repeatLenArr.getOrElse(rIdx) { 0 }
+                    val repeatStartHere = repeatStartArr.getOrElse(rIdx) { -1 }
+                    val repeatSpanHere = repeatSpanArr.getOrElse(rIdx) { 0 }
+                    val repeatShift = if (repeatLenHere >= 2 && repeatIdxHere >= 0) {
+                        val spanHere = if (repeatSpanHere > 0) repeatSpanHere else repeatLenHere
+                        val runCenter = repeatStartHere + (spanHere - 1) / 2f
+                        (runCenter - rIdx) * fitSize * 0.20f
+                    } else 0f
+                    val rubyModeHere = rubyModeArr.getOrElse(rIdx) { 0 }
+                    val rubyShiftHere = rubyShiftArr.getOrElse(rIdx) { 0f }
+                    val uXShiftTotal = uXShift + repeatShift + rubyShiftHere
+                    // 長音（ー）は前の文字と1パーツとして扱い、座標・角度・揺れの種を前の文字に統一する（バラけると読みづらいため）
+                    val effGi = if (ru == "ー" && prevUnitGi >= 0) prevUnitGi else gi
+                    prevUnitGi = gi
+                    val uSeed = Math.floorMod(baseSeed * 7 + effGi * 131, 997)
                     val charFactor = when {
                         ru.length > 1 && ru.all { it in '゠'..'ヿ' } -> 1.05f // カタカナ単語
                         ru.length > 1 -> 0.98f // 英単語
@@ -1153,7 +1645,16 @@ fun PvLyricLine(
                         ru[0] in '゠'..'ヿ' -> 1.05f
                         else -> 0.98f
                     }
+                    // 長音は大きさの係数も前の文字に統一する（前の文字と段差が出ると別パーツに見えるため）
+                    val effCharFactor = if (ru == "ー" && effGi != gi) prevCharFactor else charFactor
+                    prevCharFactor = effCharFactor
+                    // 行頭がひらがな続きの行は、先頭の1文字だけ漢字並みの大きさにする（2文字目より大きく）
+                    val sizeFactor = if (gi == 0 && leadHiraganaBoost) 1.25f else effCharFactor
                     val unitStart = chunkCharPos; chunkCharPos += ru.length
+                    // アイコン単語は塊の中の全部が対象（時計→時計、見る→目、のように複数出せる）
+                    if (thisUnitIcon == null) {
+                        thisUnitIcon = chunkIconMatches.firstOrNull { it.third >= unitStart && it.third < unitStart + ru.length }?.second
+                    }
                     // 文字同期がある行では、このユニットの実時刻（行頭からの差分）で入場させる
                     var unitDelayMs = -1L
                     if (charStartArr != null) {
@@ -1165,29 +1666,35 @@ fun PvLyricLine(
                         thisUnitIcon = LyricIcon.CROSS
                         negIconPlaced = true
                     }
-                    // 「隠」「モザイク」の文字にだけモザイクをかける
-                    val mosaicStart = when {
-                        chunkMosaicStart >= 0 -> chunkMosaicStart
-                        chunkMosaicWordStart >= 0 -> chunkMosaicWordStart
-                        else -> -1
-                    }
-                    val mosaicLen = if (chunkMosaicStart >= 0) 1 else if (chunkMosaicWordStart >= 0) 3 else 0
+                    // モザイク対象語の文字にだけモザイクをかける
+                    val mosaicStart = chunkMosaicStart
+                    val mosaicLen = chunkMosaicWord?.length ?: 0
                     val unitMosaic = mosaicStart >= 0 && unitStart < mosaicStart + mosaicLen && unitStart + ru.length > mosaicStart
                     // 「積もる・重なる」系の文字は、同じ文字を上に重ねて表現する
+                    val unitStretchKind = when {
+                        STRETCH_VERTICAL_WORDS.any { w -> ru.contains(w) } -> 1
+                        STRETCH_HORIZONTAL_WORDS.any { w -> ru.contains(w) } -> 2
+                        else -> 0
+                    }
                     val unitPile = chunkPileWord != null && unitStart < chunkPileStart + chunkPileWord.length && unitStart + ru.length > chunkPileStart
+                    val unitDrip = if (chunkDrip != null && unitStart < chunkDripStart + chunkDrip.first.length && unitStart + ru.length > chunkDripStart) chunkDrip.second else null
+                    val unitParts = chunkPartsWord != null && unitStart < chunkPartsStart + chunkPartsWord.length && unitStart + ru.length > chunkPartsStart
                     val unitChunkColor = if (chunkColorHit != null && unitStart < chunkColorStart + chunkColorHit.first.length && unitStart + ru.length > chunkColorStart) chunkColorHit.second else null
+                    val censorStartHere = censorStartArr.getOrElse(rIdx) { 0f }
+                    val censorEndHere = censorEndArr.getOrElse(rIdx) { 0f }
+                    val unitCensored = censorEndHere > censorStartHere
                     PvLyricUnit(
                         bold = bold,
-                        unitText = ru,
-                        uSize = (fitSize * (0.92f + (uSeed % 22) / 100f) * charFactor).coerceIn(fitSize * 0.55f, fitSize * 1.35f).sp,
-                        uRot = ((uSeed / 3) % 29 - 14).toFloat(),
-                        uYOffset = ((uSeed / 5) % 17 - 8).dp,
-                        uXShiftDp = uXShift,
-                        staggerIndex = gi,
+                        unitText = if (rubyModeHere == 1) "" else ru,
+                        uSize = ((fitSize * (0.92f + (uSeed % 22) / 100f) * sizeFactor).coerceIn(fitSize * 0.55f, fitSize * 1.35f) * (if (rubyModeHere == 2) 0.52f else 1f)).sp,
+                        uRot = if (unitCensored) 0f else ((uSeed / 3) % 29 - 14).toFloat(),
+                        uYOffset = if (unitCensored) 0.dp else ((uSeed / 5) % 17 - 8).dp,
+                        uXShiftDp = if (unitCensored) 0f else uXShiftTotal,
+                        staggerIndex = effGi,
                         exiting = exiting,
                         exitProgressValue = if (sandLine && !fallLine) (exitProgress.value * 1.6f).coerceAtMost(1f) else exitProgress.value,
                         exitDelayMs = (uSeed % 5) * 35f + gi * 12f,
-                        fontFamily = fontFamily,
+                        fontFamily = if (unitEnFlags.getOrElse(gi) { false }) enFontFamily else fontFamily,
                         accentColor = accentColor,
                         effectKind = effKind,
                         iconKind = thisUnitIcon,
@@ -1195,12 +1702,32 @@ fun PvLyricLine(
                         ghost = chunkGhost,
                         mosaic = unitMosaic,
                         pile = unitPile,
+                        dripColor = unitDrip,
                         fallExit = fallLine,
-                        windExit = windLine,
+                        windExit = false,
+                        crumbleExit = if (fallLine) 0 else if (sandLine) 1 else if (windLine) 2 else 0,
                         chunkColor = unitChunkColor,
                         arrowUnder = chunkArrow && ru == "行",
-                        swayScale = if (bigText) 2.8f else 1f,
-                        entryDelayMs = unitDelayMs
+                        swayScale = if (unitCensored) 0f else if (bigText) 2.8f else 1f,
+                        entryDelayMs = unitDelayMs,
+                        partsEntry = partsEntry,
+                        wordParts = unitParts,
+                        repeatIndex = repeatIdxHere,
+                        repeatCount = repeatLenHere,
+                        stretchKind = unitStretchKind,
+                        stretchProgress = stretchAnim.value,
+                        pushXFactor = stretchPushArr.getOrElse(rIdx) { 0f },
+                        censorStart = censorStartHere,
+                        censorEnd = censorEndHere,
+                        censorUnit = unitCensored,
+                        censorBandSp = fitSize * 1.18f,
+                        censorRunA = censorRunAArr.getOrElse(rIdx) { 0f },
+                        censorRunB = censorRunBArr.getOrElse(rIdx) { 1f },
+                        censorT = censorProgress.value,
+                        lineDurationMs = lineDurationMs,
+                        rubyKana = rubyModeHere == 2,
+                        parallaxState = camTransState,
+                        parallaxDepth = effCharFactor - 1f
                     )
                 }
             }
@@ -1250,11 +1777,31 @@ fun PvLyricUnit(
     ghost: Boolean = false,
     mosaic: Boolean = false,
     pile: Boolean = false,
+    dripColor: Color? = null,
     fallExit: Boolean = false,
     windExit: Boolean = false,
+    crumbleExit: Int = 0,
     chunkColor: Color? = null,
     arrowUnder: Boolean = false,
-    entryDelayMs: Long = -1L
+    entryDelayMs: Long = -1L,
+    partsEntry: Boolean = false,
+    wordParts: Boolean = false,
+    repeatIndex: Int = -1,
+    repeatCount: Int = 0,
+    stretchKind: Int = 0,
+    stretchProgress: Float = 0f,
+    pushXFactor: Float = 0f,
+    censorStart: Float = 0f,
+    censorEnd: Float = 0f,
+    censorRunA: Float = 0f,
+    censorRunB: Float = 1f,
+    censorT: Float = 0f,
+    censorUnit: Boolean = false,
+    censorBandSp: Float = 0f,
+    lineDurationMs: Long = 0L,
+    rubyKana: Boolean = false,
+    parallaxState: State<Offset>? = null,
+    parallaxDepth: Float = 0f
 ) {
     val pvEaseIn = CubicBezierEasing(0.42f, 0f, 1f, 1f)
     // 文字同期がある行では実時刻ディレイ、無い行では従来の等間隔ディレイで入場する
@@ -1262,7 +1809,14 @@ fun PvLyricUnit(
     val uSeed = staggerIndex
     val uAnim = remember(staggerIndex) { Animatable(0f) }
     // 表示中ずっと、位置がごく小さくぐらぐら揺れる（角度は変えない）
-    val sway = remember(staggerIndex) { Animatable(0f) }
+    // 退場用インスタンスでは揺れ時計を表示経過時間から逆算した位相で止める。
+    // 位相が0に戻ると液体ドリップなどが退場の瞬間にパッと縮んで「外れた」ように見えるため
+    val swayInit = if (exiting) {
+        val periodMs = 2400L + (uSeed % 5) * 380L
+        val elapsedMs = lineDurationMs - effDelayMs
+        if (lineDurationMs > 0L && elapsedMs > 0L) (elapsedMs % periodMs).toFloat() / periodMs.toFloat() else 0f
+    } else 0f
+    val sway = remember(staggerIndex) { Animatable(swayInit) }
     if (!exiting) {
         LaunchedEffect(staggerIndex) {
             delay(effDelayMs)
@@ -1298,8 +1852,64 @@ fun PvLyricUnit(
             ulAnim.animateTo(2f, animationSpec = tween(durationMillis = 260, easing = pvEaseIn))
         }
     }
+    // 粒子化して消える文字（消・砂・壊・砕=落下、風=右へ）は、描画済みの文字を画像として記録し、
+    // その形のまま粒子に分解する。取れなかった場合は通常の退場に任せる
+    val crumbleLayer = rememberGraphicsLayer()
+    var crumblePoints by remember { mutableStateOf<FloatArray?>(null) }
+    // 粒子が動き出すまでは文字本体を出し続ける（粒子側の開始待ちで一瞬消えるのを防ぐ）
+    val crumbleFp = if (exiting && crumbleExit != 0) ((exitProgressValue * 720f - exitDelayMs) / 560f).coerceIn(0f, 1f) else 0f
+    LaunchedEffect(exiting) {
+        if (exiting && crumbleExit != 0 && crumblePoints == null) {
+            // 退場用インスタンスのレイヤーは作られた直後だとまだ空で画像化に失敗することがある。取れるまで数フレーム粘る
+            var attempt = 0
+            while (crumblePoints == null && attempt < 14) {
+            try {
+                val bmp = crumbleLayer.toImageBitmap().asAndroidBitmap()
+                val w = bmp.width
+                val h = bmp.height
+                if (w > 4 && h > 4) {
+                    val px = IntArray(w * h)
+                    bmp.getPixels(px, 0, w, 0, 0, w, h)
+                    val step = maxOf(1, minOf(w, h) / 26)
+                    val pts = mutableListOf<Float>()
+                    var yy = step / 2
+                    while (yy < h) {
+                        var xx = step / 2
+                        while (xx < w) {
+                            val a = (px[yy * w + xx] ushr 24) and 0xFF
+                            if (a > 110) {
+                                pts.add(xx / w.toFloat())
+                                pts.add(yy / h.toFloat())
+                            }
+                            xx += step
+                        }
+                        yy += step
+                    }
+                    val pairCount = pts.size / 2
+                    val out = if (pairCount > 300) {
+                        val stride = pairCount / 300 + 1
+                        val o = mutableListOf<Float>()
+                        var pi = 0
+                        while (pi < pairCount) {
+                            o.add(pts[pi * 2])
+                            o.add(pts[pi * 2 + 1])
+                            pi += stride
+                        }
+                        o.toFloatArray()
+                    } else pts.toFloatArray()
+                    if (out.isNotEmpty()) crumblePoints = out
+                }
+            } catch (e: Exception) {
+                // 取れなければ次のフレームで取り直す（最後まで取れなければ通常の退場に任せる）
+            }
+            if (crumblePoints == null) delay(24)
+            attempt++
+            }
+        }
+    }
     // 色名の文字を、その色で左上から右下へ斜めに塗っていく
-    val colorHit = if (!exiting) (if (chunkColor != null) unitText to chunkColor else null) ?: COLOR_WORDS.firstOrNull { (word, _) ->
+    // 退場中も色が消えないよう、exiting でも色ヒットは維持する
+    val colorHit = (if (chunkColor != null) unitText to chunkColor else null) ?: COLOR_WORDS.firstOrNull { (word, _) ->
         if (word.all { it.code < 128 }) {
             // 英語の色名は単語単位で照合する（hundred の中の red などを拾わない）
             Regex("""(?i)(?<![A-Za-z])${Regex.escape(word)}(?![A-Za-z])""").containsMatchIn(unitText)
@@ -1312,14 +1922,18 @@ fun PvLyricUnit(
         } else {
             unitText.contains(word)
         }
-    } else null
-    val wipeT = remember { Animatable(0f) }
+    }
+    // 退場用に別インスタンスで作られた場合は、塗りが完了した状態から始める
+    val wipeT = remember { Animatable(if (exiting) 1f else 0f) }
     if (colorHit != null) {
         LaunchedEffect(staggerIndex) {
             delay(effDelayMs + 200L)
             wipeT.animateTo(1f, animationSpec = tween(durationMillis = 650, easing = LinearEasing))
         }
     }
+    // 規制表現の白塗り: 行全体で共有する進行度（censorT）を使い、連なった伏せ字を一気に覆う。
+    // 自分の担当区間（censorRunA〜censorRunB）に進行度が差しかかった分だけ塗る
+    val censorLocal = if (censorRunB > censorRunA) ((censorT - censorRunA) / (censorRunB - censorRunA)).coerceIn(0f, 1f) else censorT
     // 点滅(3)とグリッチ(4)用の進行度
     val fxT = remember { Animatable(0f) }
     if (!exiting && (effectKind == 3 || effectKind == 4)) {
@@ -1328,6 +1942,8 @@ fun PvLyricUnit(
             fxT.animateTo(1f, animationSpec = tween(durationMillis = 800, easing = LinearEasing))
         }
     }
+    // 同じ文字が3つ以上連続する場合、先頭ほど薄くする（横重ねエフェクト用）
+    val repeatAlphaF = if (repeatCount >= 2 && repeatIndex >= 0) 0.42f + 0.58f * (repeatIndex.toFloat() / (repeatCount - 1).coerceAtLeast(1)) else 1f
     Box(
         modifier = Modifier
             .width(IntrinsicSize.Max)
@@ -1339,7 +1955,7 @@ fun PvLyricUnit(
                     val spd = 0.7f + ((uSeed % 50) / 50f) * 0.7f
                     val pe = (fp2 * spd).coerceAtMost(1f)
                     val dirR = if (uSeed % 2 == 0) 1f else -1f
-                    alpha = (if (pe < 0.6f) 1f else 1f - (pe - 0.6f) / 0.4f) * (if (ghost) 0.38f else 1f)
+                    alpha = (if (pe < 0.6f) 1f else 1f - (pe - 0.6f) / 0.4f) * (if (ghost) 0.38f else 1f) * repeatAlphaF
                     rotationZ = uRot + dirR * pe * (22f + (uSeed % 38))
                     translationX = dirR * pe * pe * (14f + (uSeed % 26))
                     translationY = pe * pe * (560f + (uSeed % 30) * 9f)
@@ -1348,28 +1964,32 @@ fun PvLyricUnit(
                     val wx = ((exitProgressValue * 720f - exitDelayMs) / 520f).coerceIn(0f, 1f)
                     val wd = wx * wx
                     val wDir = if (uSeed % 2 == 0) 1f else -1f
-                    alpha = (if (wx < 0.55f) 1f else 1f - (wx - 0.55f) / 0.45f) * (if (ghost) 0.38f else 1f)
+                    alpha = (if (wx < 0.55f) 1f else 1f - (wx - 0.55f) / 0.45f) * (if (ghost) 0.38f else 1f) * repeatAlphaF
                     rotationZ = uRot + wd * (55f + (uSeed % 50)) * wDir
                     translationX = wd * (360f + (uSeed % 40) * 7f)
                     translationY = wd * ((uSeed % 41) - 20) * 2.4f - wd * 26f
                     val ws = 1f - wd * 0.15f
                     scaleX = ws
                     scaleY = ws
+                } else if (exiting && crumbleExit != 0) {
+                    // 粒子化して消える文字は、崩れる表現は粒子側が担当するので本体は姿勢だけ保つ
+                    alpha = (if (ghost) 0.38f else 1f) * repeatAlphaF
+                    rotationZ = uRot
                 } else if (exiting) {
                     val localX = ((exitProgressValue * 720f - exitDelayMs) / 320f).coerceIn(0f, 1f)
                     val a = 1f - pvEaseIn.transform(localX)
-                    alpha = a * (if (ghost) 0.38f else 1f)
+                    alpha = a * (if (ghost) 0.38f else 1f) * repeatAlphaF
                     val es = 0.5f + 0.5f * a
                     scaleX = es
                     scaleY = es
                     rotationZ = uRot * (2f - a)
                     translationY = (1f - a) * 30f
                 } else {
-                    val a = uAnim.value
+                    val a = if (partsEntry || wordParts) 1f else uAnim.value
                     val blinkF = if (effectKind == 3 && fxT.value < 1f) {
                         if (sin(fxT.value * 21.99f + uSeed * 1.3f) > -0.2f) 1f else 0.12f
                     } else 1f
-                    alpha = a * blinkF * (if (ghost) 0.38f else 1f)
+                    alpha = a * blinkF * (if (ghost) 0.38f else 1f) * repeatAlphaF
                     val ns = 0.6f + 0.4f * a
                     scaleX = ns
                     scaleY = ns
@@ -1384,12 +2004,57 @@ fun PvLyricUnit(
                     translationX = dir.first * 52f * (1f - a) + swx * a + if (effectKind == 4 && fxT.value < 1f) sin(fxT.value * 55f + uSeed * 2.7f) * 5f * (1f - fxT.value) else 0f
                     translationY = dir.second * 52f * (1f - a) + swy * a + if (effectKind == 7) sin(a * 6.2832f + uSeed * 0.8f) * 15f * (1f - a) else 0f
                 }
+                // 句読点の扱い: ！？は大きく傾け、。、・…は小さくする
+                when (unitText) {
+                    "！", "？", "!", "?" -> { scaleX *= 1.45f; scaleY *= 1.45f; rotationZ += -12f }
+                    "。", "、", "・", "…", "‥" -> { scaleX *= 0.66f; scaleY *= 0.66f }
+                }
+                // 「深」は上を支点に縦へ下に伸び、「長」は横に伸びる。伸びた分、隣の文字を押す
+                if (stretchKind == 1) {
+                    transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
+                    scaleY *= 1f + 0.55f * stretchProgress
+                }
+                if (stretchKind == 2) {
+                    scaleX *= 1f + 0.7f * stretchProgress
+                }
+                if (pushXFactor != 0f) {
+                    translationX += pushXFactor * stretchProgress * uSize.value * 1.05f
+                }
+                // ルビのかなは漢字の真上に来るよう持ち上げる（uSize はルビ側の小さいサイズ基準）
+                if (rubyKana) translationY -= uSize.value * 1.25f
+                // 疑似視差: カメラの平行移動に対し、文字の大きさ（奥行き）ぶんだけズレを足す。
+                // 大きい文字（手前）ほど大きく、小さい文字（奥）ほど小さくズレる。
+                // 落下・風・粒子化の退場中は専用の動きが付いているので足さない
+                val pState = parallaxState
+                if (pState != null && !(exiting && (fallExit || windExit || crumbleExit != 0))) {
+                    val po = pState.value
+                    translationX += po.x * parallaxDepth * 0.55f
+                    translationY += po.y * parallaxDepth * 0.55f
+                }
+                // 伏せ字のユニットは姿勢を揃える: 回転・移動・視差を無効化して、きれいに横並びにする
+                // （落下・風・粒子化の退場中は専用の動きを優先する）
+                if (censorUnit && !(exiting && (fallExit || windExit || crumbleExit != 0))) {
+                    rotationZ = 0f
+                    translationX = 0f
+                    translationY = 0f
+                }
             }
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box {
+        Box(
+            // 軽量化: 文字の形の画像化（GraphicsLayer への記録）は、粒子化する退場ユニットだけに絞る。
+            // それ以外のユニットは内容を直接描く（見た目は同じで、オフスクリーン記録の分だけ軽くなる）
+            modifier = if (exiting && crumbleExit != 0) {
+                Modifier.drawWithContent {
+                    crumbleLayer.record { this@drawWithContent.drawContent() }
+                    if (crumblePoints == null || crumbleFp <= 0f) drawLayer(crumbleLayer)
+                }
+            } else Modifier
+        ) {
             if (!exiting && effectKind == 4 && fxT.value < 1f) {
-                val flick = (0.35f + 0.3f * sin(fxT.value * 47f + uSeed * 3.1f)).coerceIn(0.1f, 0.65f)
+                // 色ゴーストは入場（uAnim）と同時にだけ出す。入場前から薄く見えてしまわないように、濃さを入場の進み具合に連動させる
+                val flick = ((0.35f + 0.3f * sin(fxT.value * 47f + uSeed * 3.1f)) * uAnim.value).coerceIn(0f, 0.65f)
                 Text(
                     text = annotatedUnit,
                     color = accentColor.copy(alpha = flick),
@@ -1426,6 +2091,46 @@ fun PvLyricUnit(
                     )
                 }
             }
+            if ((partsEntry || wordParts) && !exiting) {
+                // パーツ分解: 文字を縦3スライスに分ける。
+                // 単語由来（バラバラ等）は合体させず分解したまま揺らし、設定由来は入場時だけ分解して合体させる
+                val pa = uAnim.value
+                Box {
+                    for (slice in 0 until 3) {
+                        val sDir = PV_ENTRY_DIRS[Math.floorMod(uSeed * 131 + 7 + slice * 3, 8)]
+                        // 単語由来は原型をとどめる程度の小さなズレで揺らし、設定由来（入場）は大きく散らして合体させる
+                        val dist = if (wordParts) (9f + slice * 4.5f) * (1f - pa * 0.3f) else (44f + slice * 16f) * (1f - pa)
+                        val sliceSwayX = if (wordParts) sin(sway.value * 6.2832f + slice * 2.1f + uSeed) * 1.7f else 0f
+                        val sliceSwayY = if (wordParts) cos(sway.value * 6.2832f + slice * 1.7f + uSeed) * 1.3f else 0f
+                        Text(
+                            text = annotatedUnit,
+                            color = Color.White.copy(alpha = if (dimmed) 0.40f else 0.92f),
+                            fontSize = uSize,
+                            fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
+                            textAlign = TextAlign.Center,
+                            overflow = TextOverflow.Visible,
+                            style = LocalTextStyle.current.copy(
+                                fontFamily = fontFamily,
+                                lineHeight = uSize * 1.02f,
+                                shadow = Shadow(color = accentColor.copy(alpha = if (dimmed) 0.35f else 0.85f), blurRadius = 22f)
+                            ),
+                            modifier = Modifier
+                                .graphicsLayer {
+                                    translationX = sDir.first * dist + sliceSwayX
+                                    translationY = sDir.second * dist + sliceSwayY
+                                    alpha = pa
+                                }
+                                .drawWithContent {
+                                    val l = size.width * slice / 3f
+                                    val r = size.width * (slice + 1) / 3f
+                                    clipRect(left = l, top = 0f, right = r, bottom = size.height) {
+                                        this@drawWithContent.drawContent()
+                                    }
+                                }
+                        )
+                    }
+                }
+            } else {
             Text(
                 text = annotatedUnit,
             color = Color.White.copy(alpha = if (dimmed) 0.40f else 0.92f),
@@ -1439,6 +2144,40 @@ fun PvLyricUnit(
                     shadow = Shadow(color = accentColor.copy(alpha = if (dimmed) 0.35f else 0.85f), blurRadius = 22f)
                 )
             )
+            }
+
+            if (dripColor != null) {
+                // 液体エフェクト: 文字の下端から液が垂れ、周期的に伸びて滴が落ちる（位相は既存の揺れ時計を流用）
+                val dc = dripColor
+                Canvas(modifier = Modifier.matchParentSize()) {
+                    val t = sway.value
+                    for (k in 0 until 3) {
+                        val fx = (0.22f + 0.28f * k + ((uSeed * (k + 3)) % 10) * 0.012f).coerceIn(0.08f, 0.92f)
+                        val x = size.width * fx
+                        val cyc = (t + (uSeed % 7) * 0.13f + k * 0.37f) % 1f
+                        val grow = if (cyc < 0.7f) cyc / 0.7f else 1f
+                        val len = (3f + 13f * grow * grow).dp.toPx()
+                        val wdt = 2.6.dp.toPx()
+                        val top = size.height * 0.86f
+                        drawRoundRect(
+                            color = dc.copy(alpha = 0.75f),
+                            topLeft = Offset(x - wdt / 2f, top),
+                            size = Size(wdt, len),
+                            cornerRadius = CornerRadius(wdt / 2f, wdt / 2f)
+                        )
+                        if (cyc < 0.7f) {
+                            drawCircle(color = dc.copy(alpha = 0.85f), radius = 2.3.dp.toPx(), center = Offset(x, top + len + 1.dp.toPx()))
+                        } else {
+                            val fall = (cyc - 0.7f) / 0.3f
+                            drawCircle(
+                                color = dc.copy(alpha = 0.85f * (1f - fall)),
+                                radius = 2.3.dp.toPx(),
+                                center = Offset(x, top + len + 1.dp.toPx() + fall * fall * 26.dp.toPx())
+                            )
+                        }
+                    }
+                }
+            }
             if (ghost) {
                 // 「透明」は中身を透けさせ、点線の輪郭だけで描く
                 Canvas(modifier = Modifier.matchParentSize()) {
@@ -1449,6 +2188,24 @@ fun PvLyricUnit(
                         cornerRadius = CornerRadius(6.dp.toPx(), 6.dp.toPx()),
                         style = Stroke(width = 1.2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(7f, 6f), 0f))
                     )
+                }
+            }
+            if (mosaic && !exiting) {
+                // 「隠」の文字は入場時もモザイクから現れる（入場が進むにつれてセルが解けていく）
+                Canvas(modifier = Modifier.matchParentSize()) {
+                    val fp = 1f - uAnim.value
+                    if (fp > 0f) {
+                        val cell = 6.dp.toPx()
+                        val cols = (size.width / cell).toInt() + 1
+                        val rowsN = (size.height / cell).toInt() + 1
+                        for (gx in 0 until cols) for (gy in 0 until rowsN) {
+                            val h = (((gx * 73856093) xor (gy * 19349663) xor (uSeed * 83492791)) and 0x7fffffff) % 100
+                            if (h < fp * 135f) {
+                                val c = when (h % 4) { 0 -> Color(0xFF9E9E9E); 1 -> accentColor; 2 -> Color(0xFF616161); else -> Color(0xFFBDBDBD) }
+                                drawRect(color = c.copy(alpha = 0.9f), topLeft = Offset(gx * cell, gy * cell), size = Size(cell, cell))
+                            }
+                        }
+                    }
                 }
             }
             if (mosaic && exiting) {
@@ -1467,6 +2224,20 @@ fun PvLyricUnit(
                             }
                         }
                     }
+                }
+            }
+            if (censorEnd > censorStart && censorLocal > 0f) {
+                // 伏せ字の部分だけを白い帯で左から右へ塗りつぶす（英単語の途中にある ** 等にも対応するため、ユニット内の割合で範囲を指定）
+                // 帯の高さは行全体で統一し中央にそろえることで、隣のユニットとつながって一続きのブロックに見える
+                Canvas(modifier = Modifier.matchParentSize()) {
+                    val x0 = size.width * censorStart
+                    val bandH = if (censorBandSp > 0f) (censorBandSp.sp.toPx()).coerceAtMost(size.height) else size.height * 0.86f
+                    val bandTop = if (censorBandSp > 0f) (size.height - bandH) / 2f else size.height * 0.07f
+                    drawRect(
+                        color = Color.White,
+                        topLeft = Offset(x0, bandTop),
+                        size = Size(size.width * (censorEnd - censorStart) * censorLocal, bandH)
+                    )
                 }
             }
             if (arrowUnder) {
@@ -1530,7 +2301,7 @@ fun PvLyricUnit(
                     )
                 )
             }
-            if (!exiting && (unitText.contains("光") || unitText.contains("輝"))) {
+            if (!exiting && SPARKLE_WORDS.any { unitText.contains(it) }) {
                 // 「光」「輝」はコーティングが反射するみたいにキラキラさせる
                 Canvas(modifier = Modifier.matchParentSize()) {
                     val phBase = sway.value * 6.2832f
@@ -1544,8 +2315,36 @@ fun PvLyricUnit(
                 }
             }
         }
+        if (exiting && crumbleExit != 0 && crumblePoints != null) {
+            // 文字の形のまま粉々になる粒子（1=その場で崩れて自然落下、2=右へ飛んでいく）
+            val pts = crumblePoints!!
+            Canvas(modifier = Modifier.matchParentSize()) {
+                val fp2 = ((exitProgressValue * 720f - exitDelayMs) / 560f).coerceIn(0f, 1f)
+                if (fp2 > 0f) {
+                    val n = pts.size / 2
+                    for (pi2 in 0 until n) {
+                        val h1 = ((pi2 * 2654435761L) xor (staggerIndex * 131L)) and 0x7fffffffL
+                        val ox = pts[pi2 * 2] * size.width
+                        val oy = pts[pi2 * 2 + 1] * size.height
+                        val dx: Float
+                        val dy: Float
+                        if (crumbleExit == 2) {
+                            dx = fp2 * fp2 * (2.0f + (h1 % 50) / 28f) * size.width
+                            dy = -sin(fp2 * 3.14159f) * (6f + (h1 % 30) / 3f) + fp2 * fp2 * 22f
+                        } else {
+                            dx = sin(fp2 * 5f + (h1 % 628) / 100f) * 3.5f * fp2
+                            dy = fp2 * fp2 * (0.5f + (h1 % 45) / 100f) * size.height * 2.0f
+                        }
+                        val a = (1f - fp2) * (0.45f + (h1 % 55) / 100f)
+                        val c = when ((h1 % 5).toInt()) { 0 -> accentColor; 1 -> Color(0xFFE8D8A8); else -> Color.White }
+                        drawCircle(color = c.copy(alpha = a.coerceIn(0f, 1f)), radius = (1.1f + (h1 % 20) / 10f).dp.toPx() * 0.55f, center = Offset(ox + dx, oy + dy))
+                    }
+                }
+            }
+        }
+        }
         val enCaption = if (!exiting && unitText.length > 1 && unitText.all { it in 'ァ'..'ヶ' || it == 'ー' || it == '・' }) KATAKANA_EN[unitText] else null
-        if (!exiting && effectKind == 0) {
+        if (!exiting && effectKind == 0 && !rubyKana) {
             Spacer(modifier = Modifier.height(3.dp))
             val ulv = ulAnim.value
             Canvas(modifier = Modifier.fillMaxWidth().height(3.5.dp)) {
@@ -1575,14 +2374,23 @@ fun PvLyricUnit(
         }
         }
         if (!exiting && iconKind != null) {
-            // アイコンはその単語の右肩に小さく重ねる
+            // アイコンは大きく・薄く、文字に被せるように重ねる。
+            // レイアウト上の大きさは0にして、文字の間隔が広がらないようにする（描画だけ大きく出す）
             Canvas(
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .offset(x = 12.dp, y = (-12).dp)
-                    .size((uSize.value * 0.55f).dp)
+                    .align(Alignment.TopCenter)
+                    .layout { measurable, _ ->
+                        val iconPx = (uSize.value * 1.15f).dp.roundToPx()
+                        val placeable = measurable.measure(Constraints.fixed(iconPx, iconPx))
+                        layout(0, 0) {
+                            placeable.place(
+                                x = -iconPx / 2 + (uSize.value * 0.20f).dp.roundToPx(),
+                                y = (uSize.value * 0.02f).dp.roundToPx()
+                            )
+                        }
+                    }
                     .graphicsLayer {
-                        alpha = ulAnim.value.coerceIn(0f, 1f) * 0.45f
+                        alpha = ulAnim.value.coerceIn(0f, 1f) * 0.15f
                         rotationZ = -9f
                     }
             ) {
@@ -1676,6 +2484,23 @@ fun chunkJapanese(span: String): List<String> {
     if (sb.isNotEmpty()) runs.add(sb.toString())
 
     val particles = "はがをにへとやのもでからまでよりばねよわ"
+    // て形＋補助動詞の境界（取り消して／しまった、聞いて／いた 等）を探す。
+    // ひらがな部分の中で「て／で」の後ろに補助動詞が続く位置を返す（無ければ -1）
+    val auxList = listOf(
+        "しまった", "しまう", "しまい", "しちゃ", "ちゃった", "ちゃう",
+        "いる", "いた", "いない", "いく", "いった", "くる", "きた",
+        "くれる", "くれた", "もらう", "もらった", "あげる", "ある", "あった",
+        "おく", "おいた", "みる", "みた", "みたい", "ほしい", "ください"
+    )
+    fun auxSplitAt(run: String): Int {
+        for (i in 1 until run.length - 1) {
+            if (run[i] == 'て' || run[i] == 'で') {
+                val tail = run.substring(i + 1)
+                if (auxList.any { tail.startsWith(it) }) return i + 1
+            }
+        }
+        return -1
+    }
     val chunks = mutableListOf<String>()
     val cur = StringBuilder()
     fun closeChunk() {
@@ -1685,25 +2510,53 @@ fun chunkJapanese(span: String): List<String> {
         }
     }
     for (run in runs) {
-        val t = typeOf(run[0])
+        // ーや小さいカナで始まる部分は、前の塊にくっつける（分割したときに ーが行頭に来ないように）
+        var rest = run
+        if (cur.isNotEmpty()) {
+            var cut = 0
+            while (cut < rest.length && (rest[cut] == 'ー' || rest[cut] in "ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ")) cut++
+            if (cut > 0) {
+                cur.append(rest.substring(0, cut))
+                rest = rest.substring(cut)
+                if (rest.isEmpty()) continue
+            }
+        }
+        val t = typeOf(rest[0])
         when {
             t == 2 && cur.isNotEmpty() -> {
-                // ひらがな部分: 先頭の助詞（最大2文字）の後ろに2文字以上残るなら、助詞までを今の塊に付けて次へ
-                var pLen = 0
-                while (pLen < run.length && pLen < 2 && run[pLen] in particles) pLen++
-                if (pLen >= 1 && run.length - pLen >= 2) {
-                    cur.append(run.substring(0, pLen))
+                val auxAt = auxSplitAt(rest)
+                if (auxAt > 0) {
+                    // て形までを今の塊に付けて閉じ、補助動詞からは新しい塊にする
+                    cur.append(rest.substring(0, auxAt))
                     closeChunk()
-                    cur.append(run.substring(pLen))
+                    cur.append(rest.substring(auxAt))
                 } else {
-                    cur.append(run)
+                    // ひらがな部分: 先頭の助詞（最大2文字）の後ろに2文字以上残るなら、助詞までを今の塊に付けて次へ
+                    var pLen = 0
+                    while (pLen < rest.length && pLen < 2 && rest[pLen] in particles) pLen++
+                    if (pLen >= 1 && rest.length - pLen >= 2) {
+                        cur.append(rest.substring(0, pLen))
+                        closeChunk()
+                        cur.append(rest.substring(pLen))
+                    } else {
+                        cur.append(rest)
+                    }
                 }
             }
-            t == 2 -> cur.append(run) // 行頭のひらがなはそのまま塊の始まり
-            t == 0 -> cur.append(run) // 句読点などは前の塊に付ける
+            t == 2 -> {
+                // 行頭のひらがな: 補助動詞の境界があれば、そこまでは1つの塊にする
+                val auxAt = auxSplitAt(rest)
+                if (auxAt > 0) {
+                    chunks.add(rest.substring(0, auxAt))
+                    cur.append(rest.substring(auxAt))
+                } else {
+                    cur.append(rest)
+                }
+            }
+            t == 0 -> cur.append(rest) // 句読点などは前の塊に付ける
             else -> {
-                if (t == 3 && run.length >= 6) {
-                    // 長いカタカナ語は「前の文字＋ー・小さいカナ」を1セットとして塊に分ける
+                if (t == 3 && rest.length >= 12) {
+                    // 1行に収まらないほど長いカタカナ語だけ「前の文字＋ー・小さいカナ」を1セットとして塊に分ける
                     // （「ハッピーヘヴンリーバースデー」のような語を行で割れるようにし、ーが行頭に来ないようにするため）
                     closeChunk()
                     val unit = StringBuilder()
@@ -1713,7 +2566,7 @@ fun chunkJapanese(span: String): List<String> {
                             unit.clear()
                         }
                     }
-                    for (ch in run) {
+                    for (ch in rest) {
                         if (ch == 'ー' || ch in "ァィゥェォッャュョヮ") {
                             unit.append(ch)
                         } else {
@@ -1722,10 +2575,14 @@ fun chunkJapanese(span: String): List<String> {
                         }
                     }
                     flushUnit()
+                } else if (t == 3 && rest.length >= 6) {
+                    // 通常のカタカナ語はまるごと1塊にして、行の途中で単語が割れないようにする
+                    closeChunk()
+                    chunks.add(rest)
                 } else {
                     // 漢字・カタカナは新しい塊の始まり
                     closeChunk()
-                    cur.append(run)
+                    cur.append(rest)
                 }
             }
         }
@@ -1935,12 +2792,34 @@ fun LyricTagSearchDialog(
                                     }
                                     .padding(vertical = 8.dp)
                             ) {
-                                Text(
-                                    text = if (applyingIndex == idx) "取得中…" else cand.title.ifBlank { "(タイトルなし)" },
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = if (applyingIndex == idx) "取得中…" else cand.title.ifBlank { "(タイトルなし)" },
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false)
+                                    )
+                                    // 同期の種類チップ（文字同期＝カラオケ可能／行同期＝行単位）
+                                    if (!cand.instrumental) {
+                                        Box(
+                                            modifier = Modifier
+                                                .padding(start = 8.dp)
+                                                .background(
+                                                    if (cand.wordSync) Color(0xFF7FD4F2) else Color(0xFF444B54),
+                                                    RoundedCornerShape(6.dp)
+                                                )
+                                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                                        ) {
+                                            Text(
+                                                text = if (cand.wordSync) "文字同期" else "行同期",
+                                                color = if (cand.wordSync) Color(0xFF0B2536) else Color(0xFFD6DCE3),
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
                                 val dur = if (cand.durationSec > 0) {
                                     " ・ ${cand.durationSec / 60}:${(cand.durationSec % 60).toString().padStart(2, '0')}"
                                 } else ""
@@ -2018,7 +2897,11 @@ fun LyricsPvLayer(
     translations: List<String>?,
     pvTopDp: Dp,
     interludeTopDp: Dp,
-    translationTopDp: Dp
+    translationTopDp: Dp,
+    partsEntry: Boolean = false,
+    enFontFamily: FontFamily? = null,
+    onAccentFlash: (Color?) -> Unit = {},
+    pvTilt3d: Boolean = false,
 ) {
     val pvPos = positionMs + lyricOffsetMs
     val pvIndex = lines.indexOfLast { it.timeMs <= pvPos }
@@ -2026,11 +2909,32 @@ fun LyricsPvLayer(
     val pvCurLine = lines.getOrNull(pvIndex)
     val pvNextLine = lines.getOrNull(pvIndex + 1)
     val pvInterlude = when {
-        pvCurLine == null -> false
+        pvCurLine == null -> pvIndex < 0 && (lines.firstOrNull()?.let { (it.timeMs - pvPos) > 2500 } ?: false) // 前奏も間奏アートを出す
         pvNextLine == null -> (pvPos - pvCurLine.timeMs) > 8000
         else -> (pvNextLine.timeMs - pvCurLine.timeMs) > 15000 && (pvPos - pvCurLine.timeMs) > 5000 // 行間が長い間奏だけ。次の行が近づいたら前の行に戻る、をしない
     }
     val pvDisplayIndex = if (pvInterlude) -2 else pvIndex
+    // 色名・連想色に当たった行では、その色（文字と同じ淡色）を親に知らせてアクセントを一瞬変える
+    val flashHit = remember(pvCurLine?.text, accentColor) {
+        val t = pvCurLine?.text
+        if (t == null) null else {
+            val hit = COLOR_WORDS.firstOrNull { (w, _) ->
+                if (w.all { it.code < 128 }) Regex("""(?i)(?<![A-Za-z])${Regex.escape(w)}(?![A-Za-z])""").containsMatchIn(t) else t.contains(w)
+            } ?: ASSOC_COLOR_WORDS.firstOrNull { (w, _) ->
+                if (w.all { it.code < 128 }) Regex("""(?i)(?<![A-Za-z])${Regex.escape(w)}(?![A-Za-z])""").containsMatchIn(t) else t.contains(w)
+            }
+            hit?.let { (_, base) ->
+                Color(
+                    red = (base.red * 0.55f + accentColor.red * 0.45f) * 0.55f + 0.45f,
+                    green = (base.green * 0.55f + accentColor.green * 0.45f) * 0.55f + 0.45f,
+                    blue = (base.blue * 0.55f + accentColor.blue * 0.45f) * 0.55f + 0.45f
+                )
+            }
+        }
+    }
+    LaunchedEffect(flashHit, pvIndex) {
+        if (flashHit != null) onAccentFlash(flashHit)
+    }
     if (pvIndex >= 0) {
                 // 前の行は残像にせず、文字ごとにバラバラの遅延で退場アニメーションをかけて消す
         // エフェクトは行ごとにランダム。ただし前の行と同じ種類は避ける
@@ -2042,6 +2946,17 @@ fun LyricsPvLayer(
             val kind = if (prev != null && raw == prev) (raw + 1) % 8 else raw
             pvKindMap[idx] = kind
             return kind
+        }
+        // カメラの流れも行ごとにランダム（前の行と同じ流れは避ける）。
+        // 退場する行は「次の行の流れ」を共有するので、退場と入場がつながって見える
+        val pvCamMap = remember { mutableStateMapOf<Int, Int>() }
+        fun pvCamFlowFor(idx: Int, text: String): Int {
+            pvCamMap[idx]?.let { return it }
+            val raw = Math.floorMod(Math.floorMod(idx * 41 + text.hashCode(), 997), 6)
+            val prev = pvCamMap[idx - 1]
+            val flow = if (prev != null && raw == prev) (raw + 1) % 6 else raw
+            pvCamMap[idx] = flow
+            return flow
         }
         var pvCurrent by remember { mutableStateOf<Pair<Int, String>?>(null) }
         var pvExiting by remember { mutableStateOf<Pair<Int, String>?>(null) }
@@ -2070,7 +2985,7 @@ fun LyricsPvLayer(
             }
         }
         // 「暗」を含む行では背景を少し暗くし、次の行で戻す
-        val darkTarget = if (pvDisplayIndex >= 0 && lines.getOrNull(pvDisplayIndex)?.text?.contains("暗") == true) 0.32f else 0f
+        val darkTarget = if (pvDisplayIndex >= 0 && lines.getOrNull(pvDisplayIndex)?.text?.let { t -> DARK_WORDS.any { t.contains(it) } } == true) 0.32f else 0f
         val darkAlpha = remember { Animatable(0f) }
         LaunchedEffect(darkTarget) {
             darkAlpha.animateTo(darkTarget, animationSpec = tween(durationMillis = 700))
@@ -2092,6 +3007,10 @@ fun LyricsPvLayer(
                         effectKind = pvKindFor(exIdx, exText),
                         lineDurationMs = lines.getOrNull(exIdx + 1)?.let { it.timeMs - lines[exIdx].timeMs } ?: Long.MAX_VALUE,
                         startsInParen = pvStartsInParen(lines, exIdx),
+                        partsEntry = partsEntry,
+                        enFontFamily = enFontFamily,
+                        camFlow = pvCurrent?.let { pvCamFlowFor(it.first, it.second) } ?: pvCamFlowFor(exIdx + 1, lines.getOrNull(exIdx + 1)?.text ?: ""),
+                        tilt3d = pvTilt3d,
                         modifier = Modifier.padding(top = pvTopDp)
                     )
                 }
@@ -2110,6 +3029,10 @@ fun LyricsPvLayer(
                                 exiting = false,
                                 words = lines[curIdx].words,
                                 lineStartMs = lines[curIdx].timeMs,
+                                partsEntry = partsEntry,
+                        enFontFamily = enFontFamily,
+                                camFlow = pvCamFlowFor(curIdx, curText),
+                                tilt3d = pvTilt3d,
                                 effectKind = pvKindFor(curIdx, curText),
                                 lineDurationMs = lines.getOrNull(curIdx + 1)?.let { it.timeMs - lines[curIdx].timeMs } ?: Long.MAX_VALUE,
                                 startsInParen = pvStartsInParen(lines, curIdx),
@@ -2147,12 +3070,7 @@ fun LyricsPvLayer(
             }
         }
         pvCurrent?.let { (_, curText) ->
-            val ambKind = when {
-                curText.contains("桜") -> 2
-                curText.contains("雨") -> 0
-                curText.contains("雪") -> 1
-                else -> -1
-            }
+            val ambKind = AMBIENT_WORDS.firstOrNull { (w, _) -> curText.contains(w) }?.second ?: -1
             if (ambKind >= 0) {
                 PvAmbientEffect(kind = ambKind, modifier = Modifier.fillMaxSize())
             }
@@ -2181,12 +3099,89 @@ fun LyricsBrowseOverlay(
     onSeek: (Long) -> Unit,
     onRefresh: () -> Unit,
     onOpenSearch: () -> Unit,
-    onClose: () -> Unit
+    onSaveEditedLyrics: ((String) -> Unit)? = null,
+    onPublishLyrics: ((String, (String) -> Unit) -> Unit)? = null,
+    onClose: () -> Unit,
+    enFontFamily: FontFamily? = null
 ) {
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
     var follow by remember { mutableStateOf(true) }
     var showOffsetPanel by remember { mutableStateOf(false) }
+    var showLyricEditor by remember { mutableStateOf(false) }
+    var editText by remember { mutableStateOf("") }
+    var editError by remember { mutableStateOf(false) }
+    var publishPhase by remember { mutableStateOf(0) }
+    var publishMessage by remember { mutableStateOf("") }
+    if (showLyricEditor) {
+        AlertDialog(
+            onDismissRequest = { showLyricEditor = false },
+            containerColor = Color(0xFF141C2E),
+            title = { Text("歌詞を編集", color = Color.White, fontSize = 18.sp) },
+            text = {
+                Column {
+                    Text(
+                        "1行ごとに [分:秒.ミリ秒]歌詞 の形です。誤字の修正のほか、時刻も直せます。保存するとキャッシュに残るので、次回からも直した歌詞が出ます（文字同期は外れます）。",
+                        color = Color.Gray,
+                        fontSize = 11.5.sp
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = editText,
+                        onValueChange = { editText = it; editError = false },
+                        textStyle = TextStyle(color = Color.White, fontSize = 13.sp, fontFamily = fontFamily),
+                        modifier = Modifier.fillMaxWidth().height(300.dp)
+                    )
+                    if (editError) {
+                        Spacer(Modifier.height(6.dp))
+                        Text("時刻タグ [00:00.00] のある行が1つもありません", color = Color(0xFFFF9E9E), fontSize = 12.sp)
+                    }
+                    if (onPublishLyrics != null) {
+                        Spacer(Modifier.height(12.dp))
+                        when (publishPhase) {
+                            0 -> TextButton(onClick = { publishPhase = 1 }) {
+                                Text("この歌詞を LRCLIB に投稿する", color = Color(0xFF88C0FF), fontSize = 13.sp)
+                            }
+                            1 -> Column {
+                                Text(
+                                    "LRCLIB は公開データベースです。投稿すると誰でも見られるようになり、取り消しはできません。直した歌詞をみんなで共有できます。",
+                                    color = Color(0xFFFFD28F),
+                                    fontSize = 11.5.sp
+                                )
+                                Row {
+                                    TextButton(onClick = {
+                                        publishPhase = 2
+                                        onPublishLyrics.invoke(editText) { msg ->
+                                            publishMessage = msg
+                                            publishPhase = if (msg == "OK") 3 else 4
+                                        }
+                                    }) { Text("投稿する", color = Color(0xFF88C0FF)) }
+                                    TextButton(onClick = { publishPhase = 0 }) { Text("やめる", color = Color.Gray) }
+                                }
+                            }
+                            2 -> Text("投稿中…（計算パズルを解くため、数十秒かかることがあります）", color = Color.Gray, fontSize = 12.sp)
+                            3 -> Text("LRCLIB に投稿しました", color = Color(0xFF7FD4F2), fontSize = 12.5.sp)
+                            else -> Text(publishMessage, color = Color(0xFFFF9E9E), fontSize = 12.sp)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val ok = editText.lines().any { Regex("^\\[\\d{1,2}:\\d{2}").containsMatchIn(it) }
+                    if (!ok) {
+                        editError = true
+                    } else {
+                        onSaveEditedLyrics?.invoke(editText)
+                        showLyricEditor = false
+                    }
+                }) { Text("保存", color = Color(0xFF88C0FF)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLyricEditor = false }) { Text("キャンセル", color = Color.Gray) }
+            }
+        )
+    }
     // 自由スクロール: 位置は「行」単位の小数で持ち、指に追従させて離すと慣性で流れる
     val scrollAnim = remember { Animatable(startIndex.toFloat()) }
     val maxPos = (lines.size - 1).coerceAtLeast(0).toFloat()
@@ -2197,7 +3192,7 @@ fun LyricsBrowseOverlay(
             text = "歌詞ソース: $source",
             color = Color.White.copy(alpha = 0.45f),
             fontSize = 10.sp,
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 14.dp).zIndex(91f)
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 64.dp).zIndex(91f)
         )
     }
         val virtualPos = scrollAnim.value
@@ -2305,7 +3300,9 @@ fun LyricsBrowseOverlay(
             } else if (idx < baseIdx) {
                 for (i in idx until baseIdx) acc -= stepDp(i)
             }
-            return acc - fracPart * stepDp(baseIdx)
+            // 選択中の行の前後は間隔を広げて、選択位置を分かりやすくする（スクロールに滑らかに追従）
+            val focusSpread = 13f * (idx - virtualPos).coerceIn(-1f, 1f)
+            return acc - fracPart * stepDp(baseIdx) + focusSpread
         }
         val browseWidthDp = maxWidth.value
         val firstIdx = maxOf(0, floor(virtualPos - 7f).toInt())
@@ -2315,33 +3312,56 @@ fun LyricsBrowseOverlay(
             val isFocusedLine = idx == focusedIdx
             val fade = (1f - (abs(relPos) - 4f) / 3f).coerceIn(0f, 1f)
             val myHeightDp = (lineHeightsPx[idx]?.let { it / densityNow.density } ?: 34f)
+            if (isFocusedLine) {
+                // 「移動」ボタンは選択中の行の横に丸いアイコンボタンで置く（幅を取らず、歌詞にも被せない）
+                Box(
+                    modifier = Modifier
+                        .offset(
+                            x = (browseWidthDp - 58f).dp,
+                            y = (centerYDp + offsetDpFor(idx) - 21f).dp
+                        )
+                        .zIndex(95f)
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(accentColor)
+                        .clickable {
+                            onSeek((lines[idx].timeMs - lyricOffsetMs).coerceAtLeast(0L))
+                            onClose()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = "ここへ移動", tint = Color.White, modifier = Modifier.size(24.dp))
+                }
+            }
             Column(
                 modifier = Modifier
                     .offset(
                         x = (40f + relPos * 5f).dp,
                         y = (centerYDp + offsetDpFor(idx) - myHeightDp / 2f).dp
                     )
-                    .fillMaxWidth(0.85f)
+                    .fillMaxWidth(if (isFocusedLine) ((browseWidthDp - 118f) / browseWidthDp).coerceIn(0.3f, 0.85f) else 0.85f)
                     .onGloballyPositioned { lineHeightsPx[idx] = it.size.height }
             ) {
-                if (isFocusedLine && idx == browsePlayingIdx && lines[idx].words.isNotEmpty()) {
+                if (idx == browsePlayingIdx && lines[idx].words.isNotEmpty()) {
+                    // 再生中の行は、フォーカスが外れていてもカラオケ色付けで表示する
                     KaraokeLyricText(
                         line = lines[idx],
                         positionMs = positionMs + lyricOffsetMs,
-                        sungColor = accentColor,
-                        baseColor = Color.White,
-                        fontSize = fitFontSizeSp(lines[idx].text, 26f, browseWidthDp * 0.85f).sp,
-                        fontWeight = lyricWeight,
+                        sungColor = if (isFocusedLine) accentColor else accentColor.copy(alpha = 0.92f * fade),
+                        baseColor = if (isFocusedLine) Color.White else Color.White.copy(alpha = 0.92f * fade),
+                        fontSize = fitFontSizeSp(lines[idx].text, if (isFocusedLine) 26f else 15f, if (isFocusedLine) browseWidthDp - 118f else browseWidthDp * 0.85f).sp,
+                        fontWeight = if (isFocusedLine) lyricWeight else FontWeight.Normal,
                         fontFamily = fontFamily,
+                        enFontFamily = enFontFamily,
                         letterSpacing = 1.0.sp,
                         textAlign = TextAlign.Start,
-                        shadow = if (accentGlow) Shadow(color = accentColor, blurRadius = 14f) else Shadow(color = Color.Black.copy(alpha = 0.75f), blurRadius = 10f)
+                        shadow = if (accentGlow && isFocusedLine) Shadow(color = accentColor, blurRadius = 14f) else Shadow(color = Color.Black.copy(alpha = 0.75f), blurRadius = 10f)
                     )
                 } else {
                     Text(
-                        text = lines[idx].text,
+                        text = lyricMixedFontText(lines[idx].text, enFontFamily),
                         color = if (isFocusedLine) Color.White else Color.White.copy(alpha = 0.92f * fade),
-                        fontSize = fitFontSizeSp(lines[idx].text, if (isFocusedLine) 26f else 15f, browseWidthDp * 0.85f).sp,
+                        fontSize = fitFontSizeSp(lines[idx].text, if (isFocusedLine) 26f else 15f, if (isFocusedLine) browseWidthDp - 118f else browseWidthDp * 0.85f).sp,
                         fontWeight = if (isFocusedLine) lyricWeight else FontWeight.Normal,
                         letterSpacing = 1.0.sp,
                         textAlign = TextAlign.Start,
@@ -2371,7 +3391,6 @@ fun LyricsBrowseOverlay(
         }
     }
     // 下部ボタン: 移動（フォーカス行へジャンプ）／タイミング調整／閉じる
-    val focusedLineForButtons = lines.getOrNull(focusedIdx)
     Box(
         modifier = Modifier
             .align(Alignment.TopEnd)
@@ -2387,7 +3406,7 @@ fun LyricsBrowseOverlay(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .align(Alignment.BottomCenter)
-            .padding(bottom = 44.dp)
+            .padding(bottom = 88.dp)
             .zIndex(95f)
     ) {
         if (!follow) {
@@ -2414,21 +3433,28 @@ fun LyricsBrowseOverlay(
                 fontWeight = FontWeight.Bold
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf(-1000L to "-1.0", -500L to "-0.5", -100L to "-0.1", 100L to "+0.1", 500L to "+0.5", 1000L to "+1.0").forEach { (delta, label) ->
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(Color(0xFF263238))
-                            .clickable {
-                                val newOffset = (lyricOffsetMs + delta).coerceIn(-30000L, 30000L)
-                                onOffsetChange(newOffset)
-                            }
-                            .padding(horizontal = 10.dp, vertical = 8.dp)
-                    ) {
-                        Text(label, color = Color.White, fontSize = 13.sp)
+            // リセットを中央に置き、−は左へ、＋は右へ広がる配置
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)
+                ) {
+                    listOf(-1000L to "-1.0", -500L to "-0.5", -100L to "-0.1").forEach { (delta, label) ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFF263238))
+                                .clickable {
+                                    val newOffset = (lyricOffsetMs + delta).coerceIn(-30000L, 30000L)
+                                    onOffsetChange(newOffset)
+                                }
+                                .padding(horizontal = 10.dp, vertical = 8.dp)
+                        ) {
+                            Text(label, color = Color.White, fontSize = 13.sp)
+                        }
                     }
                 }
+                Spacer(modifier = Modifier.width(6.dp))
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(10.dp))
@@ -2437,6 +3463,26 @@ fun LyricsBrowseOverlay(
                         .padding(horizontal = 10.dp, vertical = 8.dp)
                 ) {
                     Text("リセット", color = Color.White, fontSize = 13.sp)
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.Start)
+                ) {
+                    listOf(100L to "+0.1", 500L to "+0.5", 1000L to "+1.0").forEach { (delta, label) ->
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFF263238))
+                                .clickable {
+                                    val newOffset = (lyricOffsetMs + delta).coerceIn(-30000L, 30000L)
+                                    onOffsetChange(newOffset)
+                                }
+                                .padding(horizontal = 10.dp, vertical = 8.dp)
+                        ) {
+                            Text(label, color = Color.White, fontSize = 13.sp)
+                        }
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(10.dp))
@@ -2467,20 +3513,24 @@ fun LyricsBrowseOverlay(
             ) {
                 Icon(Icons.Default.Search, contentDescription = "タグを指定して検索", tint = Color.White, modifier = Modifier.size(24.dp))
             }
-            // 中央: フォーカス行へ移動
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(accentColor)
-                    .clickable {
-                        if (focusedLineForButtons != null) {
-                            onSeek((focusedLineForButtons.timeMs - lyricOffsetMs).coerceAtLeast(0L))
-                        }
-                        onClose()
-                    }
-                    .padding(horizontal = 22.dp, vertical = 12.dp)
-            ) {
-                Text("移動", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            // 歌詞を手で編集（誤字修正など。キャッシュに保存される）
+            if (onSaveEditedLyrics != null && lines.isNotEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFF263238))
+                        .clickable {
+                            editText = buildLrcText(lines)
+                            editError = false
+                            publishPhase = 0
+                            publishMessage = ""
+                            showLyricEditor = true
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Edit, contentDescription = "歌詞を編集", tint = Color.White, modifier = Modifier.size(24.dp))
+                }
             }
             // 右: タイミング調整（オフセット）
             Box(
@@ -2509,6 +3559,19 @@ fun LyricsBrowseOverlay(
     }
 }
 
+// 編集用に、行リストを LRC 形式のテキストへ戻す（LyricsManager.linesToLrc と同じ書式）
+private fun buildLrcText(lines: List<LyricLine>): String {
+    val sb = StringBuilder()
+    for (line in lines) {
+        val totalSec = line.timeMs / 1000
+        val mm = (totalSec / 60).toString().padStart(2, '0')
+        val ss = (totalSec % 60).toString().padStart(2, '0')
+        val cs = ((line.timeMs % 1000) / 10).toString().padStart(2, '0')
+        sb.append("[$mm:$ss.$cs]").append(line.text).append("\n")
+    }
+    return sb.toString()
+}
+
 /** 歌詞フルスクリーン（横画面）: PVだけ、または曲情報と歌詞を大きく表示する */
 @Composable
 fun LyricsFullscreenOverlay(
@@ -2526,7 +3589,10 @@ fun LyricsFullscreenOverlay(
     title: String,
     artist: String,
     album: String,
-    onClose: () -> Unit
+    onClose: () -> Unit,
+    partsEntry: Boolean = false,
+    enFontFamily: FontFamily? = null,
+    pvTilt3d: Boolean = false
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize().zIndex(96f)) {
         val fsWidth = maxWidth.value
@@ -2581,7 +3647,7 @@ fun LyricsFullscreenOverlay(
         val fsCurLine = fsLines.getOrNull(fsIndex)
         val fsNextLine = fsLines.getOrNull(fsIndex + 1)
         val fsInterlude = when {
-            fsCurLine == null -> false
+            fsCurLine == null -> fsIndex < 0 && (fsLines.firstOrNull()?.let { (it.timeMs - fsPos) > 2500 } ?: false) // 前奏も間奏アートを出す
             fsNextLine == null -> (fsPos - fsCurLine.timeMs) > 8000
             else -> (fsNextLine.timeMs - fsCurLine.timeMs) > 15000 && (fsPos - fsCurLine.timeMs) > 5000
         }
@@ -2592,6 +3658,16 @@ fun LyricsFullscreenOverlay(
                 var fsCurrent by remember { mutableStateOf<Pair<Int, String>?>(null) }
                 var fsExiting by remember { mutableStateOf<Pair<Int, String>?>(null) }
                 LaunchedEffect(lines) { fsCurrent = null; fsExiting = null }
+                // カメラの流れ（退場と入場で共有してつなげる）
+                val fsCamMap = remember { mutableStateMapOf<Int, Int>() }
+                fun fsCamFlowFor(idx: Int, text: String): Int {
+                    fsCamMap[idx]?.let { return it }
+                    val raw = Math.floorMod(Math.floorMod(idx * 41 + text.hashCode(), 997), 6)
+                    val prev = fsCamMap[idx - 1]
+                    val flow = if (prev != null && raw == prev) (raw + 1) % 6 else raw
+                    fsCamMap[idx] = flow
+                    return flow
+                }
                 LaunchedEffect(fsDisplayIndex) {
                     if (fsDisplayIndex >= 0) {
                         if (fsCurrent?.first != fsDisplayIndex) {
@@ -2606,7 +3682,7 @@ fun LyricsFullscreenOverlay(
                     if (fsExiting != null) { delay(750); fsExiting = null }
                 }
                 // 「暗」を含む行では背景を少し暗くし、次の行で戻す
-                val fsDarkTarget = if (fsDisplayIndex >= 0 && fsLines.getOrNull(fsDisplayIndex)?.text?.contains("暗") == true) 0.32f else 0f
+                val fsDarkTarget = if (fsDisplayIndex >= 0 && fsLines.getOrNull(fsDisplayIndex)?.text?.let { t -> DARK_WORDS.any { t.contains(it) } } == true) 0.32f else 0f
                 val fsDarkAlpha = remember { Animatable(0f) }
                 LaunchedEffect(fsDarkTarget) {
                     fsDarkAlpha.animateTo(fsDarkTarget, animationSpec = tween(durationMillis = 700))
@@ -2627,6 +3703,10 @@ fun LyricsFullscreenOverlay(
                                 bigText = true,
                                 lineDurationMs = fsLines.getOrNull(exIdx + 1)?.let { it.timeMs - fsLines[exIdx].timeMs } ?: Long.MAX_VALUE,
                                 startsInParen = pvStartsInParen(fsLines, exIdx),
+                                partsEntry = partsEntry,
+                                enFontFamily = enFontFamily,
+                                camFlow = fsCurrent?.let { fsCamFlowFor(it.first, it.second) } ?: fsCamFlowFor(exIdx + 1, fsLines.getOrNull(exIdx + 1)?.text ?: ""),
+                                tilt3d = pvTilt3d,
                                 exiting = true,
                                 effectKind = Math.floorMod(Math.floorMod(exIdx * 31 + exText.hashCode(), 997), 8),
                                 modifier = Modifier
@@ -2645,6 +3725,10 @@ fun LyricsFullscreenOverlay(
                                 bigText = true,
                                 lineDurationMs = fsLines.getOrNull(curIdx + 1)?.let { it.timeMs - fsLines[curIdx].timeMs } ?: Long.MAX_VALUE,
                                 startsInParen = pvStartsInParen(fsLines, curIdx),
+                                partsEntry = partsEntry,
+                                enFontFamily = enFontFamily,
+                                camFlow = fsCamFlowFor(curIdx, curText),
+                                tilt3d = pvTilt3d,
                                 exiting = false,
                                 words = fsLines[curIdx].words,
                                 lineStartMs = fsLines[curIdx].timeMs,
@@ -2659,9 +3743,7 @@ fun LyricsFullscreenOverlay(
                 }
                 fsCurrent?.let { (_, curText) ->
                     val ambKind = when {
-                        curText.contains("桜") -> 2
-                        curText.contains("雨") -> 0
-                        curText.contains("雪") -> 1
+                        AMBIENT_WORDS.any { (w, _) -> curText.contains(w) } -> AMBIENT_WORDS.first { (w, _) -> curText.contains(w) }.second
                         else -> -1
                     }
                     if (ambKind >= 0) PvAmbientEffect(kind = ambKind, modifier = Modifier.fillMaxSize())
@@ -2697,7 +3779,7 @@ fun LyricsFullscreenOverlay(
                         val curText = if (fsInterlude) "♪" else (fsCurLine?.text ?: "")
                         val nextText = fsNextLine?.text ?: ""
                         if (prevText.isNotEmpty()) {
-                            Text(prevText, color = Color.White.copy(alpha = 0.45f), fontSize = fitFontSizeSp(prevText, 18f, fsWidth - 80f).sp, letterSpacing = 2.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = fontFamily))
+                            Text(lyricMixedFontText(prevText, enFontFamily), color = Color.White.copy(alpha = 0.45f), fontSize = fitFontSizeSp(prevText, 18f, fsWidth - 80f).sp, letterSpacing = 2.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = fontFamily))
                             Spacer(Modifier.height(14.dp))
                         }
                         if (curText.isNotEmpty()) {
@@ -2711,13 +3793,14 @@ fun LyricsFullscreenOverlay(
                                     fontSize = fitFontSizeSp(curText, 30f, fsWidth - 108f).sp,
                                     fontWeight = lyricWeight,
                                     fontFamily = fontFamily,
+                                    enFontFamily = enFontFamily,
                                     letterSpacing = 3.sp,
                                     shadow = Shadow(color = Color.White.copy(alpha = 0.85f), blurRadius = 18f),
                                     modifier = Modifier.padding(start = 28.dp)
                                 )
                             } else {
                                 Text(
-                                    curText,
+                                    lyricMixedFontText(curText, enFontFamily),
                                     color = Color.White,
                                     fontSize = fitFontSizeSp(curText, 30f, fsWidth - 108f).sp,
                                     fontWeight = lyricWeight,
@@ -2733,7 +3816,7 @@ fun LyricsFullscreenOverlay(
                         }
                         if (nextText.isNotEmpty()) {
                             Spacer(Modifier.height(14.dp))
-                            Text(nextText, color = Color.White.copy(alpha = 0.45f), fontSize = fitFontSizeSp(nextText, 18f, fsWidth - 136f).sp, letterSpacing = 2.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = fontFamily), modifier = Modifier.padding(start = 56.dp))
+                            Text(lyricMixedFontText(nextText, enFontFamily), color = Color.White.copy(alpha = 0.45f), fontSize = fitFontSizeSp(nextText, 18f, fsWidth - 136f).sp, letterSpacing = 2.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = LocalTextStyle.current.copy(fontFamily = fontFamily), modifier = Modifier.padding(start = 56.dp))
                         }
                     } else {
                         val lineText = if (fsIndex < 0) "" else if (fsInterlude) "♪" else (fsCurLine?.text ?: "")
@@ -2748,12 +3831,13 @@ fun LyricsFullscreenOverlay(
                                     fontSize = fitFontSizeSp(lineText, 26f, fsWidth - 80f).sp,
                                     fontWeight = lyricWeight,
                                     fontFamily = fontFamily,
+                                    enFontFamily = enFontFamily,
                                     letterSpacing = 2.sp,
                                     shadow = Shadow(color = Color.White.copy(alpha = 0.85f), blurRadius = 18f)
                                 )
                             } else {
                                 Text(
-                                    lineText,
+                                    lyricMixedFontText(lineText, enFontFamily),
                                     color = Color.White,
                                     fontSize = fitFontSizeSp(lineText, 26f, fsWidth - 80f).sp,
                                     fontWeight = lyricWeight,
@@ -2771,10 +3855,12 @@ fun LyricsFullscreenOverlay(
             }
         }
         }
-        // 終了ボタン: もう一度押すと縦画面に戻る
+        // 終了ボタン: もう一度押すと縦画面に戻る。
+        // 横画面では右端にナビゲーションバーが出るため、その幅の分だけ左へ逃がす
         Box(
             modifier = Modifier
                 .align(Alignment.TopEnd)
+                .windowInsetsPadding(WindowInsets.navigationBars)
                 .padding(top = 18.dp, end = 22.dp)
                 .size(44.dp)
                 .clickable { onClose() },

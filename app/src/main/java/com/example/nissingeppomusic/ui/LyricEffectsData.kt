@@ -112,6 +112,7 @@ object LyricEffectsData {
     "水色" to Color(0xFF7FD4F2),
     "ピンク" to Color(0xFFFF8FBF),
     "オレンジ" to Color(0xFFFF9A3D),
+    "橙" to Color(0xFFFF9A3D),
     "グレー" to Color(0xFF9AA0A6),
     "群青" to Color(0xFF3A5FCD),
     "瑠璃" to Color(0xFF1F4788),
@@ -166,7 +167,7 @@ object LyricEffectsData {
     "好" to Color(0xFFFF8FBF),
     "心" to Color(0xFFFF8FBF),
     "桜" to Color(0xFFFF8FBF),
-    "血" to Color(0xFFFF4545),
+    "血" to Color(0xFF7A0C0C),
     "宵闇" to Color(0xFF2B4C9B),
     "闇" to Color(0xFF000000),
     "夜" to Color(0xFF2B4C9B),
@@ -181,18 +182,18 @@ object LyricEffectsData {
     "凍" to Color(0xFF7FD4F2),
     "氷" to Color(0xFF7FD4F2),
     "想い" to Color(0xFFFF8FBF),
-    "炎" to Color(0xFFFF9A3D),
+    "炎" to Color(0xFFFF6A00),
     "熱" to Color(0xFFFF9A3D),
-    "火" to Color(0xFFFF9A3D),
+    "火" to Color(0xFFFF6A00),
     "砂" to Color(0xFFFFC94D),
     "汚" to Color(0xFFA9744F),
     "希望" to Color(0xFFFFE14D),
-    "殺" to Color(0xFFFF4545),
-    "死" to Color(0xFFFF4545),
-    "地獄" to Color(0xFFFF4545),
+    "殺" to Color(0xFF7A0C0C),
+    "死" to Color(0xFF7A0C0C),
+    "地獄" to Color(0xFF7A0C0C),
     "行方不明" to Color(0xFFFF4545),
     "不明" to Color(0xFFFF4545),
-    "不安" to Color(0xFFFF4545),
+    "不安" to Color(0xFF7A0C0C),
     "危険" to Color(0xFFFF4545),
     "怖" to Color(0xFFFF4545),
     "恐" to Color(0xFFFF4545),
@@ -212,7 +213,8 @@ object LyricEffectsData {
     "sky" to Color(0xFF7FD4F2),
     "tear" to Color(0xFF7FD4F2),
     "tears" to Color(0xFF7FD4F2),
-    "fire" to Color(0xFFFF9A3D)
+    "fire" to Color(0xFFFF9A3D),
+    "毒" to Color(0xFF9B30FF)
     )
     private val DEFAULT_KATAKANA_EN: Map<String, String> = mapOf(
     "ハート" to "HEART",
@@ -321,13 +323,125 @@ object LyricEffectsData {
     "フォレスト" to "FOREST"
     )
 
+    // エフェクト系の単語リスト（v7で配信対象に追加。アプリ更新なしで対象語を増やせるようにするため）
+    private val DEFAULT_DRIP_WORDS: List<Pair<String, Color>> = listOf(
+        "血液" to Color(0xFFE53935),
+        "蜂蜜" to Color(0xFFFFB300),
+        "はちみつ" to Color(0xFFFFB300),
+        "ハチミツ" to Color(0xFFFFB300),
+        "蜜" to Color(0xFFFFB300),
+        "どろどろ" to Color(0xFF8D6E63),
+        "ドロドロ" to Color(0xFF8D6E63),
+        "涎" to Color(0xFF6EC6FF),
+        "よだれ" to Color(0xFF6EC6FF),
+        "ヨダレ" to Color(0xFF6EC6FF),
+        "液体" to Color(0xFF6EC6FF),
+        "液" to Color(0xFF6EC6FF)
+    )
+    private val DEFAULT_DRIP_EXCLUSIONS: Map<String, List<String>> = mapOf(
+        "蜜" to listOf("秘密")
+    )
+    private val DEFAULT_DREAM_WORDS: List<String> = listOf("夢", "思い出")
+    private val DEFAULT_WAVE_WORDS: List<String> = listOf("流", "波", "海")
+    private val DEFAULT_SAND_WORDS: List<String> = listOf("砂", "消", "壊", "砕")
+    private val DEFAULT_WIND_WORDS: List<String> = listOf("風")
+    private val DEFAULT_FALL_WORDS: List<String> = listOf("落")
+    private val DEFAULT_RIPPLE_WORDS: List<String> = listOf("響")
+    private val DEFAULT_MOSAIC_WORDS: List<String> = listOf("隠", "モザイク")
+    private val DEFAULT_PILE_WORDS: List<String> = listOf("積み重な", "降り積も", "積も", "積み", "重な", "重ね", "堆積", "累積")
+    private val DEFAULT_PARTS_WORDS: List<String> = listOf("バラバラ", "ばらばら", "壊れ", "割れ", "砕け", "崩れ", "破", "割", "壊", "砕")
+    private val DEFAULT_NEG_WORDS: List<String> = listOf("なかった", "じゃない", "なくて", "なくな", "無い", "ない", "間違い", "誤り")
+    private val DEFAULT_GHOST_WORDS: List<String> = listOf("透明")
+    private val DEFAULT_SPARKLE_WORDS: List<String> = listOf("光", "輝")
+    private val DEFAULT_DARK_WORDS: List<String> = listOf("暗", "闇")
+    private val DEFAULT_STRETCH_VERTICAL_WORDS: List<String> = listOf("深")
+    private val DEFAULT_STRETCH_HORIZONTAL_WORDS: List<String> = listOf("長")
+    private val DEFAULT_AMBIENT_WORDS: List<Pair<String, Int>> = listOf("桜" to 2, "雨" to 0, "雪" to 1)
+    // 歌詞データ系（v10〜）: 漢字変換表・クレジット判定・ダミー歌詞マーカー・コーラスの音節
+    private val DEFAULT_KANJI_MAP: Map<Char, Char> = mapOf(
+        '编' to '編', '词' to '詞', '爱' to '愛', '乐' to '楽', '声' to '声', '风' to '風',
+        '云' to '雲', '龙' to '竜', '马' to '馬', '车' to '車', '门' to '門', '开' to '開',
+        '关' to '関', '时' to '時', '间' to '間', '线' to '線', '红' to '紅', '绿' to '緑',
+        '蓝' to '藍', '银' to '銀', '铁' to '鉄', '飞' to '飛', '鸟' to '鳥', '鱼' to '魚',
+        '长' to '長', '发' to '発', '后' to '後', '过' to '過', '还' to '還', '这' to '這',
+        '个' to '個', '们' to '們', '为' to '為', '对' to '対', '说' to '説', '读' to '読',
+        '听' to '聴', '买' to '買', '卖' to '売', '现' to '現', '见' to '見', '觉' to '覚',
+        '远' to '遠', '进' to '進', '运' to '運', '动' to '動', '气' to '気', '压' to '圧',
+        '电' to '電', '视' to '視', '圆' to '円', '团' to '団', '园' to '園', '图' to '図',
+        '书' to '書', '贝' to '貝', '页' to '頁', '阳' to '陽', '阴' to '陰', '梦' to '夢',
+        '伤' to '傷', '泪' to '涙', '让' to '譲', '给' to '給', '话' to '話', '语' to '語',
+        '调' to '調', '谁' to '誰', '岁' to '歳', '尘' to '塵', '净' to '浄', '飘' to '飄',
+        '摇' to '揺', '摆' to '擺', '脸' to '顔', '湿' to '湿', '干' to '乾', '挂' to '掛',
+        '牵' to '牽', '怀' to '懷', '转' to '転', '轮' to '輪', '响' to '響', '应' to '応',
+        '传' to '伝', '统' to '統', '续' to '続', '烧' to '焼', '毁' to '毀', '灭' to '滅',
+        '烟' to '煙', '雾' to '霧', '凉' to '涼', '热' to '熱', '闷' to '悶', '恼' to '悩',
+        '烦' to '煩', '忧' to '憂', '欢' to '歓', '惊' to '驚', '吓' to '嚇', '怜' to '憐',
+        '义' to '義', '节' to '節', '钟' to '鐘', '针' to '針', '钱' to '銭', '铜' to '銅',
+        '铅' to '鉛', '镜' to '鏡', '锁' to '鎖', '窗' to '窓', '户' to '戸', '桥' to '橋',
+        '墙' to '壁', '弹' to '弾', '诗' to '詩', '谱' to '譜', '韵' to '韻', '愿' to '願',
+        '够' to '夠', '麼' to '麼', '來' to '来', '說' to '説', '話' to '話', '語' to '語',
+        '樂' to '楽', '聲' to '声', '聽' to '聴', '寫' to '写', '讀' to '読', '覺' to '覚',
+        '氣' to '気', '壓' to '圧', '畫' to '画', '圓' to '円', '團' to '団', '圖' to '図',
+        '淚' to '涙', '讓' to '譲', '鐵' to '鉄', '髮' to '髪', '臉' to '顔', '綠' to '緑',
+        '關' to '関', '時' to '時', '紅' to '紅', '愛' to '愛', '夢' to '夢', '傷' to '傷',
+        '還' to '還', '過' to '過', '個' to '個', '為' to '為', '這' to '這', '們' to '們',
+        '达' to '達', '诉' to '訴', '边' to '辺', '渐' to '漸', '满' to '満', '游' to '遊',
+        '灿' to '燦', '烂' to '爛', '畅' to '暢', '犹' to '猶', '狮' to '獅', '狱' to '獄',
+        '贵' to '貴', '质' to '質', '败' to '敗', '购' to '購', '货' to '貨', '贫' to '貧',
+        '贴' to '貼', '迟' to '遅', '迹' to '跡', '乡' to '郷', '丰' to '豊', '临' to '臨',
+        '丽' to '麗', '乌' to '烏', '乔' to '喬', '习' to '習', '亚' to '亜', '产' to '産',
+        '亲' to '親', '亿' to '億', '仅' to '僅', '从' to '従', '仓' to '倉', '仪' to '儀',
+        '优' to '優', '侣' to '侶', '侦' to '偵', '侧' to '側', '侨' to '僑', '俭' to '倹',
+        '债' to '債', '倾' to '傾', '假' to '仮', '偿' to '償', '储' to '儲', '儿' to '児',
+        '兰' to '蘭', '兴' to '興', '养' to '養', '兽' to '獣', '冈' to '岡', '册' to '冊',
+        '军' to '軍', '农' to '農', '冲' to '沖', '决' to '決', '况' to '況', '冻' to '凍',
+        '减' to '減', '几' to '幾', '凤' to '鳳', '划' to '劃', '刘' to '劉', '则' to '則',
+        '刚' to '剛', '创' to '創', '删' to '刪', '别' to '別', '剂' to '剤', '剑' to '剣',
+        '剧' to '劇', '劝' to '勧', '务' to '務', '劲' to '勁', '劳' to '労', '势' to '勢',
+        '勋' to '勲', '华' to '華', '协' to '協', '卫' to '衛', '厅' to '庁', '历' to '歴',
+        '厌' to '厭', '县' to '県', '变' to '変', '叠' to '畳', '叹' to '嘆', '吴' to '呉',
+        '咏' to '詠', '國' to '国', '學' to '学', '會' to '会', '實' to '実', '點' to '点',
+        '產' to '産', '樣' to '様', '處' to '処', '價' to '価', '妝' to '粧', '寶' to '宝',
+        '寬' to '寛', '屬' to '属', '歲' to '歳', '帶' to '帯', '廣' to '広', '廢' to '廃',
+        '閒' to '閑', '隨' to '随', '險' to '険', '隱' to '隠', '雙' to '双', '雜' to '雑',
+        '雞' to '鶏', '靜' to '静', '顏' to '顔', '體' to '体', '鬥' to '闘', '鹽' to '塩',
+        '麥' to '麦', '黃' to '黄', '黑' to '黒'
+    )
+    private val DEFAULT_CREDIT_KEYWORDS: List<String> = listOf("作詞", "作曲", "編曲", "作词", "编曲", "歌唱", "演唱", "ボーカル", "Vocal", "Lyrics", "Composer", "Arranger", "詞：", "曲：")
+    private val DEFAULT_PLACEHOLDER_MARKERS: List<String> = listOf("纯音乐", "純音樂", "纯音樂", "請欣賞", "请欣赏", "暫無歌詞", "暂无歌词")
+    private val DEFAULT_CHORUS_SYLLABLES: List<String> = listOf("yeah", "yea", "ah", "oh", "ooh", "wow", "la", "na", "hey", "uh", "yay", "hoo", "ha", "mm", "hmm")
+
     @Volatile var iconWords: List<Pair<String, Int>> = DEFAULT_ICON_WORDS; private set
     @Volatile var iconWordsEn: List<Pair<String, Int>> = DEFAULT_ICON_WORDS_EN; private set
     @Volatile var iconExclusions: Map<String, List<String>> = DEFAULT_ICON_EXCLUSIONS; private set
     @Volatile var colorWords: List<Pair<String, Color>> = DEFAULT_COLOR_WORDS; private set
     @Volatile var assocColorWords: List<Pair<String, Color>> = DEFAULT_ASSOC_COLOR_WORDS; private set
     @Volatile var katakanaEn: Map<String, String> = DEFAULT_KATAKANA_EN; private set
+    @Volatile var dripWords: List<Pair<String, Color>> = DEFAULT_DRIP_WORDS; private set
+    @Volatile var dripExclusions: Map<String, List<String>> = DEFAULT_DRIP_EXCLUSIONS; private set
+    @Volatile var dreamWords: List<String> = DEFAULT_DREAM_WORDS; private set
+    @Volatile var waveWords: List<String> = DEFAULT_WAVE_WORDS; private set
+    @Volatile var sandWords: List<String> = DEFAULT_SAND_WORDS; private set
+    @Volatile var windWords: List<String> = DEFAULT_WIND_WORDS; private set
+    @Volatile var fallWords: List<String> = DEFAULT_FALL_WORDS; private set
+    @Volatile var rippleWords: List<String> = DEFAULT_RIPPLE_WORDS; private set
+    @Volatile var mosaicWords: List<String> = DEFAULT_MOSAIC_WORDS; private set
+    @Volatile var pileWords: List<String> = DEFAULT_PILE_WORDS; private set
+    @Volatile var partsWords: List<String> = DEFAULT_PARTS_WORDS; private set
+    @Volatile var negWords: List<String> = DEFAULT_NEG_WORDS; private set
+    @Volatile var ghostWords: List<String> = DEFAULT_GHOST_WORDS; private set
+    @Volatile var sparkleWords: List<String> = DEFAULT_SPARKLE_WORDS; private set
+    @Volatile var darkWords: List<String> = DEFAULT_DARK_WORDS; private set
+    @Volatile var stretchVerticalWords: List<String> = DEFAULT_STRETCH_VERTICAL_WORDS; private set
+    @Volatile var stretchHorizontalWords: List<String> = DEFAULT_STRETCH_HORIZONTAL_WORDS; private set
+    @Volatile var ambientWords: List<Pair<String, Int>> = DEFAULT_AMBIENT_WORDS; private set
+    @Volatile var kanjiMap: Map<Char, Char> = DEFAULT_KANJI_MAP; private set
+    @Volatile var creditKeywords: List<String> = DEFAULT_CREDIT_KEYWORDS; private set
+    @Volatile var placeholderMarkers: List<String> = DEFAULT_PLACEHOLDER_MARKERS; private set
+    @Volatile var chorusSyllables: List<String> = DEFAULT_CHORUS_SYLLABLES; private set
     @Volatile var appliedVersion: Int = 4; private set
+    // 直近の更新失敗の理由（設定画面で表示する。成功時は null）
+    @Volatile var lastRefreshError: String? = null; private set
     @Volatile private var appliedRaw: String = ""
 
     private val ICON_BY_NAME: Map<String, Int> = mapOf(
@@ -392,6 +506,50 @@ object LyricEffectsData {
         return out
     }
 
+    private fun parseWordList(arr: JSONArray): List<String>? {
+        val out = mutableListOf<String>()
+        for (i in 0 until arr.length()) {
+            val w = arr.optString(i)
+            if (w.isEmpty()) return null
+            out.add(w)
+        }
+        return out
+    }
+
+    private fun parseWordInts(arr: JSONArray): List<Pair<String, Int>>? {
+        val out = mutableListOf<Pair<String, Int>>()
+        for (i in 0 until arr.length()) {
+            val p = arr.optJSONArray(i) ?: return null
+            val word = p.optString(0)
+            if (word.isEmpty() || p.length() < 2) return null
+            out.add(word to p.optInt(1))
+        }
+        return out
+    }
+
+    // 漢字変換表: キーも値も1文字のものだけ取り込む。1件も取れなければ不正として null
+    private fun parseKanjiMap(obj: JSONObject): Map<Char, Char>? {
+        val out = mutableMapOf<Char, Char>()
+        val keys = obj.keys()
+        while (keys.hasNext()) {
+            val k = keys.next()
+            val v = try { obj.getString(k) } catch (e: Exception) { continue }
+            if (k.length == 1 && v.length == 1) out[k[0]] = v[0]
+        }
+        return if (out.isEmpty()) null else out
+    }
+
+    private fun parseExclusions(obj: JSONObject): Map<String, List<String>> {
+        val out = mutableMapOf<String, List<String>>()
+        val keys = obj.keys()
+        while (keys.hasNext()) {
+            val k = keys.next()
+            val a = obj.getJSONArray(k)
+            out[k] = List(a.length()) { a.getString(it) }
+        }
+        return out
+    }
+
     // JSON を検証してから一括で差し替える。途中で壊れていたら何も変えず false
     private fun applyJson(text: String): Boolean {
         return try {
@@ -418,12 +576,61 @@ object LyricEffectsData {
                 kata[k] = kataObj.getString(k)
             }
             if (iw.isEmpty() || cw.isEmpty() || kata.isEmpty()) return false
+            // v7以降のエフェクト系セクションは任意。ある場合は検証して取り込み、無い場合は現行値（内蔵デフォルト等）を維持する
+            val newDrip = root.optJSONArray("dripWords")?.let { parseColors(it) ?: return false }
+            val newDripExcl = root.optJSONObject("dripExclusions")?.let { parseExclusions(it) }
+            val newDream = root.optJSONArray("dreamWords")?.let { parseWordList(it) ?: return false }
+            val newWave = root.optJSONArray("waveWords")?.let { parseWordList(it) ?: return false }
+            val newSand = root.optJSONArray("sandWords")?.let { parseWordList(it) ?: return false }
+            val newWind = root.optJSONArray("windWords")?.let { parseWordList(it) ?: return false }
+            val newFall = root.optJSONArray("fallWords")?.let { parseWordList(it) ?: return false }
+            val newRipple = root.optJSONArray("rippleWords")?.let { parseWordList(it) ?: return false }
+            val newMosaic = root.optJSONArray("mosaicWords")?.let { parseWordList(it) ?: return false }
+            val newPile = root.optJSONArray("pileWords")?.let { parseWordList(it) ?: return false }
+            val newParts = root.optJSONArray("partsWords")?.let { parseWordList(it) ?: return false }
+            val newNeg = root.optJSONArray("negWords")?.let { parseWordList(it) ?: return false }
+            val newGhost = root.optJSONArray("ghostWords")?.let { parseWordList(it) ?: return false }
+            val newSparkle = root.optJSONArray("sparkleWords")?.let { parseWordList(it) ?: return false }
+            val newDark = root.optJSONArray("darkWords")?.let { parseWordList(it) ?: return false }
+            val newStretchV = root.optJSONArray("stretchVerticalWords")?.let { parseWordList(it) ?: return false }
+            val newStretchH = root.optJSONArray("stretchHorizontalWords")?.let { parseWordList(it) ?: return false }
+            val newAmbient = root.optJSONArray("ambientWords")?.let { parseWordInts(it) ?: return false }
+            // v10以降の歌詞データ系セクションは任意。ある場合は検証して取り込む
+            val newKanji = root.optJSONObject("kanjiMap")?.let { parseKanjiMap(it) ?: return false }
+            val newCredit = root.optJSONArray("creditKeywords")?.let { parseWordList(it) ?: return false }
+            val newPlaceholder = root.optJSONArray("placeholderMarkers")?.let { parseWordList(it) ?: return false }
+            val newChorus = root.optJSONArray("chorusSyllables")?.let { parseWordList(it) ?: return false }
+            if (newCredit != null && newCredit.isEmpty()) return false
+            if (newPlaceholder != null && newPlaceholder.isEmpty()) return false
+            if (newChorus != null && newChorus.isEmpty()) return false
             iconWords = iw
             iconWordsEn = iwe
             iconExclusions = excl
             colorWords = cw
             assocColorWords = aw
             katakanaEn = kata
+            if (newDrip != null) dripWords = newDrip
+            if (newDripExcl != null) dripExclusions = newDripExcl
+            if (newDream != null) dreamWords = newDream
+            if (newWave != null) waveWords = newWave
+            if (newSand != null) sandWords = newSand
+            if (newWind != null) windWords = newWind
+            if (newFall != null) fallWords = newFall
+            if (newRipple != null) rippleWords = newRipple
+            if (newMosaic != null) mosaicWords = newMosaic
+            if (newPile != null) pileWords = newPile
+            if (newParts != null) partsWords = newParts
+            if (newNeg != null) negWords = newNeg
+            if (newGhost != null) ghostWords = newGhost
+            if (newSparkle != null) sparkleWords = newSparkle
+            if (newDark != null) darkWords = newDark
+            if (newStretchV != null) stretchVerticalWords = newStretchV
+            if (newStretchH != null) stretchHorizontalWords = newStretchH
+            if (newAmbient != null) ambientWords = newAmbient
+            if (newKanji != null) kanjiMap = newKanji
+            if (newCredit != null) creditKeywords = newCredit
+            if (newPlaceholder != null) placeholderMarkers = newPlaceholder
+            if (newChorus != null) chorusSyllables = newChorus
             appliedVersion = version
             appliedRaw = text
             true
@@ -446,19 +653,37 @@ object LyricEffectsData {
 
     // 戻り値: 1=更新した / 0=最新だった / -1=失敗
     suspend fun refresh(context: Context): Int {
-        val text = withContext(Dispatchers.IO) {
-            try {
-                val conn = URL(DATA_URL).openConnection() as HttpURLConnection
-                conn.connectTimeout = 8000
-                conn.readTimeout = 8000
-                conn.setRequestProperty("User-Agent", "NissinGeppoMusic")
-                conn.inputStream.bufferedReader().use { it.readText() }
-            } catch (e: Exception) {
-                null
+        var text: String? = null
+        var lastError: Exception? = null
+        // 不安定な回線でも拾えるよう、長めのタイムアウトで最大2回試す
+        for (attempt in 0..1) {
+            text = withContext(Dispatchers.IO) {
+                try {
+                    val conn = URL(DATA_URL).openConnection() as HttpURLConnection
+                    conn.connectTimeout = 15000
+                    conn.readTimeout = 15000
+                    conn.setRequestProperty("User-Agent", "NissinGeppoMusic")
+                    conn.inputStream.bufferedReader().use { it.readText() }
+                } catch (e: Exception) {
+                    lastError = e
+                    null
+                }
             }
-        } ?: return -1
-        if (text == appliedRaw) return 0
-        if (!applyJson(text)) return -1
+            if (text != null) break
+        }
+        if (text == null) {
+            lastRefreshError = "通信エラー: ${lastError?.javaClass?.simpleName ?: "不明"} ${lastError?.message ?: ""}".trim()
+            return -1
+        }
+        if (text == appliedRaw) {
+            lastRefreshError = null
+            return 0
+        }
+        if (!applyJson(text)) {
+            lastRefreshError = "データ検証エラー"
+            return -1
+        }
+        lastRefreshError = null
         withContext(Dispatchers.IO) {
             try {
                 File(context.filesDir, CACHE_FILE).writeText(text)
