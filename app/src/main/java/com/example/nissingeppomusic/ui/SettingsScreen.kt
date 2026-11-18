@@ -8,6 +8,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -26,12 +27,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -208,6 +214,250 @@ fun FontSelectionSection(
     }
 }
 
+// 3択などの選択肢を、イラスト付きのカードで選ぶための部品
+@Composable
+fun ChoiceIllustration(kind: String, accentColor: Color, selected: Boolean) {
+    Canvas(modifier = Modifier.size(40.dp)) {
+        val w = size.width
+        val h = size.height
+        val ink = Color.White.copy(alpha = 0.9f)
+        val thin = Stroke(width = w * 0.05f)
+        when (kind) {
+            "disc_classic" -> {
+                drawCircle(color = accentColor, radius = w * 0.19f, center = Offset(w * 0.30f, h * 0.50f))
+                drawCircle(color = ink, radius = w * 0.19f, center = Offset(w * 0.70f, h * 0.50f))
+            }
+            "disc_artwork" -> {
+                drawCircle(color = accentColor, radius = w * 0.26f, center = Offset(w * 0.36f, h * 0.50f))
+                drawCircle(color = ink, radius = w * 0.12f, center = Offset(w * 0.78f, h * 0.50f))
+            }
+            "disc_auto" -> {
+                drawCircle(color = accentColor, radius = w * 0.25f, center = Offset(w * 0.38f, h * 0.50f))
+                val tri = Path()
+                tri.moveTo(w * 0.31f, h * 0.37f)
+                tri.lineTo(w * 0.31f, h * 0.63f)
+                tri.lineTo(w * 0.52f, h * 0.50f)
+                tri.close()
+                drawPath(path = tri, color = Color(0xFF101728))
+                drawCircle(color = ink, radius = w * 0.11f, center = Offset(w * 0.79f, h * 0.50f))
+            }
+            "date_sideways" -> {
+                drawCircle(color = ink, radius = w * 0.20f, center = Offset(w * 0.33f, h * 0.50f), style = thin)
+                drawLine(color = ink, start = Offset(w * 0.33f, h * 0.50f), end = Offset(w * 0.33f, h * 0.37f), strokeWidth = w * 0.05f, cap = StrokeCap.Round)
+                drawLine(color = ink, start = Offset(w * 0.33f, h * 0.50f), end = Offset(w * 0.43f, h * 0.55f), strokeWidth = w * 0.05f, cap = StrokeCap.Round)
+                drawCircle(color = accentColor, radius = w * 0.045f, center = Offset(w * 0.72f, h * 0.27f))
+                drawCircle(color = accentColor, radius = w * 0.045f, center = Offset(w * 0.72f, h * 0.50f))
+                drawCircle(color = accentColor, radius = w * 0.045f, center = Offset(w * 0.72f, h * 0.73f))
+            }
+            "date_under" -> {
+                drawCircle(color = ink, radius = w * 0.17f, center = Offset(w * 0.50f, h * 0.36f), style = thin)
+                drawLine(color = ink, start = Offset(w * 0.50f, h * 0.36f), end = Offset(w * 0.50f, h * 0.26f), strokeWidth = w * 0.05f, cap = StrokeCap.Round)
+                drawLine(color = ink, start = Offset(w * 0.50f, h * 0.36f), end = Offset(w * 0.58f, h * 0.40f), strokeWidth = w * 0.05f, cap = StrokeCap.Round)
+                drawLine(color = accentColor, start = Offset(w * 0.28f, h * 0.68f), end = Offset(w * 0.72f, h * 0.68f), strokeWidth = w * 0.06f, cap = StrokeCap.Round)
+                drawLine(color = ink, start = Offset(w * 0.36f, h * 0.82f), end = Offset(w * 0.64f, h * 0.82f), strokeWidth = w * 0.06f, cap = StrokeCap.Round)
+            }
+            "date_auto" -> {
+                drawCircle(color = ink, radius = w * 0.18f, center = Offset(w * 0.36f, h * 0.40f), style = thin)
+                drawLine(color = ink, start = Offset(w * 0.36f, h * 0.40f), end = Offset(w * 0.36f, h * 0.29f), strokeWidth = w * 0.05f, cap = StrokeCap.Round)
+                drawLine(color = ink, start = Offset(w * 0.36f, h * 0.40f), end = Offset(w * 0.45f, h * 0.45f), strokeWidth = w * 0.05f, cap = StrokeCap.Round)
+                drawLine(color = accentColor, start = Offset(w * 0.56f, h * 0.70f), end = Offset(w * 0.84f, h * 0.70f), strokeWidth = w * 0.05f, cap = StrokeCap.Round)
+                drawLine(color = accentColor, start = Offset(w * 0.84f, h * 0.70f), end = Offset(w * 0.74f, h * 0.61f), strokeWidth = w * 0.05f, cap = StrokeCap.Round)
+                drawLine(color = accentColor, start = Offset(w * 0.84f, h * 0.86f), end = Offset(w * 0.56f, h * 0.86f), strokeWidth = w * 0.05f, cap = StrokeCap.Round)
+                drawLine(color = accentColor, start = Offset(w * 0.56f, h * 0.86f), end = Offset(w * 0.66f, h * 0.77f), strokeWidth = w * 0.05f, cap = StrokeCap.Round)
+            }
+            "bg_wallpaper" -> {
+                drawRoundRect(color = ink, topLeft = Offset(w * 0.13f, h * 0.17f), size = Size(w * 0.74f, h * 0.66f), cornerRadius = CornerRadius(w * 0.06f, w * 0.06f), style = thin)
+                drawCircle(color = accentColor, radius = w * 0.08f, center = Offset(w * 0.68f, h * 0.35f))
+                val m1 = Path()
+                m1.moveTo(w * 0.20f, h * 0.75f)
+                m1.lineTo(w * 0.42f, h * 0.45f)
+                m1.lineTo(w * 0.58f, h * 0.75f)
+                m1.close()
+                drawPath(path = m1, color = ink.copy(alpha = 0.85f))
+                val m2 = Path()
+                m2.moveTo(w * 0.48f, h * 0.75f)
+                m2.lineTo(w * 0.64f, h * 0.53f)
+                m2.lineTo(w * 0.80f, h * 0.75f)
+                m2.close()
+                drawPath(path = m2, color = ink.copy(alpha = 0.6f))
+            }
+            "bg_solid" -> {
+                drawRoundRect(color = accentColor, topLeft = Offset(w * 0.16f, h * 0.20f), size = Size(w * 0.68f, h * 0.60f), cornerRadius = CornerRadius(w * 0.06f, w * 0.06f))
+            }
+            "bg_blur" -> {
+                drawCircle(color = accentColor.copy(alpha = 0.45f), radius = w * 0.20f, center = Offset(w * 0.38f, h * 0.42f))
+                drawCircle(color = ink.copy(alpha = 0.35f), radius = w * 0.20f, center = Offset(w * 0.62f, h * 0.42f))
+                drawCircle(color = Color(0xFF9AA0A6).copy(alpha = 0.40f), radius = w * 0.20f, center = Offset(w * 0.50f, h * 0.63f))
+            }
+        }
+    }
+}
+
+@Composable
+fun IllustratedChoiceCard(
+    kind: String,
+    label: String,
+    selected: Boolean,
+    accentColor: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Surface(
+        color = if (selected) accentColor.copy(alpha = 0.25f) else Color(0xFF1F293D),
+        shape = RoundedCornerShape(16.dp),
+        border = if (selected) BorderStroke(1.5.dp, accentColor) else null,
+        modifier = modifier.height(84.dp).clickable { onClick() }
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
+        ) {
+            ChoiceIllustration(kind = kind, accentColor = accentColor, selected = selected)
+            Spacer(modifier = Modifier.height(5.dp))
+            Text(
+                text = label,
+                color = if (selected) Color.White else Color.White.copy(alpha = 0.7f),
+                fontSize = 11.5.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+// 設定トップのカテゴリ行に付ける小さなイラスト（Canvas の簡単な線画）
+@Composable
+fun SettingsCategoryIcon(kind: String, accentColor: Color) {
+    Canvas(modifier = Modifier.size(38.dp)) {
+        val w = size.width
+        val h = size.height
+        val ink = Color.White.copy(alpha = 0.9f)
+        val thin = Stroke(width = w * 0.055f)
+        when (kind) {
+            "behavior" -> {
+                // 左右で逆向きの2本矢印（スクロール方向・操作感のイメージ）
+                val lw = w * 0.06f
+                drawLine(color = accentColor, start = Offset(w * 0.16f, h * 0.35f), end = Offset(w * 0.76f, h * 0.35f), strokeWidth = lw, cap = StrokeCap.Round)
+                drawLine(color = accentColor, start = Offset(w * 0.76f, h * 0.35f), end = Offset(w * 0.60f, h * 0.21f), strokeWidth = lw, cap = StrokeCap.Round)
+                drawLine(color = accentColor, start = Offset(w * 0.76f, h * 0.35f), end = Offset(w * 0.60f, h * 0.49f), strokeWidth = lw, cap = StrokeCap.Round)
+                drawLine(color = ink, start = Offset(w * 0.84f, h * 0.65f), end = Offset(w * 0.24f, h * 0.65f), strokeWidth = lw, cap = StrokeCap.Round)
+                drawLine(color = ink, start = Offset(w * 0.24f, h * 0.65f), end = Offset(w * 0.40f, h * 0.51f), strokeWidth = lw, cap = StrokeCap.Round)
+                drawLine(color = ink, start = Offset(w * 0.24f, h * 0.65f), end = Offset(w * 0.40f, h * 0.79f), strokeWidth = lw, cap = StrokeCap.Round)
+            }
+            "appearance" -> {
+                drawCircle(color = accentColor, radius = w * 0.27f, center = Offset(w * 0.36f, h * 0.38f))
+                drawCircle(color = ink.copy(alpha = 0.75f), radius = w * 0.27f, center = Offset(w * 0.64f, h * 0.38f))
+                drawCircle(color = Color(0xFF9AA0A6), radius = w * 0.27f, center = Offset(w * 0.50f, h * 0.66f))
+            }
+            "lyrics" -> {
+                drawOval(color = accentColor, topLeft = Offset(w * 0.10f, h * 0.64f), size = Size(w * 0.30f, h * 0.22f))
+                drawLine(color = ink, start = Offset(w * 0.40f, h * 0.72f), end = Offset(w * 0.40f, h * 0.16f), strokeWidth = w * 0.05f, cap = StrokeCap.Round)
+                drawOval(color = ink, topLeft = Offset(w * 0.56f, h * 0.58f), size = Size(w * 0.28f, h * 0.20f))
+                drawLine(color = ink, start = Offset(w * 0.84f, h * 0.66f), end = Offset(w * 0.84f, h * 0.10f), strokeWidth = w * 0.05f, cap = StrokeCap.Round)
+                drawLine(color = ink, start = Offset(w * 0.40f, h * 0.16f), end = Offset(w * 0.84f, h * 0.10f), strokeWidth = w * 0.07f, cap = StrokeCap.Round)
+            }
+            "apps" -> {
+                val cell = w * 0.32f
+                val rad = CornerRadius(w * 0.06f, w * 0.06f)
+                drawRoundRect(color = accentColor, topLeft = Offset(w * 0.13f, h * 0.13f), size = Size(cell, cell), cornerRadius = rad)
+                drawRoundRect(color = ink, topLeft = Offset(w * 0.55f, h * 0.13f), size = Size(cell, cell), cornerRadius = rad)
+                drawRoundRect(color = ink, topLeft = Offset(w * 0.13f, h * 0.55f), size = Size(cell, cell), cornerRadius = rad)
+                drawRoundRect(color = accentColor, topLeft = Offset(w * 0.55f, h * 0.55f), size = Size(cell, cell), cornerRadius = rad)
+            }
+            "security" -> {
+                drawArc(color = ink, startAngle = 180f, sweepAngle = 180f, useCenter = false, topLeft = Offset(w * 0.29f, h * 0.08f), size = Size(w * 0.42f, h * 0.42f), style = thin)
+                drawRoundRect(color = accentColor, topLeft = Offset(w * 0.18f, h * 0.34f), size = Size(w * 0.64f, h * 0.52f), cornerRadius = CornerRadius(w * 0.08f, w * 0.08f))
+                drawCircle(color = Color(0xFF101728), radius = w * 0.07f, center = Offset(w * 0.50f, h * 0.58f))
+            }
+            else -> {
+                drawCircle(color = ink, radius = w * 0.36f, style = thin)
+                val q = Path()
+                q.moveTo(w * 0.38f, h * 0.37f)
+                q.cubicTo(w * 0.38f, h * 0.23f, w * 0.62f, h * 0.23f, w * 0.62f, h * 0.37f)
+                q.cubicTo(w * 0.62f, h * 0.49f, w * 0.50f, h * 0.50f, w * 0.50f, h * 0.61f)
+                drawPath(path = q, color = ink, style = Stroke(width = w * 0.055f, cap = StrokeCap.Round))
+                drawCircle(color = ink, radius = w * 0.045f, center = Offset(w * 0.50f, h * 0.73f))
+            }
+        }
+    }
+}
+
+// フォント選択カード: 閉じた状態では「現在のフォント名＋見本文字」だけを見せ、タップで候補リストを展開する
+@Composable
+fun FontPickerCard(
+    title: String,
+    options: List<Pair<String, String>>,
+    selected: String,
+    accentColor: Color,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    onSelected: (String) -> Unit,
+    fontFor: (String) -> FontFamily?,
+    sampleText: String,
+    footer: @Composable (() -> Unit)? = null
+) {
+    Surface(
+        color = Color(0x99101728),
+        shape = RoundedCornerShape(20.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onToggle() }
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(title, color = Color.White, fontSize = 14.sp)
+                    Text(
+                        text = options.firstOrNull { it.first == selected }?.second ?: "",
+                        color = accentColor,
+                        fontSize = 13.sp,
+                        fontFamily = fontFor(selected)
+                    )
+                }
+                Text(
+                    text = sampleText,
+                    color = Color.White.copy(alpha = 0.85f),
+                    fontSize = 20.sp,
+                    fontFamily = fontFor(selected),
+                    modifier = Modifier.padding(end = 12.dp)
+                )
+                Text(if (expanded) "△" else "▽", color = Color.Gray, fontSize = 14.sp)
+            }
+            if (expanded) {
+                options.forEach { (key, label) ->
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelected(key) }
+                            .padding(vertical = 2.dp)
+                    ) {
+                        RadioButton(
+                            selected = selected == key,
+                            onClick = null,
+                            colors = RadioButtonDefaults.colors(selectedColor = accentColor, unselectedColor = Color.Gray)
+                        )
+                        Text(
+                            text = label,
+                            color = if (selected == key) accentColor else Color.White.copy(alpha = 0.8f),
+                            fontSize = 15.sp,
+                            fontFamily = fontFor(key)
+                        )
+                    }
+                }
+            }
+            footer?.invoke()
+        }
+    }
+}
+
 @Composable
 fun SettingsScreen(
     repo: AppRepository,
@@ -234,6 +484,12 @@ fun SettingsScreen(
     var lyricsDisplayMode by remember { mutableStateOf(repo.prefManager.getLyricsDisplayMode()) }
     var lyricsPvFont by remember { mutableStateOf(repo.prefManager.getLyricsPvFont()) }
     var lyricsBold by remember { mutableStateOf(repo.prefManager.isLyricsBold()) }
+    var fontPickerExpanded by remember { mutableStateOf<String?>(null) }
+    var lyricsEnFont by remember { mutableStateOf(repo.prefManager.getLyricsEnFont()) }
+    var lyricsEnCustomPath by remember { mutableStateOf(repo.prefManager.getLyricsEnCustomFontPath()) }
+    var pvPartsEntry by remember { mutableStateOf(repo.prefManager.isPvPartsEntryEnabled()) }
+    var disc3d by remember { mutableStateOf(repo.prefManager.isDisc3dEnabled()) }
+    var disc3dTilt by remember { mutableStateOf(repo.prefManager.isDisc3dTiltEnabled()) }
     var wallpaperAlpha by remember { mutableFloatStateOf(repo.prefManager.getHomeWallpaperAlpha()) }
     var showPasscodeChangeDialog by remember { mutableStateOf(false) }
     var newPasscodeField by remember { mutableStateOf(repo.prefManager.getPasscode()) }
@@ -351,6 +607,31 @@ fun SettingsScreen(
         }
     }
 
+    // 歌詞の英字フォント専用のカスタムフォント読み込み（日本語用とは別ファイルに保存する）
+    val enFontPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                    val destFile = File(context.filesDir, "custom_font_en.ttf")
+                    FileOutputStream(destFile).use { out ->
+                        inputStream.copyTo(out)
+                    }
+                    val path = destFile.absolutePath
+                    repo.prefManager.setLyricsEnCustomFontPath(path)
+                    repo.prefManager.setLyricsEnFont("custom")
+                    lyricsEnCustomPath = path
+                    lyricsEnFont = "custom"
+                    onChanged()
+                    Toast.makeText(context, "英字用カスタムフォントを読み込みました", Toast.LENGTH_SHORT).show()
+                }
+            } catch (_: Exception) {
+                Toast.makeText(context, "フォントの読み込みに失敗しました", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     var excludedFolders by remember { mutableStateOf(repo.prefManager.getExcludedFolders().sorted()) }
 
     // 除外フォルダ選択ピッカー
@@ -448,7 +729,9 @@ fun SettingsScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column {
+                                SettingsCategoryIcon(kind = id, accentColor = currentAccentColor)
+                                Spacer(modifier = Modifier.width(14.dp))
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = title,
                                         color = Color.White,
@@ -585,60 +868,129 @@ fun SettingsScreen(
                                                         }
                                                         Text("複数行は円を下げて、できた空白に前・今・次の3行を表示します", color = Color.Gray, fontSize = 12.sp)
                                                     }
-                                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                                        Text("歌詞のフォント（全モード共通）", color = Color.White, fontSize = 14.sp)
-                                                            listOf(
-                                                                "default" to "システムフォント",
-                                                                "receipt" to "レシートフォント (Receipt Font)",
-                                                                "denkichip" to "でんきチップ (DenkiChip)",
-                                                                "tsukuhou" to "築豊明朝 (Tsukuhou Mincho)",
-                                                                "custom" to "カスタムフォント (.ttf/.otf)"
-                                                            ).forEach { (key, label) ->
-                                                                Row(
-                                                                    verticalAlignment = Alignment.CenterVertically,
-                                                                    modifier = Modifier
-                                                                        .fillMaxWidth()
-                                                                        .clickable {
-                                                                            lyricsPvFont = key
-                                                                            repo.prefManager.setLyricsPvFont(key)
-                                                                            onChanged()
-                                                                        }
-                                                                        .padding(vertical = 2.dp)
-                                                                ) {
-                                                                    RadioButton(
-                                                                        selected = lyricsPvFont == key,
-                                                                        onClick = null,
-                                                                        colors = RadioButtonDefaults.colors(selectedColor = currentAccentColor, unselectedColor = Color.Gray)
-                                                                    )
-                                                                    Text(
-                                                                        text = label,
-                                                                        color = if (lyricsPvFont == key) currentAccentColor else Color.White.copy(alpha = 0.8f),
-                                                                        fontSize = 15.sp,
-                                                                        fontFamily = parseFontFamily(key, if (key == "custom") customFontPath else null)
-                                                                    )
-                                                                }
-                                                            }
-                                                            Text("「カスタムフォント」はフォント設定で選んだファイルを使います", color = Color.Gray, fontSize = 12.sp)
-                                                    }
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        Column(modifier = Modifier.weight(1f)) {
-                                                            Text("歌詞を太字にする", color = Color.White, fontSize = 14.sp)
-                                                            Text("デフォルトは細字。築豊明朝は細字が映えます", color = Color.Gray, fontSize = 12.sp)
-                                                        }
-                                                        Switch(
-                                                            checked = lyricsBold,
-                                                            onCheckedChange = {
-                                                                lyricsBold = it
-                                                                repo.prefManager.setLyricsBold(it)
-                                                                onChanged()
-                                                            },
-                                                            colors = switchColors
-                                                        )
-                                                    }
+                                    }
+                                }
+                            }
+                            item {
+                                FontPickerCard(
+                                    title = "歌詞のフォント（全モード共通）",
+                                    options = listOf(
+                                        "default" to "システムフォント",
+                                        "receipt" to "レシートフォント (Receipt Font)",
+                                        "denkichip" to "でんきチップ (DenkiChip)",
+                                        "tsukuhou" to "築豊明朝 (Tsukuhou Mincho)",
+                                        "kaibunsho" to "怪聞書フォント (Kaibunsho)",
+                                        "custom" to "カスタムフォント (.ttf/.otf)"
+                                    ),
+                                    selected = lyricsPvFont,
+                                    accentColor = currentAccentColor,
+                                    expanded = fontPickerExpanded == "jp",
+                                    onToggle = { fontPickerExpanded = if (fontPickerExpanded == "jp") null else "jp" },
+                                    onSelected = { key ->
+                                        lyricsPvFont = key
+                                        repo.prefManager.setLyricsPvFont(key)
+                                        onChanged()
+                                    },
+                                    fontFor = { key -> parseFontFamily(key, if (key == "custom") customFontPath else null) },
+                                    sampleText = "あア 歌詞",
+                                    footer = {
+                                        Text("「カスタムフォント」はフォント設定で選んだファイルを使います", color = Color.Gray, fontSize = 12.sp)
+                                    }
+                                )
+                            }
+                            item {
+                                FontPickerCard(
+                                    title = "歌詞の英字フォント",
+                                    options = listOf(
+                                        "same" to "日本語フォントと同じ",
+                                        "freelicense" to "Free License",
+                                        "montserratbi" to "Montserrat Bold Italic",
+                                        "default" to "システムフォント",
+                                        "receipt" to "レシートフォント (Receipt Font)",
+                                        "denkichip" to "でんきチップ (DenkiChip)",
+                                        "tsukuhou" to "築豊明朝 (Tsukuhou Mincho)",
+                                        "kaibunsho" to "怪聞書フォント (Kaibunsho)",
+                                        "custom" to "カスタムフォント (.ttf/.otf)"
+                                    ),
+                                    selected = lyricsEnFont,
+                                    accentColor = currentAccentColor,
+                                    expanded = fontPickerExpanded == "en",
+                                    onToggle = { fontPickerExpanded = if (fontPickerExpanded == "en") null else "en" },
+                                    onSelected = { key ->
+                                        lyricsEnFont = key
+                                        repo.prefManager.setLyricsEnFont(key)
+                                        onChanged()
+                                    },
+                                    fontFor = { key ->
+                                        when (key) {
+                                            "same" -> parseFontFamily(lyricsPvFont, if (lyricsPvFont == "custom") customFontPath else null)
+                                            "custom" -> parseFontFamily("custom", lyricsEnCustomPath)
+                                            else -> parseFontFamily(key, null)
+                                        }
+                                    },
+                                    sampleText = "ABC abc",
+                                    footer = if (lyricsEnFont == "custom") {
+                                        {
+                                            Button(
+                                                onClick = { enFontPickerLauncher.launch("*/*") },
+                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F293D)),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Text("英字用フォントファイル (.ttf / .otf) をインポート", color = Color.White, fontWeight = FontWeight.Light)
+                                            }
+                                            Text("英字フォント専用のファイルです（日本語用とは別に選べます）", color = Color.Gray, fontSize = 12.sp)
+                                        }
+                                    } else null
+                                )
+                            }
+                            item {
+                                Surface(
+                                    color = Color(0x99101728),
+                                    shape = RoundedCornerShape(20.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(20.dp),
+                                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text("歌詞を太字にする", color = Color.White, fontSize = 14.sp)
+                                                Text("デフォルトは細字。築豊明朝は細字が映えます", color = Color.Gray, fontSize = 12.sp)
+                                            }
+                                            Switch(
+                                                checked = lyricsBold,
+                                                onCheckedChange = {
+                                                    lyricsBold = it
+                                                    repo.prefManager.setLyricsBold(it)
+                                                    onChanged()
+                                                },
+                                                colors = switchColors
+                                            )
+                                        }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text("文字をパーツに分けて入場させる", color = Color.White, fontSize = 14.sp)
+                                                Text("リリックビデオで、文字がスライス状のパーツになって集まります", color = Color.Gray, fontSize = 12.sp)
+                                            }
+                                            Switch(
+                                                checked = pvPartsEntry,
+                                                onCheckedChange = {
+                                                    pvPartsEntry = it
+                                                    repo.prefManager.setPvPartsEntryEnabled(it)
+                                                    onChanged()
+                                                },
+                                                colors = switchColors
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -657,7 +1009,7 @@ fun SettingsScreen(
                                                 fxMessage = when (result) {
                                                     1 -> "更新しました（データ v${LyricEffectsData.appliedVersion}）"
                                                     0 -> "最新のデータです（データ v${LyricEffectsData.appliedVersion}）"
-                                                    else -> "確認に失敗しました"
+                                                    else -> "確認に失敗しました" + (LyricEffectsData.lastRefreshError?.let { "（$it）" } ?: "")
                                                 }
                                             }
                                         }
@@ -970,30 +1322,20 @@ fun SettingsScreen(
                                                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                                                         ) {
                                                             listOf(
-                                                                "classic" to "従来（均等）",
-                                                                "artwork" to "アートワーク大きめ",
-                                                                "auto" to "自動"
-                                                            ).forEach { (layoutId, label) ->
-                                                                val isSelected = homeDiscLayout == layoutId
-                                                                Box(
-                                                                    modifier = Modifier
-                                                                        .weight(1f)
-                                                                        .height(40.dp)
-                                                                        .clip(RoundedCornerShape(12.dp))
-                                                                        .background(if (isSelected) currentAccentColor else Color(0xFF1F293D))
-                                                                        .clickable {
-                                                                            homeDiscLayout = layoutId
-                                                                            repo.prefManager.setHomeDiscLayout(layoutId)
-                                                                            onChanged()
-                                                                        },
-                                                                    contentAlignment = Alignment.Center
+                                                                Triple("classic", "従来（均等）", "disc_classic"),
+                                                                Triple("artwork", "アートワーク大きめ", "disc_artwork"),
+                                                                Triple("auto", "自動", "disc_auto")
+                                                            ).forEach { (value, label, illo) ->
+                                                                IllustratedChoiceCard(
+                                                                    kind = illo,
+                                                                    label = label,
+                                                                    selected = homeDiscLayout == value,
+                                                                    accentColor = currentAccentColor,
+                                                                    modifier = Modifier.weight(1f)
                                                                 ) {
-                                                                    Text(
-                                                                        text = label,
-                                                                        color = Color.White,
-                                                                        fontSize = 13.sp,
-                                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                                                    )
+                                                                    homeDiscLayout = value
+                                                                    repo.prefManager.setHomeDiscLayout(value)
+                                                                    onChanged()
                                                                 }
                                                             }
                                                         }
@@ -1023,6 +1365,47 @@ fun SettingsScreen(
                                                                 onChanged()
                                                             },
                                                             colors = switchColors
+                                                        )
+                                                    }
+
+                                                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Column(modifier = Modifier.weight(1f)) {
+                                                            Text("UIを3D表示", color = Color.White, fontSize = 14.sp)
+                                                            Text("円・ダイヤル・歌詞PVなどを少し奥に倒して、立体的に見せます", color = Color.Gray, fontSize = 12.sp)
+                                                        }
+                                                        Switch(
+                                                            checked = disc3d,
+                                                            onCheckedChange = {
+                                                                disc3d = it
+                                                                repo.prefManager.setDisc3dEnabled(it)
+                                                                onChanged()
+                                                            },
+                                                            colors = switchColors
+                                                        )
+                                                    }
+
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        Column(modifier = Modifier.weight(1f)) {
+                                                            Text("端末の傾きで角度を変える", color = if (disc3d) Color.White else Color.Gray, fontSize = 14.sp)
+                                                            Text("スマホを傾けると、3Dの角度もついてきます（3D表示がオンのときだけ）", color = Color.Gray, fontSize = 12.sp)
+                                                        }
+                                                        Switch(
+                                                            checked = disc3dTilt,
+                                                            onCheckedChange = {
+                                                                disc3dTilt = it
+                                                                repo.prefManager.setDisc3dTiltEnabled(it)
+                                                                onChanged()
+                                                            },
+                                                            colors = switchColors,
+                                                            enabled = disc3d
                                                         )
                                                     }
 
