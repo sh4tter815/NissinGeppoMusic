@@ -68,6 +68,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.draw.blur
@@ -84,6 +85,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import android.content.Context
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -340,6 +346,33 @@ fun MainLauncherScreen() {
     // アクセント色（前景）と背景色を抽出してテーマカラーにする
     var matchArtwork by remember { mutableStateOf(repo.prefManager.isMatchArtworkColor()) }
     var homeDiscLayout by remember { mutableStateOf(repo.prefManager.getHomeDiscLayout()) }
+    var disc3d by remember { mutableStateOf(repo.prefManager.isDisc3dEnabled()) }
+    var disc3dTilt by remember { mutableStateOf(repo.prefManager.isDisc3dTiltEnabled()) }
+    // 傾き連動の現在値（ローパス済み）。graphicsLayer の中でのみ読むので再コンポーズは走らない
+    val discTiltX = remember { mutableFloatStateOf(0f) }
+    val discTiltY = remember { mutableFloatStateOf(0f) }
+    DisposableEffect(disc3d, disc3dTilt, currentLauncherPage) {
+        if (!disc3d || !disc3dTilt || currentLauncherPage !in 1..3) {
+            discTiltX.value = 0f
+            discTiltY.value = 0f
+            return@DisposableEffect onDispose { }
+        }
+        val sm = context.getSystemService(Context.SENSOR_SERVICE) as? SensorManager
+        val sensor = sm?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+        if (sm == null || sensor == null) return@DisposableEffect onDispose { }
+        val listener = object : SensorEventListener {
+            override fun onSensorChanged(e: SensorEvent) {
+                val k = 0.14f
+                val targetY = (e.values[0] / 9.8f * 14f).coerceIn(-14f, 14f)
+                val targetX = ((e.values[1] - 9.8f) / 9.8f * 14f).coerceIn(-14f, 14f)
+                discTiltY.value += (targetY - discTiltY.value) * k
+                discTiltX.value += (targetX - discTiltX.value) * k
+            }
+            override fun onAccuracyChanged(s: Sensor?, accuracy: Int) { }
+        }
+        sm.registerListener(listener, sensor, SensorManager.SENSOR_DELAY_UI)
+        onDispose { sm.unregisterListener(listener) }
+    }
     var liquidBackground by remember { mutableStateOf(repo.prefManager.isLiquidBackgroundEnabled()) }
     var lyricsDisplayMode by remember { mutableStateOf(repo.prefManager.getLyricsDisplayMode()) }
     val lyricsPvMode = lyricsDisplayMode == "video"
@@ -535,6 +568,8 @@ fun MainLauncherScreen() {
         accentHex = repo.prefManager.getAccentColorHex()
         matchArtwork = repo.prefManager.isMatchArtworkColor()
         homeDiscLayout = repo.prefManager.getHomeDiscLayout()
+        disc3d = repo.prefManager.isDisc3dEnabled()
+        disc3dTilt = repo.prefManager.isDisc3dTiltEnabled()
         liquidBackground = repo.prefManager.isLiquidBackgroundEnabled()
         lyricsDisplayMode = repo.prefManager.getLyricsDisplayMode()
         lyricsPvFont = repo.prefManager.getLyricsPvFont()
@@ -816,7 +851,8 @@ fun MainLauncherScreen() {
                         translationTopDp = 350.dp,
                         partsEntry = pvPartsEntry,
                         enFontFamily = lyricsEnFontFamily,
-                        onAccentFlash = { pvFlashColor = it }
+                        onAccentFlash = { pvFlashColor = it },
+                        pvTilt3d = disc3d
                     )
                 }
             }
@@ -1057,7 +1093,14 @@ fun MainLauncherScreen() {
 
                     if (!isRackShown && !isLyricsBrowsing && !pvFullscreen) {
                         MusicSeekBarDisc(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.fillMaxSize().graphicsLayer {
+                                                                if (disc3d) {
+                                                                transformOrigin = TransformOrigin((animatedDisc2CenterX / screenWidthDp).coerceIn(-2f, 3f), (disc2CenterY / screenHeightDp).coerceIn(-2f, 3f))
+                                                                rotationX = 27f + discTiltX.value
+                                                                rotationY = discTiltY.value
+                                                                cameraDistance = 6.5f * density
+                                                            }
+                            },
                             playerManager = musicPlayerManager,
                             focusedTrack = focusedTrackPreview,
                             discCenterXDp = animatedDisc2CenterX,
@@ -1072,9 +1115,18 @@ fun MainLauncherScreen() {
                         modifier = Modifier
                             .fillMaxSize()
                             .zIndex(50f)
-                            .graphicsLayer { alpha = if (isLyricsBrowsing) 0f else 1f }
+                            .graphicsLayer {
+                                alpha = if (isLyricsBrowsing) 0f else 1f
+                                                                if (disc3d) {
+                                                                transformOrigin = TransformOrigin((animatedDisc1CenterX / screenWidthDp).coerceIn(-2f, 3f), (disc1CenterY / screenHeightDp).coerceIn(-2f, 3f))
+                                                                rotationX = 27f + discTiltX.value
+                                                                rotationY = discTiltY.value
+                                                                cameraDistance = 6.5f * density
+                                                            }
+                            }
                     ) {
                         MusicVinylWidget(
+                            artworkTilt3d = disc3d,
                             modifier = Modifier.fillMaxSize(),
                             playerManager = musicPlayerManager,
                             allApps = allApps,
@@ -1168,7 +1220,14 @@ fun MainLauncherScreen() {
                 2 -> {
                     // --- 2: アプリ一覧画面 ---
                     RotatableIndexWheel(
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().graphicsLayer {
+                                                        if (disc3d) {
+                                                            transformOrigin = TransformOrigin((animatedDisc1CenterX / screenWidthDp).coerceIn(-2f, 3f), (disc1CenterY / screenHeightDp).coerceIn(-2f, 3f))
+                                                            rotationX = 27f + discTiltX.value
+                                                            rotationY = discTiltY.value
+                                                            cameraDistance = 6.5f * density
+                                                        }
+                        },
                         discCenterXDp = animatedDisc1CenterX,
                         discCenterYDp = disc1CenterY,
                         discRadiusDp = disc1RadiusDp,
@@ -1281,7 +1340,15 @@ fun MainLauncherScreen() {
                     }
 
                     RotatableAppDisc(
-                        modifier = Modifier.fillMaxSize(),
+                        iconTilt3d = disc3d,
+                        modifier = Modifier.fillMaxSize().graphicsLayer {
+                                                        if (disc3d) {
+                                                            transformOrigin = TransformOrigin((animatedDisc2CenterX / screenWidthDp).coerceIn(-2f, 3f), (disc2CenterY / screenHeightDp).coerceIn(-2f, 3f))
+                                                            rotationX = 27f + discTiltX.value
+                                                            rotationY = discTiltY.value
+                                                            cameraDistance = 6.5f * density
+                                                        }
+                        },
                         apps = displayedApps,
                         discCenterXDp = animatedDisc2CenterX,
                         discCenterYDp = disc2CenterY,
@@ -1324,7 +1391,14 @@ fun MainLauncherScreen() {
                     // --- 3: フォルダ画面 ---
                     if (isEditingFolder) {
                         RotatableIndexWheel(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.fillMaxSize().graphicsLayer {
+                                                                if (disc3d) {
+                                                                transformOrigin = TransformOrigin((animatedDisc1CenterX / screenWidthDp).coerceIn(-2f, 3f), (disc1CenterY / screenHeightDp).coerceIn(-2f, 3f))
+                                                                rotationX = 27f + discTiltX.value
+                                                                rotationY = discTiltY.value
+                                                                cameraDistance = 6.5f * density
+                                                            }
+                            },
                             discCenterXDp = animatedDisc1CenterX,
                             discCenterYDp = disc1CenterY,
                             discRadiusDp = disc1RadiusDp,
@@ -1384,7 +1458,15 @@ fun MainLauncherScreen() {
                     }
 
                     RotatableAppDisc(
-                        modifier = Modifier.fillMaxSize(),
+                        iconTilt3d = disc3d,
+                        modifier = Modifier.fillMaxSize().graphicsLayer {
+                                                        if (disc3d) {
+                                                            transformOrigin = TransformOrigin((animatedDisc2CenterX / screenWidthDp).coerceIn(-2f, 3f), (disc2CenterY / screenHeightDp).coerceIn(-2f, 3f))
+                                                            rotationX = 27f + discTiltX.value
+                                                            rotationY = discTiltY.value
+                                                            cameraDistance = 6.5f * density
+                                                        }
+                        },
                         apps = discApps,
                         discCenterXDp = animatedDisc2CenterX,
                         discCenterYDp = disc2CenterY,
@@ -1456,7 +1538,15 @@ fun MainLauncherScreen() {
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = bottomPaddingDp + 4.dp)
-                    .zIndex(250f),
+                    .zIndex(250f)
+                    .graphicsLayer {
+                        if (disc3d) {
+                            transformOrigin = TransformOrigin(0.5f, 0.5f)
+                            rotationX = 27f + discTiltX.value
+                            rotationY = discTiltY.value
+                            cameraDistance = 6.5f * density
+                        }
+                    },
                 onPressedChanged = { isDialPressed = it },
                 accentGlow = accentGlow
             )
@@ -1471,6 +1561,14 @@ fun MainLauncherScreen() {
                     .align(Alignment.BottomCenter)
                     .padding(bottom = bottomPaddingDp + 4.dp)
                     .zIndex(250f)
+                    .graphicsLayer {
+                        if (disc3d) {
+                            transformOrigin = TransformOrigin(0.5f, 0.5f)
+                            rotationX = 27f + discTiltX.value
+                            rotationY = discTiltY.value
+                            cameraDistance = 6.5f * density
+                        }
+                    }
             )
         }
         }
@@ -1634,6 +1732,7 @@ fun MainLauncherScreen() {
                 fontFamily = lyricsFontFamily,
                 enFontFamily = lyricsEnFontFamily,
                 partsEntry = pvPartsEntry,
+                pvTilt3d = disc3d,
                 lyricWeight = lyricWeight,
                 accentColor = accentColor,
                 artwork = musicPlayerManager.currentAlbumArt,
