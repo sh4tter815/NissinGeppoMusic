@@ -314,4 +314,141 @@ class AppPreferenceManager(private val context: Context) {
     // ライブラリの並び替え基準 ("title" = 曲名, "artist" = アーティスト, "album" = アルバム)
     fun getLibrarySortMode(): String = prefs.getString("library_sort_mode", "title") ?: "title"
     fun setLibrarySortMode(mode: String) = prefs.edit().putString("library_sort_mode", mode).apply()
+
+
+    // ===== ランチャー版から移植した追加設定 =====
+    fun isDopagakiEnabled(): Boolean = prefs.getBoolean("dopagaki_mode", false)
+    fun setDopagakiEnabled(value: Boolean) { prefs.edit().putBoolean("dopagaki_mode", value).apply() }
+    fun isDopaBlackFontEnabled(): Boolean = prefs.getBoolean("dopagaki_black_font", true)
+    fun setDopaBlackFontEnabled(value: Boolean) { prefs.edit().putBoolean("dopagaki_black_font", value).apply() }
+
+    fun getDateDisplayMode(): String = prefs.getString("date_display_mode", "auto") ?: "auto"
+    fun setDateDisplayMode(mode: String) { prefs.edit().putString("date_display_mode", mode).apply() }
+
+    fun getDiscInertia(): Float = prefs.getFloat("disc_inertia", 1.0f)
+    fun setDiscInertia(v: Float) = prefs.edit().putFloat("disc_inertia", v).apply()
+    // 振動フィードバック（円盤のカチッという触覚）
+    fun isHapticsEnabled(): Boolean = prefs.getBoolean("haptics_enabled", true)
+    fun setHapticsEnabled(v: Boolean) = prefs.edit().putBoolean("haptics_enabled", v).apply()
+    // 時計: 秒表示 / 12時間表示 / バッテリー残量 / 和暦
+    fun isClockShowSeconds(): Boolean = prefs.getBoolean("clock_show_seconds", false)
+    fun setClockShowSeconds(v: Boolean) = prefs.edit().putBoolean("clock_show_seconds", v).apply()
+    fun isClock12h(): Boolean = prefs.getBoolean("clock_12h", false)
+    fun setClock12h(v: Boolean) = prefs.edit().putBoolean("clock_12h", v).apply()
+    fun isClockShowBattery(): Boolean = prefs.getBoolean("clock_show_battery", false)
+    fun setClockShowBattery(v: Boolean) = prefs.edit().putBoolean("clock_show_battery", v).apply()
+    fun isDateWareki(): Boolean = prefs.getBoolean("date_wareki", false)
+    fun setDateWareki(v: Boolean) = prefs.edit().putBoolean("date_wareki", v).apply()
+    // 歌詞マスター（オフでPV・時計下・ステータスバーの歌詞を全部消す）
+    fun isLyricsEnabled(): Boolean = prefs.getBoolean("lyrics_enabled", true)
+    fun setLyricsEnabled(v: Boolean) = prefs.edit().putBoolean("lyrics_enabled", v).apply()
+    // PV: 文字サイズ倍率 / 縦位置オフセット(dp) / 文字色 / ルビ / 間奏アート
+    fun getPvFontScale(): Float = prefs.getFloat("pv_font_scale", 1.0f)
+    fun setPvFontScale(v: Float) = prefs.edit().putFloat("pv_font_scale", v).apply()
+    fun getPvTopOffsetDp(): Float = prefs.getFloat("pv_top_offset", 0f)
+    fun setPvTopOffsetDp(v: Float) = prefs.edit().putFloat("pv_top_offset", v).apply()
+    fun getPvTextColor(): String = prefs.getString("pv_text_color", "white") ?: "white"
+    fun setPvTextColor(v: String) = prefs.edit().putString("pv_text_color", v).apply()
+    fun isPvRubyEnabled(): Boolean = prefs.getBoolean("pv_ruby_enabled", true)
+    fun setPvRubyEnabled(v: Boolean) = prefs.edit().putBoolean("pv_ruby_enabled", v).apply()
+    fun isPvInterludeArtEnabled(): Boolean = prefs.getBoolean("pv_interlude_art", true)
+    fun setPvInterludeArtEnabled(v: Boolean) = prefs.edit().putBoolean("pv_interlude_art", v).apply()
+    // 液体: 速さ倍率 / 濃さ倍率
+    fun getLiquidSpeed(): Float = prefs.getFloat("liquid_speed", 1.0f)
+    fun setLiquidSpeed(v: Float) = prefs.edit().putFloat("liquid_speed", v).apply()
+    fun getLiquidAlpha(): Float = prefs.getFloat("liquid_alpha", 1.0f)
+    fun setLiquidAlpha(v: Float) = prefs.edit().putFloat("liquid_alpha", v).apply()
+    // 起動時に開くページ: "home" / "last"（last のときは getLastPage を使う）
+    fun getStartupPage(): String = prefs.getString("startup_page", "home") ?: "home"
+    fun setStartupPage(v: String) = prefs.edit().putString("startup_page", v).apply()
+    fun getLastPage(): Int = prefs.getInt("last_page", 1)
+    fun setLastPage(v: Int) = prefs.edit().putInt("last_page", v).apply()
+    // 下ダイヤルの表示方法: "auto"（ラック中などは隠れる） / "always" / "hidden"
+    fun getDialVisibility(): String = prefs.getString("dial_visibility", "auto") ?: "auto"
+    fun setDialVisibility(v: String) = prefs.edit().putString("dial_visibility", v).apply()
+    // ページ切り替えアニメの速さ倍率
+    fun getPageTransitionSpeed(): Float = prefs.getFloat("page_transition_speed", 1.0f)
+    fun setPageTransitionSpeed(v: Float) = prefs.edit().putFloat("page_transition_speed", v).apply()
+    // 再生中は画面を点けたまま
+    fun isKeepScreenOn(): Boolean = prefs.getBoolean("keep_screen_on", false)
+    fun setKeepScreenOn(v: Boolean) = prefs.edit().putBoolean("keep_screen_on", v).apply()
+    // 壁紙のぼかし (dp)
+    fun getWallpaperBlurDp(): Float = prefs.getFloat("wallpaper_blur", 0f)
+    fun setWallpaperBlurDp(v: Float) = prefs.edit().putFloat("wallpaper_blur", v).apply()
+    // ページごとの壁紙（未設定のページは共通の壁紙にフォールバック）
+    fun getPageWallpaperPath(page: Int): String? = prefs.getString("wallpaper_path_page_$page", null)
+    fun setPageWallpaperPath(page: Int, path: String?) = prefs.edit().putString("wallpaper_path_page_$page", path).apply()
+
+    // アートワーク表示（左円とラックの画像そのもの）
+    fun isArtworkEnabled(): Boolean = prefs.getBoolean("artwork_enabled", true)
+    fun setArtworkEnabled(v: Boolean) = prefs.edit().putBoolean("artwork_enabled", v).apply()
+    // ラック専用のスクロール反転（円盤の反転とは別）
+    fun isRackReverseScroll(): Boolean = prefs.getBoolean("rack_reverse", false)
+    fun setRackReverseScroll(v: Boolean) = prefs.edit().putBoolean("rack_reverse", v).apply()
+
+    fun getClockOffsetXDp(): Float = prefs.getFloat("clock_offset_x", 0f)
+    fun getClockOffsetYDp(): Float = prefs.getFloat("clock_offset_y", 0f)
+    fun setClockOffset(x: Float, y: Float) = prefs.edit().putFloat("clock_offset_x", x).putFloat("clock_offset_y", y).apply()
+    fun getPvOffsetXDp(): Float = prefs.getFloat("pv_offset_x", 0f)
+    fun setPvOffsetX(v: Float) = prefs.edit().putFloat("pv_offset_x", v).apply()
+    // 設定画面からレイアウト編集モードを開くための一時フラグ
+    fun requestLayoutEdit() = prefs.edit().putBoolean("layout_edit_request", true).apply()
+    fun isLayoutEditRequested(): Boolean = prefs.getBoolean("layout_edit_request", false)
+    fun clearLayoutEditRequest() = prefs.edit().putBoolean("layout_edit_request", false).apply()
+
+    fun exportAllJson(): String {
+        val prefsObj = org.json.JSONObject()
+        for ((k, v) in prefs.all) {
+            val o = org.json.JSONObject()
+            when (v) {
+                is Boolean -> { o.put("t", "b"); o.put("v", v) }
+                is Int -> { o.put("t", "i"); o.put("v", v) }
+                is Long -> { o.put("t", "l"); o.put("v", v) }
+                is Float -> { o.put("t", "f"); o.put("v", v.toDouble()) }
+                is String -> { o.put("t", "s"); o.put("v", v) }
+                is Set<*> -> { o.put("t", "set"); o.put("v", org.json.JSONArray(v.map { it.toString() })) }
+                else -> continue
+            }
+            prefsObj.put(k, o)
+        }
+        return org.json.JSONObject().apply {
+            put("app", "NissinGeppoMusic")
+            put("kind", "settings-backup")
+            put("version", 1)
+            put("prefs", prefsObj)
+        }.toString()
+    }
+
+    fun importAllJson(text: String): Boolean {
+        return try {
+            val root = org.json.JSONObject(text)
+            if (root.optString("kind") != "settings-backup") return false
+            val prefsObj = root.getJSONObject("prefs")
+            val e = prefs.edit()
+            e.clear()
+            val keys = prefsObj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                val o = prefsObj.getJSONObject(k)
+                when (o.getString("t")) {
+                    "b" -> e.putBoolean(k, o.getBoolean("v"))
+                    "i" -> e.putInt(k, o.getInt("v"))
+                    "l" -> e.putLong(k, o.getLong("v"))
+                    "f" -> e.putFloat(k, o.getDouble("v").toFloat())
+                    "s" -> e.putString(k, o.getString("v"))
+                    "set" -> {
+                        val arr = o.getJSONArray("v")
+                        val s = mutableSetOf<String>()
+                        for (i in 0 until arr.length()) s.add(arr.getString(i))
+                        e.putStringSet(k, s)
+                    }
+                }
+            }
+            e.apply()
+            true
+        } catch (_: Exception) {
+            false
+        }
+    }
+
 }
