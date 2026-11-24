@@ -4,6 +4,11 @@ package com.example.nissingeppomusic.ui.components
 // Lucide is licensed under the ISC License. Copyright (c) 2022-present, Lucide Contributors.
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier

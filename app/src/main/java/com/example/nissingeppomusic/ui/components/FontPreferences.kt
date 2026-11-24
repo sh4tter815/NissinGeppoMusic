@@ -41,6 +41,10 @@ val MontserratBoldItalicFontFamily = FontFamily(Font(R.font.montserrat_bold_ital
 
 val KaibunshoFontFamily = FontFamily(Font(R.font.kaibunsyo_font))
 
+// ドパガキ用フォント（音楽側にはまだ dopagaki_font.ttf が無いため暫定で Default。
+// 本物のフォントファイルを res/font に追加したら Font(R.font.dopagaki_font) に差し替える）
+val DopagakiFontFamily: FontFamily = FontFamily.Default
+
 fun parseFontFamily(fontChoice: String, customPath: String?): FontFamily {
     return when (fontChoice) {
         "receipt" -> ReceiptFontFamily
