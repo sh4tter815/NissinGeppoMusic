@@ -3146,7 +3146,7 @@ fun PvDopagakiBackground(modifier: Modifier = Modifier, rotate90: Boolean = fals
                             mp = player
                             try {
                                 player.setSurface(Surface(st))
-                                player.setDataSource(ctx, Uri.parse("android.resource://" + ctx.packageName + "/" + R.raw.dopagaki_bg))
+                                player.setDataSource(ctx, Uri.parse("android.resource://" + ctx.packageName + "/" + ctx.resources.getIdentifier("dopagaki_bg", "raw", ctx.packageName)))
                                 player.isLooping = true
                                 player.setVolume(0f, 0f)
                                 player.setOnPreparedListener { it.start() }

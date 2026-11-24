@@ -279,24 +279,6 @@ fun MainLauncherScreen() {
     val configuration = LocalConfiguration.current
     val haptic = LocalHapticFeedback.current
     val view = LocalView.current
-    LaunchedEffect(keepScreenOnPref, musicPlayerManager.isPlaying) {
-        view.keepScreenOn = keepScreenOnPref && musicPlayerManager.isPlaying
-    }
-    LaunchedEffect(Unit) {
-        while (true) {
-            val sleepEnd = repo.prefManager.getSleepTimerEndMs()
-            if (sleepEnd > 0L && System.currentTimeMillis() >= sleepEnd) {
-                musicPlayerManager.stopPlayback()
-                repo.prefManager.setSleepTimerEndMs(0L)
-            }
-            delay(15000)
-        }
-    }
-    LaunchedEffect(currentLauncherPage) {
-        if (currentLauncherPage == 1 && repo.prefManager.consumeLayoutEditRequest()) {
-            layoutEditMode = true
-        }
-    }
 
     val insets = WindowInsets.systemBars.asPaddingValues()
     val topPaddingDp = insets.calculateTopPadding()
@@ -418,6 +400,24 @@ fun MainLauncherScreen() {
     var clockOffsetY by remember { mutableFloatStateOf(repo.prefManager.getClockOffsetYDp()) }
     var pvOffsetX by remember { mutableFloatStateOf(repo.prefManager.getPvOffsetXDp()) }
     var layoutEditMode by remember { mutableStateOf(false) }
+    LaunchedEffect(keepScreenOnPref, musicPlayerManager.isPlaying) {
+        view.keepScreenOn = keepScreenOnPref && musicPlayerManager.isPlaying
+    }
+    LaunchedEffect(Unit) {
+        while (true) {
+            val sleepEnd = repo.prefManager.getSleepTimerEndMs()
+            if (sleepEnd > 0L && System.currentTimeMillis() >= sleepEnd) {
+                musicPlayerManager.stopPlayback()
+                repo.prefManager.setSleepTimerEndMs(0L)
+            }
+            delay(15000)
+        }
+    }
+    LaunchedEffect(currentLauncherPage) {
+        if (currentLauncherPage == 1 && repo.prefManager.consumeLayoutEditRequest()) {
+            layoutEditMode = true
+        }
+    }
     var lyricsDisplayMode by remember { mutableStateOf(repo.prefManager.getLyricsDisplayMode()) }
     val lyricsPvMode = lyricsDisplayMode == "video"
     var lyricsPvFont by remember { mutableStateOf(repo.prefManager.getLyricsPvFont()) }
