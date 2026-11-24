@@ -1,23 +1,37 @@
 package com.example.nissingeppomusic.ui
 
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
+import androidx.compose.animation.core.Animatable
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -27,26 +41,51 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.nissingeppomusic.data.AppRepository
+import com.example.nissingeppomusic.ui.components.DiscEntry
+import com.example.nissingeppomusic.data.SettingsTreeData
+import com.example.nissingeppomusic.data.SettingItemDef
+import com.example.nissingeppomusic.data.SettingNodeDef
+import com.example.nissingeppomusic.ui.components.DiscInfoChip
+import com.example.nissingeppomusic.ui.components.DiscValueWheel
+import com.example.nissingeppomusic.ui.components.DiscGlyph
+import com.example.nissingeppomusic.ui.components.WhiteSearchIcon
+import com.example.nissingeppomusic.ui.components.DiscMiniSwitch
+import com.example.nissingeppomusic.ui.components.lucidePath
+import com.example.nissingeppomusic.ui.components.DiscSide
+import com.example.nissingeppomusic.ui.components.DiscCarouselState
+import com.example.nissingeppomusic.ui.components.DiscTouchHalf
+import com.example.nissingeppomusic.ui.components.DiscWheel
+import com.example.nissingeppomusic.ui.components.rememberDiscCarouselState
 import com.example.nissingeppomusic.ui.components.parseFontFamily
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.io.File
 import java.io.FileOutputStream
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import kotlin.math.cos
 import kotlin.math.roundToInt
+import kotlin.math.sin
 import androidx.core.graphics.toColorInt
 
 val ACCENT_PRESETS = listOf(
@@ -59,25 +98,46 @@ val ACCENT_PRESETS = listOf(
     Pair("ピンク", "#FF4081")
 )
 
+// 円盤ナビの項目モデル
+data class SettingChoice(
+    val id: String,
+    val label: String,
+    val checked: Boolean,
+    val illo: String? = null,
+    val fontSample: FontFamily? = null,
+    val colorHex: String? = null,
+    val modePreview: String? = null,
+    val onSelect: () -> Unit
+)
+
+data class SettingSliderSpec(
+    val value: Float,
+    val range: ClosedFloatingPointRange<Float>,
+    val steps: Int,
+    val format: (Float) -> String,
+    val onSave: (Float) -> Unit
+)
+
+data class SettingItem(
+    val id: String,
+    val label: String,
+    val desc: String,
+    val glyph: String,
+    val valueText: String,
+    val choices: List<SettingChoice> = emptyList(),
+    val slider: SettingSliderSpec? = null,
+    val onAction: (() -> Unit)? = null,
+    val onToggle: (() -> Unit)? = null,
+    val currentIllo: String? = null,
+    val currentFont: FontFamily? = null,
+    val currentColorHex: String? = null
+)
+
 fun parseHexColor(hex: String, fallback: Color = Color(0xFFE53935)): Color {
     return try {
         Color(hex.toColorInt())
     } catch (_: Exception) {
         fallback
-    }
-}
-
-/** フォルダピッカーのツリーURIを実ファイルパスへ変換する（内部ストレージ / SDカード想定） */
-fun treeUriToPath(uri: Uri): String? {
-    return try {
-        val docId = android.provider.DocumentsContract.getTreeDocumentId(uri)
-        val parts = docId.split(":", limit = 2)
-        if (parts.size < 2) return null
-        val base = if (parts[0] == "primary") "/storage/emulated/0" else "/storage/${parts[0]}"
-        val relative = parts[1].trim('/')
-        if (relative.isEmpty()) base else "${base}/${relative}"
-    } catch (_: Exception) {
-        null
     }
 }
 
@@ -168,36 +228,48 @@ fun FontSelectionSection(
     onUseCustomFontChanged: (Boolean) -> Unit,
     switchColors: SwitchColors
 ) {
+    var expanded by remember { mutableStateOf(false) }
     val fontOptions = mapOf(
         "default" to "システムフォント",
         "receipt" to "レシートフォント (Receipt Font)",
         "denkichip" to "でんきチップ (DenkiChip)",
         "tsukuhou" to "築豊明朝 (Tsukuhou Mincho)",
+        "kaibunsho" to "怪聞書フォント (Kaibunsho)",
+        "zenkaku" to "Zen Kaku Gothic New (Medium)",
         "custom" to "カスタムフォント (.ttf/.otf)"
     )
+    val currentLabel = fontOptions[currentFontChoice] ?: "システムフォント"
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("フォント選択", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Normal)
 
-        Column {
-            fontOptions.forEach { (key, label) ->
+        Box(modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(
+                onClick = { expanded = true },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+            ) {
                 Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onFontSelected(key) }
-                        .padding(vertical = 2.dp)
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    RadioButton(
-                        selected = key == currentFontChoice,
-                        onClick = null,
-                        colors = RadioButtonDefaults.colors(selectedColor = Color.White, unselectedColor = Color.Gray)
-                    )
-                    Text(
-                        text = label,
-                        color = Color.White,
-                        fontSize = 15.sp,
-                        fontFamily = parseFontFamily(key, if (key == "custom") customFontPath else null)
+                    Text(currentLabel, fontSize = 14.sp)
+                    Text("▼", fontSize = 12.sp)
+                }
+            }
+            DropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false },
+                modifier = Modifier.background(Color(0xFF141C2E))
+            ) {
+                fontOptions.forEach { (key, label) ->
+                    DropdownMenuItem(
+                        text = { Text(label, color = Color.White) },
+                        onClick = {
+                            onFontSelected(key)
+                            expanded = false
+                        }
                     )
                 }
             }
@@ -213,6 +285,7 @@ fun FontSelectionSection(
 
     }
 }
+
 
 // 3択などの選択肢を、イラスト付きのカードで選ぶための部品
 @Composable
@@ -333,55 +406,74 @@ fun SettingsCategoryIcon(kind: String, accentColor: Color) {
         val w = size.width
         val h = size.height
         val ink = Color.White.copy(alpha = 0.9f)
-        val thin = Stroke(width = w * 0.055f)
         when (kind) {
-            "behavior" -> {
-                // 左右で逆向きの2本矢印（スクロール方向・操作感のイメージ）
-                val lw = w * 0.06f
-                drawLine(color = accentColor, start = Offset(w * 0.16f, h * 0.35f), end = Offset(w * 0.76f, h * 0.35f), strokeWidth = lw, cap = StrokeCap.Round)
-                drawLine(color = accentColor, start = Offset(w * 0.76f, h * 0.35f), end = Offset(w * 0.60f, h * 0.21f), strokeWidth = lw, cap = StrokeCap.Round)
-                drawLine(color = accentColor, start = Offset(w * 0.76f, h * 0.35f), end = Offset(w * 0.60f, h * 0.49f), strokeWidth = lw, cap = StrokeCap.Round)
-                drawLine(color = ink, start = Offset(w * 0.84f, h * 0.65f), end = Offset(w * 0.24f, h * 0.65f), strokeWidth = lw, cap = StrokeCap.Round)
-                drawLine(color = ink, start = Offset(w * 0.24f, h * 0.65f), end = Offset(w * 0.40f, h * 0.51f), strokeWidth = lw, cap = StrokeCap.Round)
-                drawLine(color = ink, start = Offset(w * 0.24f, h * 0.65f), end = Offset(w * 0.40f, h * 0.79f), strokeWidth = lw, cap = StrokeCap.Round)
+            "background" -> {
+                // Lucide "image"
+                val ls = Stroke(width = w * (2f / 24f), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                val sc = w / 24f
+                drawRoundRect(color = ink, topLeft = Offset(3f * sc, 3f * sc), size = Size(18f * sc, 18f * sc), cornerRadius = CornerRadius(2f * sc, 2f * sc), style = ls)
+                drawCircle(color = ink, radius = 2f * sc, center = Offset(9f * sc, 9f * sc), style = ls)
+                drawPath(lucidePath("m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21", sc), color = ink, style = ls)
             }
-            "appearance" -> {
-                drawCircle(color = accentColor, radius = w * 0.27f, center = Offset(w * 0.36f, h * 0.38f))
-                drawCircle(color = ink.copy(alpha = 0.75f), radius = w * 0.27f, center = Offset(w * 0.64f, h * 0.38f))
-                drawCircle(color = Color(0xFF9AA0A6), radius = w * 0.27f, center = Offset(w * 0.50f, h * 0.66f))
+            "ui" -> {
+                // Lucide "sliders-horizontal"
+                val ls = Stroke(width = w * (2f / 24f), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                val sc = w / 24f
+                drawPath(lucidePath("M10 5H3", sc), color = ink, style = ls)
+                drawPath(lucidePath("M12 19H3", sc), color = ink, style = ls)
+                drawPath(lucidePath("M14 3v4", sc), color = ink, style = ls)
+                drawPath(lucidePath("M16 17v4", sc), color = ink, style = ls)
+                drawPath(lucidePath("M21 12h-9", sc), color = ink, style = ls)
+                drawPath(lucidePath("M21 19h-5", sc), color = ink, style = ls)
+                drawPath(lucidePath("M21 5h-7", sc), color = ink, style = ls)
+                drawPath(lucidePath("M8 10v4", sc), color = ink, style = ls)
+                drawPath(lucidePath("M8 12H3", sc), color = ink, style = ls)
             }
             "lyrics" -> {
-                drawOval(color = accentColor, topLeft = Offset(w * 0.10f, h * 0.64f), size = Size(w * 0.30f, h * 0.22f))
-                drawLine(color = ink, start = Offset(w * 0.40f, h * 0.72f), end = Offset(w * 0.40f, h * 0.16f), strokeWidth = w * 0.05f, cap = StrokeCap.Round)
-                drawOval(color = ink, topLeft = Offset(w * 0.56f, h * 0.58f), size = Size(w * 0.28f, h * 0.20f))
-                drawLine(color = ink, start = Offset(w * 0.84f, h * 0.66f), end = Offset(w * 0.84f, h * 0.10f), strokeWidth = w * 0.05f, cap = StrokeCap.Round)
-                drawLine(color = ink, start = Offset(w * 0.40f, h * 0.16f), end = Offset(w * 0.84f, h * 0.10f), strokeWidth = w * 0.07f, cap = StrokeCap.Round)
+                // Lucide "audio-lines"
+                val ls = Stroke(width = w * (2f / 24f), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                val sc = w / 24f
+                drawPath(lucidePath("M2 10v3", sc), color = ink, style = ls)
+                drawPath(lucidePath("M6 6v11", sc), color = ink, style = ls)
+                drawPath(lucidePath("M10 3v18", sc), color = ink, style = ls)
+                drawPath(lucidePath("M14 8v7", sc), color = ink, style = ls)
+                drawPath(lucidePath("M18 5v13", sc), color = ink, style = ls)
+                drawPath(lucidePath("M22 10v3", sc), color = ink, style = ls)
             }
-            "apps" -> {
-                val cell = w * 0.32f
-                val rad = CornerRadius(w * 0.06f, w * 0.06f)
-                drawRoundRect(color = accentColor, topLeft = Offset(w * 0.13f, h * 0.13f), size = Size(cell, cell), cornerRadius = rad)
-                drawRoundRect(color = ink, topLeft = Offset(w * 0.55f, h * 0.13f), size = Size(cell, cell), cornerRadius = rad)
-                drawRoundRect(color = ink, topLeft = Offset(w * 0.13f, h * 0.55f), size = Size(cell, cell), cornerRadius = rad)
-                drawRoundRect(color = accentColor, topLeft = Offset(w * 0.55f, h * 0.55f), size = Size(cell, cell), cornerRadius = rad)
+            "library" -> {
+                // Lucide "folder"
+                val ls = Stroke(width = w * (2f / 24f), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                val sc = w / 24f
+                drawPath(lucidePath("M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z", sc), color = ink, style = ls)
             }
             "security" -> {
-                drawArc(color = ink, startAngle = 180f, sweepAngle = 180f, useCenter = false, topLeft = Offset(w * 0.29f, h * 0.08f), size = Size(w * 0.42f, h * 0.42f), style = thin)
-                drawRoundRect(color = accentColor, topLeft = Offset(w * 0.18f, h * 0.34f), size = Size(w * 0.64f, h * 0.52f), cornerRadius = CornerRadius(w * 0.08f, w * 0.08f))
-                drawCircle(color = Color(0xFF101728), radius = w * 0.07f, center = Offset(w * 0.50f, h * 0.58f))
+                // Lucide "lock"
+                val ls = Stroke(width = w * (2f / 24f), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                val sc = w / 24f
+                drawRoundRect(color = ink, topLeft = Offset(3f * sc, 11f * sc), size = Size(18f * sc, 11f * sc), cornerRadius = CornerRadius(2f * sc, 2f * sc), style = ls)
+                drawPath(lucidePath("M7 11V7a5 5 0 0 1 10 0v4", sc), color = ink, style = ls)
+            }
+            "tools" -> {
+                // Lucide "wrench"
+                val ls = Stroke(width = w * (2f / 24f), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                val sc = w / 24f
+                drawPath(lucidePath("M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z", sc), color = ink, style = ls)
+            }
+            "other" -> {
+                // Lucide "ellipsis"
+                val ls = Stroke(width = w * (2f / 24f), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                val sc = w / 24f
+                drawCircle(color = ink, radius = 1f * sc, center = Offset(12f * sc, 12f * sc), style = ls)
+                drawCircle(color = ink, radius = 1f * sc, center = Offset(19f * sc, 12f * sc), style = ls)
+                drawCircle(color = ink, radius = 1f * sc, center = Offset(5f * sc, 12f * sc), style = ls)
             }
             else -> {
-                drawCircle(color = ink, radius = w * 0.36f, style = thin)
-                val q = Path()
-                q.moveTo(w * 0.38f, h * 0.37f)
-                q.cubicTo(w * 0.38f, h * 0.23f, w * 0.62f, h * 0.23f, w * 0.62f, h * 0.37f)
-                q.cubicTo(w * 0.62f, h * 0.49f, w * 0.50f, h * 0.50f, w * 0.50f, h * 0.61f)
-                drawPath(path = q, color = ink, style = Stroke(width = w * 0.055f, cap = StrokeCap.Round))
-                drawCircle(color = ink, radius = w * 0.045f, center = Offset(w * 0.50f, h * 0.73f))
+                drawCircle(color = ink, radius = w * 0.30f, style = Stroke(width = w * 0.06f))
             }
         }
     }
 }
+
 
 // フォント選択カード: 閉じた状態では「現在のフォント名＋見本文字」だけを見せ、タップで候補リストを展開する
 @Composable
@@ -463,13 +555,21 @@ fun SettingsScreen(
     repo: AppRepository,
     onBack: () -> Unit = {},
     onChanged: () -> Unit = {},
-        onLibraryUpdated: () -> Unit = {},
+    onAppsUpdated: () -> Unit = {},
     // 画面側で算出された現在のアクセント色（アートワーク連動時はその抽出色）
-    accentColor: Color = Color(0xFFE53935)
+    accentColor: Color = Color(0xFFE53935),
+    disc3d: Boolean = false,
+    tiltX: State<Float>? = null,
+    tiltY: State<Float>? = null
 ) {
     val context = LocalContext.current
     var accentHex by remember { mutableStateOf(repo.prefManager.getAccentColorHex()) }
     var matchArtwork by remember { mutableStateOf(repo.prefManager.isMatchArtworkColor()) }
+    var liquidBackground by remember { mutableStateOf(repo.prefManager.isLiquidBackgroundEnabled()) }
+    var homeDiscLayout by remember { mutableStateOf(repo.prefManager.getHomeDiscLayout()) }
+    var disc3d by remember { mutableStateOf(repo.prefManager.isDisc3dEnabled()) }
+    var disc3dTilt by remember { mutableStateOf(repo.prefManager.isDisc3dTiltEnabled()) }
+    var dateDisplayMode by remember { mutableStateOf(repo.prefManager.getDateDisplayMode()) }
     // 配色をアートワークに合わせるONのときは、画面側で算出されたアートワーク由来の
     // アクセント色（accentColor引数）を設定UIの色にも使う。OFFのときは手動色
     val currentAccentColor = if (matchArtwork) accentColor else parseHexColor(accentHex)
@@ -478,29 +578,79 @@ fun SettingsScreen(
     var textSize by remember { mutableFloatStateOf(repo.prefManager.getAppDiscTextSizeSp()) }
     var letterSpacing by remember { mutableFloatStateOf(repo.prefManager.getAppDiscLetterSpacingSp()) }
     var stepAngle by remember { mutableFloatStateOf(repo.prefManager.getAppDiscStepAngle()) }
+    // 2026-11-23 一括追加分の状態
+    var lyricsEnabled by remember { mutableStateOf(repo.prefManager.isLyricsEnabled()) }
+    var lyricTranslation by remember { mutableStateOf(repo.prefManager.isLyricTranslationEnabled()) }
+    var pvRuby by remember { mutableStateOf(repo.prefManager.isPvRubyEnabled()) }
+    var pvInterludeArt by remember { mutableStateOf(repo.prefManager.isPvInterludeArtEnabled()) }
+    var haptics by remember { mutableStateOf(repo.prefManager.isHapticsEnabled()) }
+    var clockSeconds by remember { mutableStateOf(repo.prefManager.isClockShowSeconds()) }
+    var clock12h by remember { mutableStateOf(repo.prefManager.isClock12h()) }
+    var clockBattery by remember { mutableStateOf(repo.prefManager.isClockShowBattery()) }
+    var dateWareki by remember { mutableStateOf(repo.prefManager.isDateWareki()) }
+    var keepScreenOn by remember { mutableStateOf(repo.prefManager.isKeepScreenOn()) }
+    var librarySort by remember { mutableStateOf(repo.prefManager.getLibrarySortMode()) }
+    var pvTextColor by remember { mutableStateOf(repo.prefManager.getPvTextColor()) }
+    var startupPage by remember { mutableStateOf(repo.prefManager.getStartupPage()) }
+    var dialVisibility by remember { mutableStateOf(repo.prefManager.getDialVisibility()) }
+    var discInertia by remember { mutableFloatStateOf(repo.prefManager.getDiscInertia()) }
+    var pvFontScale by remember { mutableFloatStateOf(repo.prefManager.getPvFontScale()) }
+    var pvTopOffset by remember { mutableFloatStateOf(repo.prefManager.getPvTopOffsetDp()) }
+    var liquidSpeed by remember { mutableFloatStateOf(repo.prefManager.getLiquidSpeed()) }
+    var liquidAlpha by remember { mutableFloatStateOf(repo.prefManager.getLiquidAlpha()) }
+    var pageTransitionSpeed by remember { mutableFloatStateOf(repo.prefManager.getPageTransitionSpeed()) }
+    var wallpaperBlur by remember { mutableFloatStateOf(repo.prefManager.getWallpaperBlurDp()) }
+    var pageWallpapers by remember { mutableStateOf((0..3).map { repo.prefManager.getPageWallpaperPath(it) }) }
+    var pendingWallpaperPage by remember { mutableIntStateOf(-1) }
+    var artworkVisible by remember { mutableStateOf(repo.prefManager.isArtworkEnabled()) }
+    var rackReverse by remember { mutableStateOf(repo.prefManager.isRackReverseScroll()) }
     var backgroundPath by remember { mutableStateOf(repo.prefManager.getCustomBackgroundPath()) }
-    var homeDiscLayout by remember { mutableStateOf(repo.prefManager.getHomeDiscLayout()) }
-    var liquidBackground by remember { mutableStateOf(repo.prefManager.isLiquidBackgroundEnabled()) }
-    var lyricsDisplayMode by remember { mutableStateOf(repo.prefManager.getLyricsDisplayMode()) }
-    var lyricsPvFont by remember { mutableStateOf(repo.prefManager.getLyricsPvFont()) }
-    var lyricsBold by remember { mutableStateOf(repo.prefManager.isLyricsBold()) }
-    var fontPickerExpanded by remember { mutableStateOf<String?>(null) }
-    var lyricsEnFont by remember { mutableStateOf(repo.prefManager.getLyricsEnFont()) }
-    var lyricsEnCustomPath by remember { mutableStateOf(repo.prefManager.getLyricsEnCustomFontPath()) }
-    var pvPartsEntry by remember { mutableStateOf(repo.prefManager.isPvPartsEntryEnabled()) }
-    var disc3d by remember { mutableStateOf(repo.prefManager.isDisc3dEnabled()) }
-    var disc3dTilt by remember { mutableStateOf(repo.prefManager.isDisc3dTiltEnabled()) }
     var wallpaperAlpha by remember { mutableFloatStateOf(repo.prefManager.getHomeWallpaperAlpha()) }
+    var excludedFolders by remember { mutableStateOf(repo.prefManager.getExcludedFolders().sorted()) }
+    var showExcludedFoldersDialog by remember { mutableStateOf(false) }
+    val excludedFolderPickerLauncher = rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.OpenDocumentTree()
+    ) { uri: android.net.Uri? ->
+        if (uri != null) {
+            val path = treeUriToPath(uri)
+            if (path != null) {
+                repo.prefManager.addExcludedFolder(path)
+                excludedFolders = repo.prefManager.getExcludedFolders().sorted()
+                onAppsUpdated()
+                android.widget.Toast.makeText(context, "除外フォルダに追加しました", android.widget.Toast.LENGTH_SHORT).show()
+            } else {
+                android.widget.Toast.makeText(context, "フォルダの場所を特定できませんでした", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
     var showPasscodeChangeDialog by remember { mutableStateOf(false) }
     var newPasscodeField by remember { mutableStateOf(repo.prefManager.getPasscode()) }
 
     var isReverseScroll by remember { mutableStateOf(repo.prefManager.isReverseScroll()) }
+    var sleepTimerEndMs by remember { mutableStateOf(repo.prefManager.getSleepTimerEndMs()) }
+    var sleepTimerMinutes by remember { mutableStateOf(repo.prefManager.getSleepTimerMinutes()) }
+    var sleepNowMs by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            sleepNowMs = System.currentTimeMillis()
+            if (sleepTimerEndMs > 0L && sleepTimerEndMs <= sleepNowMs) sleepTimerEndMs = 0L
+            delay(20000)
+        }
+    }
     var usePasscodeForHidden by remember { mutableStateOf(repo.prefManager.isUsePasscodeForHidden()) }
     var currentFontChoice by remember { mutableStateOf(repo.prefManager.getFontChoice()) }
+    var lyricsDisplayMode by remember { mutableStateOf(repo.prefManager.getLyricsDisplayMode()) }
+    var fontPickerExpanded by remember { mutableStateOf<String?>(null) }
+    var lyricsPvFont by remember { mutableStateOf(repo.prefManager.getLyricsPvFont()) }
+    var lyricsEnFont by remember { mutableStateOf(repo.prefManager.getLyricsEnFont()) }
+    var lyricsEnCustomPath by remember { mutableStateOf(repo.prefManager.getLyricsEnCustomFontPath()) }
+    var lyricsBold by remember { mutableStateOf(repo.prefManager.isLyricsBold()) }
+    var pvPartsEntry by remember { mutableStateOf(repo.prefManager.isPvPartsEntryEnabled()) }
+    var dopagakiMode by remember { mutableStateOf(repo.prefManager.isDopagakiEnabled()) }
+    var dopaBlackFont by remember { mutableStateOf(repo.prefManager.isDopaBlackFontEnabled()) }
         var pageSwitchStyle by remember { mutableStateOf(repo.prefManager.getPageSwitchStyle()) }
-        var libraryUpdateStatus by remember { mutableStateOf("") }
-        var isUpdatingLibrary by remember { mutableStateOf(false) }
-        val settingsScope = rememberCoroutineScope()
+    var isUpdatingApps by remember { mutableStateOf(false) }
+    val settingsScope = rememberCoroutineScope()
 
     val switchColors = SwitchDefaults.colors(
         checkedThumbColor = currentAccentColor,
@@ -510,12 +660,53 @@ fun SettingsScreen(
     )
 
     // システム環境設定風 2段階ナビゲーション ("behavior", "appearance", "security", "tutorial")
-    var selectedCategory by remember { mutableStateOf<String?>(null) }
+    // 円盤ナビの状態（1: カテゴリ/項目, 2: 選択肢/スライダー）
+    var navPath by remember { mutableStateOf<List<String>>(emptyList()) }
+    var focusId by remember { mutableStateOf<String?>(null) }
+    var searchQuery by remember { mutableStateOf("") }
+    var leftDiscState by remember { mutableStateOf<DiscCarouselState?>(null) }
+    var leftHeld by remember { mutableStateOf(false) }
+    var backFocused by remember { mutableStateOf(false) }
+    var rightDiscState by remember { mutableStateOf<DiscCarouselState?>(null) }
+    fun goBack() {
+        val dropped = navPath.lastOrNull() ?: return
+        navPath = navPath.dropLast(1)
+        focusId = dropped
+    }
+    // 退場（円が端に引っ込む）を挟んでから遷移する
+    var discExiting by remember { mutableStateOf(false) }
+    var navBusy by remember { mutableStateOf(false) }
+    fun navigateAnimated(change: () -> Unit) {
+        if (navBusy) return
+        navBusy = true
+        settingsScope.launch {
+            discExiting = true
+            kotlinx.coroutines.delay(175)
+            change()
+            discExiting = false
+            navBusy = false
+        }
+    }
+    // 階層を降りる時、右円で選んだラベルが回転しながら左円の縦ラベルへ飛ぶ
+    var flightLabel by remember { mutableStateOf<String?>(null) }
+    val flightAnim = remember { Animatable(0f) }
+    var flightReverse by remember { mutableStateOf(false) }
+    val backLabelState = remember { mutableStateOf<String?>(null) }
+    fun startBackFlight() {
+        val label = backLabelState.value ?: return
+        flightReverse = true
+        settingsScope.launch {
+            flightLabel = label
+            flightAnim.snapTo(0f)
+            flightAnim.animateTo(1f, animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing))
+            flightLabel = null
+        }
+    }
     var updateChecking by remember { mutableStateOf(false) }
-    var updateMessage by remember { mutableStateOf<String?>(null) }
+    var knownBuild by remember { mutableStateOf(0) }
     var updateInfo by remember { mutableStateOf<com.example.nissingeppomusic.data.UpdateChecker.LatestRelease?>(null) }
     var fxChecking by remember { mutableStateOf(false) }
-    var fxMessage by remember { mutableStateOf<String?>(null) }
+    var fxVersion by remember { mutableStateOf(LyricEffectsData.appliedVersion) }
     var showUpdateDialog by remember { mutableStateOf(false) }
     if (showUpdateDialog && updateInfo != null) {
         UpdateDialog(
@@ -527,14 +718,19 @@ fun SettingsScreen(
         )
     }
     // 外観内のサブタブ ("wallpaper", "color", "font")
-    var appearanceSubTab by remember { mutableStateOf("wallpaper") }
 
     var customFontPath by remember { mutableStateOf(repo.prefManager.getCustomFontPath()) }
     var useCustomFont by remember { mutableStateOf(repo.prefManager.isUseCustomFont()) }
 
     // システム「戻る」キーを押した時、カテゴリ詳細画面なら設定トップに戻る
-    BackHandler(enabled = selectedCategory != null) {
-        selectedCategory = null
+    BackHandler(enabled = navPath.isNotEmpty() || searchQuery.isNotBlank()) {
+        if (searchQuery.isNotBlank()) {
+            searchQuery = ""
+            focusId = null
+        } else {
+            startBackFlight()
+            navigateAnimated { goBack() }
+        }
     }
 
     // 壁紙選択ピッカー
@@ -580,6 +776,82 @@ fun SettingsScreen(
         }
     }
 
+    // ページ別壁紙ピッカー（保存先ファイルと pref をページごとに分ける以外は共通ピッカーと同じ）
+    val pageImagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        val page = pendingWallpaperPage
+        if (uri != null && page in 0..3) {
+            try {
+                context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                    val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                    BitmapFactory.decodeStream(inputStream, null, options)
+                    var sampleSize = 1
+                    val maxDimension = 1920
+                    while (options.outWidth / sampleSize > maxDimension || options.outHeight / sampleSize > maxDimension) {
+                        sampleSize *= 2
+                    }
+                    val decodeOptions = BitmapFactory.Options().apply {
+                        inSampleSize = sampleSize
+                        inPreferredConfig = Bitmap.Config.ARGB_8888
+                    }
+                    context.contentResolver.openInputStream(uri)?.use { stream2 ->
+                        val bitmap = BitmapFactory.decodeStream(stream2, null, decodeOptions)
+                        if (bitmap != null) {
+                            val destFile = File(context.filesDir, "custom_bg_p$page.png")
+                            FileOutputStream(destFile).use { out ->
+                                bitmap.compress(Bitmap.CompressFormat.PNG, 90, out)
+                            }
+                            bitmap.recycle()
+                            val path = destFile.absolutePath
+                            repo.prefManager.setPageWallpaperPath(page, path)
+                            pageWallpapers = (0..3).map { repo.prefManager.getPageWallpaperPath(it) }
+                            onChanged()
+                            Toast.makeText(context, "壁紙を変更しました", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            } catch (_: Exception) {
+                Toast.makeText(context, "壁紙の読み込みに失敗しました", Toast.LENGTH_SHORT).show()
+            }
+        }
+        pendingWallpaperPage = -1
+    }
+
+    // 設定バックアップ: 書き出し（作成先を選ぶ）と読み込み（ファイルを選ぶ）
+    val settingsExportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                context.contentResolver.openOutputStream(uri)?.use { out ->
+                    out.write(repo.prefManager.exportAllJson().toByteArray(Charsets.UTF_8))
+                }
+                Toast.makeText(context, "設定を書き出しました", Toast.LENGTH_SHORT).show()
+            } catch (_: Exception) {
+                Toast.makeText(context, "書き出しに失敗しました", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+    val settingsImportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            try {
+                val text = context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
+                if (text != null && repo.prefManager.importAllJson(text)) {
+                    onChanged()
+                    onAppsUpdated()
+                    Toast.makeText(context, "設定を読み込みました", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, "読み込みに失敗しました（ファイルが違います）", Toast.LENGTH_SHORT).show()
+                }
+            } catch (_: Exception) {
+                Toast.makeText(context, "読み込みに失敗しました", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     // フォントファイル選択ピッカー (.ttf / .otf)
     val fontPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -607,7 +879,7 @@ fun SettingsScreen(
         }
     }
 
-    // 歌詞の英字フォント専用のカスタムフォント読み込み（日本語用とは別ファイルに保存する）
+    // 英字フォント専用のカスタムフォント選択ピッカー (.ttf / .otf)
     val enFontPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -632,22 +904,419 @@ fun SettingsScreen(
         }
     }
 
-    var excludedFolders by remember { mutableStateOf(repo.prefManager.getExcludedFolders().sorted()) }
+    // ===== 円盤ナビの項目モデル（状態と保存処理は従来のものをそのまま使う） =====
+    fun toggleChoices(current: Boolean, set: (Boolean) -> Unit): List<SettingChoice> = listOf(
+        SettingChoice("on", "オン", current) { set(true) },
+        SettingChoice("off", "オフ", !current) { set(false) }
+    )
+    // ===== 設定ツリー（settings_tree.json 駆動）: 構造と項目定義はJSON、動作はここの対応表 =====
+    data class SettingNode(
+        val id: String,
+        val label: String,
+        val glyph: String? = null,
+        val catIcon: Boolean = false,
+        val item: SettingItem? = null,
+        val children: List<SettingNode> = emptyList()
+    )
 
-    // 除外フォルダ選択ピッカー
-    val excludedFolderPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocumentTree()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            val path = treeUriToPath(uri)
-            if (path != null) {
-                repo.prefManager.addExcludedFolder(path)
-                excludedFolders = repo.prefManager.getExcludedFolders().sorted()
-                onLibraryUpdated()
-                Toast.makeText(context, "除外フォルダに追加しました", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(context, "フォルダの場所を特定できませんでした", Toast.LENGTH_SHORT).show()
+    var treeData by remember { mutableStateOf(SettingsTreeData.load(context)) }
+    LaunchedEffect(Unit) {
+        val newer = SettingsTreeData.refresh(context)
+        if (newer != null) treeData = newer
+    }
+
+    val boolBinds: Map<String, Pair<() -> Boolean, (Boolean) -> Unit>> = mapOf(
+        "reverseScroll" to Pair({ isReverseScroll }, { v: Boolean -> isReverseScroll = v; repo.prefManager.setReverseScroll(v); onChanged() }),
+        "disc3d" to Pair({ disc3d }, { v: Boolean -> disc3d = v; repo.prefManager.setDisc3dEnabled(v); onChanged() }),
+        "disc3dTilt" to Pair({ disc3dTilt }, { v: Boolean -> disc3dTilt = v; repo.prefManager.setDisc3dTiltEnabled(v); onChanged() }),
+        "liquidBackground" to Pair({ liquidBackground }, { v: Boolean -> liquidBackground = v; repo.prefManager.setLiquidBackgroundEnabled(v); onChanged() }),
+        "matchArtwork" to Pair({ matchArtwork }, { v: Boolean -> matchArtwork = v; repo.prefManager.setMatchArtworkColor(v); onChanged() }),
+        "lyricsBold" to Pair({ lyricsBold }, { v: Boolean -> lyricsBold = v; repo.prefManager.setLyricsBold(v); onChanged() }),
+        "pvPartsEntry" to Pair({ pvPartsEntry }, { v: Boolean -> pvPartsEntry = v; repo.prefManager.setPvPartsEntryEnabled(v); onChanged() }),
+        "dopagaki" to Pair({ dopagakiMode }, { v: Boolean -> dopagakiMode = v; repo.prefManager.setDopagakiEnabled(v); onChanged() }),
+        "dopaBlackFont" to Pair({ dopaBlackFont }, { v: Boolean -> dopaBlackFont = v; repo.prefManager.setDopaBlackFontEnabled(v); onChanged() }),
+        "usePasscodeForHidden" to Pair({ usePasscodeForHidden }, { v: Boolean -> usePasscodeForHidden = v; repo.prefManager.setUsePasscodeForHidden(v); onChanged() }),
+        "lyricsEnabled" to Pair({ lyricsEnabled }, { v: Boolean -> lyricsEnabled = v; repo.prefManager.setLyricsEnabled(v); onChanged() }),
+        "lyricTranslation" to Pair({ lyricTranslation }, { v: Boolean -> lyricTranslation = v; repo.prefManager.setLyricTranslationEnabled(v); onChanged() }),
+        "pvRuby" to Pair({ pvRuby }, { v: Boolean -> pvRuby = v; repo.prefManager.setPvRubyEnabled(v); onChanged() }),
+        "pvInterludeArt" to Pair({ pvInterludeArt }, { v: Boolean -> pvInterludeArt = v; repo.prefManager.setPvInterludeArtEnabled(v); onChanged() }),
+        "haptics" to Pair({ haptics }, { v: Boolean -> haptics = v; repo.prefManager.setHapticsEnabled(v); onChanged() }),
+        "clockSeconds" to Pair({ clockSeconds }, { v: Boolean -> clockSeconds = v; repo.prefManager.setClockShowSeconds(v); onChanged() }),
+        "clock12h" to Pair({ clock12h }, { v: Boolean -> clock12h = v; repo.prefManager.setClock12h(v); onChanged() }),
+        "clockBattery" to Pair({ clockBattery }, { v: Boolean -> clockBattery = v; repo.prefManager.setClockShowBattery(v); onChanged() }),
+        "dateWareki" to Pair({ dateWareki }, { v: Boolean -> dateWareki = v; repo.prefManager.setDateWareki(v); onChanged() }),
+        "keepScreenOn" to Pair({ keepScreenOn }, { v: Boolean -> keepScreenOn = v; repo.prefManager.setKeepScreenOn(v); onChanged() }),
+        "artworkEnabled" to Pair({ artworkVisible }, { v: Boolean -> artworkVisible = v; repo.prefManager.setArtworkEnabled(v); onChanged() }),
+        "rackReverse" to Pair({ rackReverse }, { v: Boolean -> rackReverse = v; repo.prefManager.setRackReverseScroll(v); onChanged() })
+    )
+
+    val stringBinds: Map<String, Pair<() -> String, (String) -> Unit>> = mapOf(
+        "pageSwitchStyle" to Pair({ pageSwitchStyle }, { v: String -> pageSwitchStyle = v; repo.prefManager.setPageSwitchStyle(v); onChanged() }),
+        "homeDiscLayout" to Pair({ homeDiscLayout }, { v: String -> homeDiscLayout = v; repo.prefManager.setHomeDiscLayout(v); onChanged() }),
+        "dateDisplayMode" to Pair({ dateDisplayMode }, { v: String -> dateDisplayMode = v; repo.prefManager.setDateDisplayMode(v); onChanged() }),
+        "accentHex" to Pair({ accentHex }, { v: String -> accentHex = v; repo.prefManager.setAccentColorHex(v); onChanged() }),
+        "fontChoice" to Pair({ currentFontChoice }, { v: String -> currentFontChoice = v; repo.prefManager.setFontChoice(v); useCustomFont = v == "custom"; repo.prefManager.setUseCustomFont(v == "custom"); onChanged() }),
+        "lyricsDisplayMode" to Pair({ lyricsDisplayMode }, { v: String -> lyricsDisplayMode = v; repo.prefManager.setLyricsDisplayMode(v); onChanged() }),
+        "lyricsPvFont" to Pair({ lyricsPvFont }, { v: String -> lyricsPvFont = v; repo.prefManager.setLyricsPvFont(v); onChanged() }),
+        "lyricsEnFont" to Pair({ lyricsEnFont }, { v: String -> lyricsEnFont = v; repo.prefManager.setLyricsEnFont(v); onChanged() }),
+        "pvTextColor" to Pair({ pvTextColor }, { v: String -> pvTextColor = v; repo.prefManager.setPvTextColor(v); onChanged() }),
+        "startupPage" to Pair({ startupPage }, { v: String -> startupPage = v; repo.prefManager.setStartupPage(v); onChanged() }),
+        "dialVisibility" to Pair({ dialVisibility }, { v: String -> dialVisibility = v; repo.prefManager.setDialVisibility(v); onChanged() }),
+        "librarySort" to Pair({ librarySort }, { v: String -> librarySort = v; repo.prefManager.setLibrarySortMode(v); onChanged(); onAppsUpdated() }),
+    )
+
+    val floatBinds: Map<String, Pair<() -> Float, (Float) -> Unit>> = mapOf(
+        "wallpaperAlpha" to Pair({ wallpaperAlpha }, { v: Float -> wallpaperAlpha = v; repo.prefManager.setHomeWallpaperAlpha(v); onChanged() }),
+        "iconSize" to Pair({ iconSize }, { v: Float -> iconSize = v; repo.prefManager.setAppDiscIconSizeDp(v); onChanged() }),
+        "textSize" to Pair({ textSize }, { v: Float -> textSize = v; repo.prefManager.setAppDiscTextSizeSp(v); onChanged() }),
+        "letterSpacing" to Pair({ letterSpacing }, { v: Float -> letterSpacing = v; repo.prefManager.setAppDiscLetterSpacingSp(v); onChanged() }),
+        "stepAngle" to Pair({ stepAngle }, { v: Float -> stepAngle = v; repo.prefManager.setAppDiscStepAngle(v); onChanged() }),
+        "discInertia" to Pair({ discInertia }, { v: Float -> discInertia = v; repo.prefManager.setDiscInertia(v); onChanged() }),
+        "pvFontScale" to Pair({ pvFontScale }, { v: Float -> pvFontScale = v; repo.prefManager.setPvFontScale(v); onChanged() }),
+        "pvTopOffset" to Pair({ pvTopOffset }, { v: Float -> pvTopOffset = v; repo.prefManager.setPvTopOffsetDp(v); onChanged() }),
+        "liquidSpeed" to Pair({ liquidSpeed }, { v: Float -> liquidSpeed = v; repo.prefManager.setLiquidSpeed(v); onChanged() }),
+        "liquidAlpha" to Pair({ liquidAlpha }, { v: Float -> liquidAlpha = v; repo.prefManager.setLiquidAlpha(v); onChanged() }),
+        "pageTransitionSpeed" to Pair({ pageTransitionSpeed }, { v: Float -> pageTransitionSpeed = v; repo.prefManager.setPageTransitionSpeed(v); onChanged() }),
+        "wallpaperBlur" to Pair({ wallpaperBlur }, { v: Float -> wallpaperBlur = v; repo.prefManager.setWallpaperBlurDp(v); onChanged() })
+    )
+
+    val sliderFormats: Map<String, (Float) -> String> = mapOf(
+        "percentInv" to { v: Float -> "${((1f - v) * 100).toInt()}%" },
+        "dp" to { v: Float -> "${v.toInt()} dp" },
+        "sp" to { v: Float -> "${v.toInt()} sp" },
+        "sp1" to { v: Float -> String.format(java.util.Locale.ROOT, "%.1f sp", v) },
+        "deg" to { v: Float -> String.format(java.util.Locale.ROOT, "%.1f°", v) },
+        "x" to { v: Float -> String.format(java.util.Locale.ROOT, "×%.1f", v) },
+        "pct" to { v: Float -> "${(v * 100).toInt()}%" }
+    )
+
+    val fontResolvers: Map<String, Pair<() -> FontFamily?, (String) -> FontFamily?>> = mapOf(
+        "uiFont" to Pair(
+            { parseFontFamily(currentFontChoice, if (currentFontChoice == "custom") customFontPath else null) },
+            { k: String -> parseFontFamily(k, if (k == "custom") customFontPath else null) }
+        ),
+        "jpFont" to Pair(
+            { parseFontFamily(lyricsPvFont, if (lyricsPvFont == "custom") customFontPath else null) },
+            { k: String -> parseFontFamily(k, if (k == "custom") customFontPath else null) }
+        ),
+        "enFont" to Pair(
+            {
+                when (lyricsEnFont) {
+                    "same" -> parseFontFamily(lyricsPvFont, if (lyricsPvFont == "custom") customFontPath else null)
+                    "custom" -> parseFontFamily("custom", lyricsEnCustomPath)
+                    else -> parseFontFamily(lyricsEnFont, null)
+                }
+            },
+            { k: String ->
+                when (k) {
+                    "same" -> parseFontFamily(lyricsPvFont, if (lyricsPvFont == "custom") customFontPath else null)
+                    "custom" -> parseFontFamily("custom", lyricsEnCustomPath)
+                    else -> parseFontFamily(k, null)
+                }
             }
+        )
+    )
+
+    val choiceEffects: Map<String, (String) -> Unit> = mapOf(
+        "pickFont" to { v: String -> if (v == "custom") fontPickerLauncher.launch("*/*") },
+        "pickFontIfNone" to { v: String -> if (v == "custom" && customFontPath == null) fontPickerLauncher.launch("*/*") },
+        "pickEnFont" to { v: String -> if (v == "custom") enFontPickerLauncher.launch("*/*") }
+    )
+
+    val actionBuilders: Map<String, (SettingItemDef) -> SettingItem> = mapOf(
+        "wallpaperPick" to { def: SettingItemDef ->
+            SettingItem(
+                def.id, def.label, def.desc, def.glyph,
+                valueText = if (backgroundPath != null) "設定済み" else "未設定",
+                onAction = { imagePickerLauncher.launch("image/*") }
+            )
+        },
+        "wallpaperPickPage" to { def: SettingItemDef ->
+            val page = when (def.id) {
+                "wallpaperPickHome" -> 1
+                "wallpaperPickApps" -> 2
+                "wallpaperPickFolder" -> 3
+                else -> 0
+            }
+            SettingItem(
+                def.id, def.label, def.desc, def.glyph,
+                valueText = if (pageWallpapers.getOrNull(page) != null) "設定済み" else "共通",
+                onAction = {
+                    pendingWallpaperPage = page
+                    pageImagePickerLauncher.launch("image/*")
+                }
+            )
+        },
+        "wallpaperClearPages" to { def: SettingItemDef ->
+            SettingItem(
+                def.id, def.label, def.desc, def.glyph, valueText = "",
+                onAction = {
+                    (0..3).forEach { repo.prefManager.setPageWallpaperPath(it, null) }
+                    pageWallpapers = (0..3).map { null }
+                    onChanged()
+                }
+            )
+        },
+        "wallpaperClear" to { def: SettingItemDef ->
+            SettingItem(
+                def.id, def.label, def.desc, def.glyph, valueText = "",
+                onAction = {
+                    repo.prefManager.setCustomBackgroundPath(null)
+                    backgroundPath = null
+                    onChanged()
+                }
+            )
+        },
+        "updateLibrary" to { def: SettingItemDef ->
+            SettingItem(
+                def.id, def.label, def.desc, def.glyph,
+                valueText = "差分更新",
+                onAction = {
+                    if (!isUpdatingApps) {
+                        isUpdatingApps = true
+                        settingsScope.launch {
+                            val tracks = repo.getMusicTracks(forceRefresh = true)
+                            isUpdatingApps = false
+                            android.widget.Toast.makeText(context, "ライブラリを更新しました（全 ${tracks.size} 曲）", android.widget.Toast.LENGTH_SHORT).show()
+                            onAppsUpdated()
+                        }
+                    }
+                }
+            )
+        },
+        "excludedFolders" to { def: SettingItemDef ->
+            SettingItem(
+                def.id, def.label, def.desc, def.glyph,
+                valueText = if (excludedFolders.isEmpty()) "なし" else "${excludedFolders.size}件",
+                onAction = { showExcludedFoldersDialog = true }
+            )
+        },
+        "layoutEdit" to { def: SettingItemDef ->
+            SettingItem(
+                def.id, def.label, def.desc, def.glyph, valueText = "",
+                onAction = {
+                    repo.prefManager.requestLayoutEdit()
+                    onChanged()
+                    android.widget.Toast.makeText(context, "ホームで編集モードを開きます", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            )
+        },
+        "settingsExport" to { def: SettingItemDef ->
+            SettingItem(
+                def.id, def.label, def.desc, def.glyph, valueText = "",
+                onAction = { settingsExportLauncher.launch("nissingeppo_settings.json") }
+            )
+        },
+        "settingsImport" to { def: SettingItemDef ->
+            SettingItem(
+                def.id, def.label, def.desc, def.glyph, valueText = "",
+                onAction = { settingsImportLauncher.launch("*/*") }
+            )
+        },
+        "treeUpdate" to { def: SettingItemDef ->
+            SettingItem(
+                def.id, def.label, def.desc, def.glyph,
+                valueText = "v${treeData.version}",
+                onAction = {
+                    settingsScope.launch {
+                        val newer = com.example.nissingeppomusic.data.SettingsTreeData.refresh(context)
+                        if (newer != null) {
+                            treeData = newer
+                            android.widget.Toast.makeText(context, "設定データを更新しました（v${newer.version}）", android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            android.widget.Toast.makeText(context, "設定データは最新です", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+            )
+        },
+        "fxUpdate" to { def: SettingItemDef ->
+            SettingItem(
+                def.id, def.label, def.desc, def.glyph,
+                valueText = "v$fxVersion",
+                onAction = {
+                    if (!fxChecking) {
+                        fxChecking = true
+                        settingsScope.launch {
+                            val result = LyricEffectsData.refresh(context)
+                            fxChecking = false
+                            fxVersion = LyricEffectsData.appliedVersion
+                            when (result) {
+                                0 -> android.widget.Toast.makeText(context, "最新のデータです（データ v${LyricEffectsData.appliedVersion}）", android.widget.Toast.LENGTH_SHORT).show()
+                                1 -> android.widget.Toast.makeText(context, "歌詞データを更新しました（v${LyricEffectsData.appliedVersion}）", android.widget.Toast.LENGTH_SHORT).show()
+                                else -> android.widget.Toast.makeText(context, "確認に失敗しました" + (LyricEffectsData.lastRefreshError?.let { "（$it）" } ?: ""), android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                }
+            )
+        },
+        "checkUpdate" to { def: SettingItemDef ->
+            SettingItem(
+                def.id, def.label, def.desc, def.glyph,
+                valueText = if (knownBuild > 0) "#$knownBuild" else "—",
+                onAction = {
+                    if (!updateChecking) {
+                        updateChecking = true
+                        settingsScope.launch {
+                            val info = com.example.nissingeppomusic.data.UpdateChecker.fetchLatest(context)
+                            updateChecking = false
+                            if (info != null) knownBuild = info.buildNumber
+                            if (info?.isNewer == true) {
+                                updateInfo = info
+                                showUpdateDialog = true
+                            } else if (info == null) {
+                                android.widget.Toast.makeText(context, "確認に失敗しました", android.widget.Toast.LENGTH_SHORT).show()
+                            } else {
+                                android.widget.Toast.makeText(context, "新しいビルドはありませんでした（最新: #${info.buildNumber}）", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                }
+            )
+        },
+        "passcodeChange" to { def: SettingItemDef ->
+            SettingItem(
+                def.id, def.label, def.desc, def.glyph, valueText = "",
+                onAction = {
+                    newPasscodeField = repo.prefManager.getPasscode()
+                    showPasscodeChangeDialog = true
+                }
+            )
+        },
+        "guideReshow" to { def: SettingItemDef ->
+            SettingItem(
+                def.id, def.label, def.desc, def.glyph, valueText = "",
+                onAction = {
+                    repo.prefManager.setFirstWelcomeTutorialShown(false)
+                    repo.prefManager.setFirstIndexTutorialShown(false)
+                    repo.prefManager.setFirstHideTutorialShown(false)
+                    Toast.makeText(context, "チュートリアルを再表示するように設定しました", Toast.LENGTH_SHORT).show()
+                    onChanged()
+                }
+            )
+        }
+    )
+
+    val specialBuilders: Map<String, (SettingItemDef) -> SettingItem> = mapOf(
+        "sleep" to { def: SettingItemDef ->
+            SettingItem(
+                def.id, def.label, def.desc, def.glyph,
+                valueText = if (sleepTimerEndMs > sleepNowMs) "あと約 ${(sleepTimerEndMs - sleepNowMs + 59999L) / 60000L} 分" else "オフ",
+                choices = listOf(0, 15, 30, 60).map { min ->
+                    SettingChoice(
+                        id = "min$min", label = if (min == 0) "オフ" else "${min}分",
+                        checked = if (min == 0) sleepTimerEndMs <= 0L else (sleepTimerEndMs > sleepNowMs && sleepTimerMinutes == min)
+                    ) {
+                        sleepTimerMinutes = min
+                        repo.prefManager.setSleepTimerMinutes(min)
+                        val end = if (min == 0) 0L else System.currentTimeMillis() + min * 60000L
+                        sleepTimerEndMs = end
+                        repo.prefManager.setSleepTimerEndMs(end)
+                        onChanged()
+                    }
+                }
+            )
+        },
+    )
+
+    fun buildItem(def: SettingItemDef): SettingItem? {
+        return when (def.type) {
+            "toggle" -> {
+                val b = boolBinds[def.bind] ?: return null
+                val cur = b.first()
+                SettingItem(
+                    def.id, def.label, def.desc, def.glyph,
+                    valueText = if (cur) "オン" else "オフ",
+                    choices = toggleChoices(cur) { v -> b.second(v) },
+                    onToggle = { b.second(!cur); onChanged() }
+                )
+            }
+            "choices" -> {
+                val b = stringBinds[def.bind] ?: return null
+                val cur = b.first()
+                val sel = def.choices.firstOrNull { it.v == cur }
+                SettingItem(
+                    def.id, def.label, def.desc, def.glyph,
+                    valueText = sel?.let { it.short ?: it.label } ?: cur,
+                    currentIllo = sel?.illo,
+                    currentColorHex = if (def.id == "accentColor") cur else null,
+                    currentFont = fontResolvers[def.id]?.first?.invoke(),
+                    choices = def.choices.map { c ->
+                        SettingChoice(
+                            id = c.v, label = c.label, checked = cur == c.v,
+                            illo = c.illo, colorHex = c.colorHex,
+                            fontSample = fontResolvers[def.id]?.second?.invoke(c.v),
+                            modePreview = c.preview
+                        ) {
+                            b.second(c.v)
+                            c.effect?.let { eff -> choiceEffects[eff]?.invoke(c.v) }
+                        }
+                    }
+                )
+            }
+            "slider" -> {
+                val b = floatBinds[def.bind] ?: return null
+                val fmt = sliderFormats[def.format] ?: { v: Float -> v.toString() }
+                val cur = b.first()
+                SettingItem(
+                    def.id, def.label, def.desc, def.glyph,
+                    valueText = fmt(cur),
+                    slider = SettingSliderSpec(cur, def.min..def.max, def.steps, fmt) { v -> b.second(v) }
+                )
+            }
+            "action" -> actionBuilders[def.action]?.invoke(def)
+            "special" -> specialBuilders[def.id]?.invoke(def)
+            else -> null
+        }
+    }
+
+    fun buildNode(def: SettingNodeDef): SettingNode? {
+        if (def.itemId != null) {
+            val itemDef = treeData.items[def.itemId] ?: return null
+            if (itemDef.visibleIf == "wallpaperSet" && backgroundPath == null) return null
+            val item = buildItem(itemDef) ?: return null
+            return SettingNode(itemDef.id, itemDef.label, glyph = itemDef.glyph, item = item)
+        }
+        val kids = def.children.mapNotNull { buildNode(it) }
+        return SettingNode(def.id, def.label, glyph = def.glyph, catIcon = def.cat, children = kids)
+    }
+    val settingsTree: List<SettingNode> = treeData.tree.mapNotNull { buildNode(it) }
+
+    val searchResults: List<SettingNode> = if (searchQuery.isBlank()) emptyList() else {
+        val all = mutableListOf<SettingNode>()
+        fun walk(nodes: List<SettingNode>) {
+            for (n in nodes) {
+                if (n.item != null) all += n
+                walk(n.children)
+            }
+        }
+        walk(settingsTree)
+        all.filter { it.label.contains(searchQuery, ignoreCase = true) || (it.item?.desc?.contains(searchQuery, ignoreCase = true) == true) }
+    }
+    val currentList: List<SettingNode> = if (searchQuery.isNotBlank()) searchResults else navPath.fold(settingsTree) { list, id -> list.firstOrNull { it.id == id }?.children ?: emptyList() }
+    val focusedNode: SettingNode? = currentList.firstOrNull { it.id == focusId } ?: currentList.firstOrNull()
+    val currentItem: SettingItem? = focusedNode?.item
+    val ownerNode: SettingNode? = run {
+        var list = settingsTree
+        var node: SettingNode? = null
+        for (id in navPath) {
+            node = list.firstOrNull { it.id == id }
+            list = node?.children ?: emptyList()
+        }
+        node
+    }
+    backLabelState.value = focusedNode?.label
+
+    val leftEntryClick: (Int) -> Unit = { idx ->
+        if (idx >= currentList.size) {
+            startBackFlight()
+            navigateAnimated { goBack() }
+        } else {
+            val node = currentList[idx]
+            val act = node.item?.onAction
+            leftDiscState?.animateToIndex(idx)
+            if (act != null) act.invoke() else focusId = node.id
         }
     }
 
@@ -655,1047 +1324,331 @@ fun SettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0x330B101D))
-            .padding(top = 40.dp)
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            // --- 上部 タイトルバー ---
-            Surface(
-                color = Color(0x99101728),
-                shape = RoundedCornerShape(20.dp),
+            // --- 階層ツリーの2円ナビ（左=現在の階層の一覧, 右=フォーカス中の子一覧 or 選択肢） ---
+            val statusTopDp = with(LocalDensity.current) { WindowInsets.statusBars.getTop(LocalDensity.current).toDp() }
+            val discDensity = LocalDensity.current
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp, vertical = 8.dp)
+                    .fillMaxSize()
+                    .then(
+                        if (disc3d) Modifier.graphicsLayer {
+                            transformOrigin = TransformOrigin(0.5f, 0.5f)
+                            rotationX = 27f + (tiltX?.value ?: 0f)
+                            rotationY = tiltY?.value ?: 0f
+                            cameraDistance = 6.5f * discDensity.density
+                        } else Modifier
+                    )
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (selectedCategory != null) {
-                        Text(
-                            text = "‹ 戻る",
-                            color = currentAccentColor,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Normal,
-                            modifier = Modifier
-                                .clickable { selectedCategory = null }
-                                .padding(end = 16.dp)
+                fun nodeEntry(node: SettingNode): DiscEntry = DiscEntry(
+                    id = node.id, label = node.label,
+                    valueText = node.item?.valueText?.ifEmpty { null },
+                    toggleState = node.item?.let { item -> if (item.onToggle != null) item.valueText == "オン" else null },
+                    icon = {
+                        if (node.catIcon) SettingsCategoryIcon(kind = node.id, accentColor = currentAccentColor)
+                        else DiscGlyph(node.glyph ?: node.item?.glyph ?: "toggle", currentAccentColor)
+                    }
+                )
+                // 左円: 現在の階層の一覧（パネル駆動）
+                key("tree-left-${navPath.joinToString("/")}-$searchQuery") {
+                    val lState = rememberDiscCarouselState(currentList.indexOfFirst { it.id == focusId }.coerceAtLeast(0), stepAngle)
+                    LaunchedEffect(lState) { leftDiscState = lState }
+                    DiscWheel(
+                        entries = currentList.map { nodeEntry(it) } + (
+                            if (navPath.isNotEmpty() && searchQuery.isBlank()) listOf(
+                                DiscEntry(id = "__back", label = "戻る", immediate = true, icon = { DiscGlyph("back", currentAccentColor) })
+                            ) else emptyList()
+                        ),
+                        side = DiscSide.LEFT,
+                        accentColor = currentAccentColor,
+                        modifier = Modifier.fillMaxSize(),
+                        state = lState, gesturesEnabled = false, stepAngle = stepAngle, iconSizeDp = iconSize, textSizeSp = textSize, letterSpacingSp = letterSpacing,
+                        focusedLabelOnly = true, fadeLabelsOnScroll = false, showValues = false, verticalRestLabel = true,
+                        forceSlideOut = discExiting, holdExpand = true, holdActive = leftHeld,
+                        contentKey = navPath.joinToString("/") + "-" + searchQuery,
+                        initialFocus = currentList.indexOfFirst { it.id == focusId }.coerceAtLeast(0),
+                        onFocusChange = { idx ->
+                            backFocused = idx >= currentList.size
+                            currentList.getOrNull(idx)?.let { focusId = it.id }
+                        },
+                        onEntryClick = leftEntryClick
+                    )
+                }
+                // 右円: 子一覧 / ゲージ / 選択肢（「戻る」にフォーカス中は右円に何も表示しない）
+                val currentItem = if (backFocused) null else currentItem
+                val fNode = if (backFocused) null else focusedNode
+                if (fNode != null && fNode.item == null && fNode.children.isNotEmpty()) {
+                    key("tree-right-${navPath.joinToString("/")}-${fNode.id}") {
+                        val rState = rememberDiscCarouselState(0, stepAngle)
+                        LaunchedEffect(rState) { rightDiscState = rState }
+                        DiscWheel(
+                            entries = fNode.children.map { nodeEntry(it) },
+                            side = DiscSide.RIGHT,
+                            accentColor = currentAccentColor,
+                            modifier = Modifier.fillMaxSize(),
+                            state = rState, gesturesEnabled = true, stepAngle = stepAngle, iconSizeDp = iconSize, textSizeSp = textSize, letterSpacingSp = letterSpacing,
+                            accentSelectedLabel = true, fadeLabelsOnScroll = false, dimmed = leftDiscState?.isScrolling == true,
+                            forceSlideOut = discExiting,
+                            contentKey = "r-${navPath.joinToString("/")}-${fNode.id}",
+                            initialFocus = 0,
+                            onFocusChange = { },
+                            onEntryClick = { idx ->
+                                val child = fNode.children[idx]
+                                val act = child.item?.onAction
+                                if (act != null) {
+                                    act.invoke()
+                                } else {
+                                    flightReverse = false
+                                    flightLabel = child.label
+                                    settingsScope.launch {
+                                        flightAnim.snapTo(0f)
+                                        flightAnim.animateTo(1f, animationSpec = tween(durationMillis = 420, easing = FastOutSlowInEasing))
+                                        flightLabel = null
+                                    }
+                                    navigateAnimated {
+                                        navPath = navPath + fNode.id
+                                        focusId = child.id
+                                    }
+                                }
+                            }
                         )
                     }
-                    Text(
-                        text = when (selectedCategory) {
-                            "behavior" -> "動作設定"
-                            "appearance" -> "外観設定"
-                            "lyrics" -> "歌詞設定"
-                            "library" -> "ライブラリ"
-                            "security" -> "セキュリティ"
-                            "tutorial" -> "チュートリアル"
-                            else -> "環境設定"
+                } else if (currentItem != null && currentItem.slider != null) {
+                    key("disc-value-${currentItem.id}") {
+                        DiscValueWheel(
+                            title = currentItem.label,
+                            initialValue = currentItem.slider.value,
+                            range = currentItem.slider.range,
+                            steps = currentItem.slider.steps,
+                            format = currentItem.slider.format,
+                            accentColor = currentAccentColor,
+                            modifier = Modifier.fillMaxSize(),
+                            onSave = { v -> currentItem.slider.onSave(v) }
+                        )
+                    }
+                } else if (currentItem != null) {
+key("disc-choices-${currentItem.id}") {
+                    val choiceState = rememberDiscCarouselState(currentItem.choices.indexOfFirst { it.checked }.coerceAtLeast(0), stepAngle)
+                    LaunchedEffect(choiceState) { rightDiscState = choiceState }
+                    DiscWheel(
+                        entries = currentItem.choices.map { choice ->
+                            DiscEntry(
+                                id = choice.id, label = choice.label, checked = choice.checked,
+                                icon = {
+                                    val cHex = choice.colorHex
+                                    val cFont = choice.fontSample
+                                    val cIllo = choice.illo
+                                    when {
+                                        choice.id == "on" || choice.id == "off" -> DiscMiniSwitch(choice.id == "on", currentAccentColor)
+                                        cHex != null -> Box(
+                                            modifier = Modifier.size(30.dp).clip(CircleShape).background(parseHexColor(cHex))
+                                        )
+                                        cFont != null -> Text("あ", fontFamily = cFont, color = Color.White, fontSize = 19.sp)
+                                        cIllo != null -> Box(modifier = Modifier.graphicsLayer { scaleX = 0.78f; scaleY = 0.78f }) {
+                                            ChoiceIllustration(cIllo, currentAccentColor, choice.checked)
+                                        }
+                                        else -> DiscGlyph(currentItem.glyph, currentAccentColor)
+                                    }
+                                }
+                            )
                         },
-                        color = Color.White,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Normal
+                        side = DiscSide.RIGHT,
+                        accentColor = currentAccentColor,
+                        modifier = Modifier.fillMaxSize(),
+                        state = choiceState, gesturesEnabled = true, stepAngle = stepAngle, iconSizeDp = iconSize, textSizeSp = textSize, letterSpacingSp = letterSpacing, accentSelectedLabel = true, fadeLabelsOnScroll = false, tapToApply = true, dimmed = leftDiscState?.isScrolling == true, contentKey = "c-${currentItem.id}", forceSlideOut = discExiting,
+                        initialFocus = currentItem.choices.indexOfFirst { it.checked }.coerceAtLeast(0),
+                        onFocusChange = { },
+                        onEntryClick = { idx -> currentItem.choices[idx].onSelect() },
                     )
+                }
                 }
             }
 
-            val categories = listOf(
-                Triple("behavior", "動作", "ダイヤルのスクロール方向や操作感の設定"),
-                Triple("appearance", "外観", "壁紙、配色、フォントなどの見た目のカスタマイズ"),
-                Triple("lyrics", "歌詞", "表示モード、フォント、太さの設定"),
-                Triple("library", "ライブラリ", "曲データの差分更新（追加・削除された曲の反映）"),
-                Triple("security", "セキュリティ", "非表示アプリ用のパスコード(PIN)設定"),
-                Triple("tutorial", "チュートリアル", "ガイドや使い方の再表示設定")
-            )
+        // --- タッチ操作パネル（左円駆動＋タップ判定＋ホールド信号。円盤レイヤーの上） ---
+        val panelRadiusPx = with(LocalDensity.current) { 165.dp.toPx() }
+        val discCenterXPx = with(LocalDensity.current) { (-80).dp.toPx() }
+        val screenHDp = LocalConfiguration.current.screenHeightDp.toFloat()
+        val discCenterYPx = with(LocalDensity.current) { (screenHDp / 2f - statusTopDp.value - 104f).dp.toPx() }
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = statusTopDp + 104.dp, bottom = 72.dp)
+        ) {
+            Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                DiscTouchHalf(
+                    state = leftDiscState,
+                    isRight = false,
+                    radiusPx = panelRadiusPx,
+                    isReverseScroll = { isReverseScroll },
+                    modifier = Modifier.fillMaxSize(),
+                    onHoldingChanged = { leftHeld = it },
+                    discCenterXPx = discCenterXPx,
+                    discCenterYPx = discCenterYPx,
+                    onItemTap = leftEntryClick
+                )
+            }
+            Box(modifier = Modifier.weight(1f).fillMaxHeight())
+        }
 
-            LazyColumn(
+        // --- 検索（文字だけ＋検索アイコン） ---
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = statusTopDp + 10.dp),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp, vertical = 12.dp),
-                contentPadding = PaddingValues(bottom = 240.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                    .width(320.dp)
+                    .height(48.dp)
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                if (selectedCategory == null) {
-                    // --- 1段階目: ジャンル選択リスト ---
-                    items(categories) { (id, title, subtitle) ->
-                        Surface(
-                            color = Color(0x99101728),
-                            shape = RoundedCornerShape(20.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { selectedCategory = id }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(20.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                SettingsCategoryIcon(kind = id, accentColor = currentAccentColor)
-                                Spacer(modifier = Modifier.width(14.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = title,
-                                        color = Color.White,
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Normal
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = subtitle,
-                                        color = Color.Gray,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Light
-                                    )
-                                }
-                                Text(
-                                    text = "›",
-                                    color = Color.Gray,
-                                    fontSize = 22.sp,
-                                    fontWeight = FontWeight.Light
-                                )
-                            }
+                WhiteSearchIcon(size = 18.dp, color = Color.White.copy(alpha = 0.85f))
+                Spacer(modifier = Modifier.width(8.dp))
+                BasicTextField(
+                    value = searchQuery,
+                    onValueChange = {
+                        searchQuery = it
+                        focusId = null
+                    },
+                    singleLine = true,
+                    textStyle = androidx.compose.ui.text.TextStyle(
+                        color = Color.White,
+                        fontSize = 15.sp,
+                        textAlign = TextAlign.Center
+                    ),
+                    cursorBrush = SolidColor(currentAccentColor),
+                    modifier = Modifier.weight(1f)
+                ) { innerTextField ->
+                    Box(contentAlignment = Alignment.Center) {
+                        if (searchQuery.isEmpty()) {
+                            Text(
+                                text = "設定を検索",
+                                color = Color.White.copy(alpha = 0.85f),
+                                fontSize = 14.sp,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
+                        innerTextField()
                     }
-                    // アップデート確認（カテゴリ外の単独行）
-                    item {
-                        Surface(
-                            color = Color(0x99101728),
-                            shape = RoundedCornerShape(20.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable(enabled = !updateChecking) {
-                                    updateMessage = null
-                                    updateChecking = true
-                                    settingsScope.launch {
-                                        val info = com.example.nissingeppomusic.data.UpdateChecker.fetchLatest(context)
-                                        updateChecking = false
-                                        if (info?.isNewer == true) {
-                                            updateInfo = info
-                                            showUpdateDialog = true
-                                        } else if (info == null) {
-                                            updateMessage = "確認に失敗しました"
-                                        } else {
-                                            updateMessage = "新しいビルドはありませんでした（最新: #${info.buildNumber}）"
-                                        }
-                                    }
-                                }
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(20.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(
-                                        text = "アップデートを確認",
-                                        color = Color.White,
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Normal
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = when {
-                                            updateChecking -> "確認中…"
-                                            updateMessage != null -> updateMessage!!
-                                            else -> "GitHubの最新ビルドを確認します"
-                                        },
-                                        color = Color.Gray,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Light
-                                    )
-                                }
-                                Text(
-                                    text = "›",
-                                    color = Color.Gray,
-                                    fontSize = 22.sp,
-                                    fontWeight = FontWeight.Light
-                                )
+                }
+                if (searchQuery.isNotEmpty()) {
+                    Text(
+                        text = "✕",
+                        color = Color.White,
+                        fontSize = 14.sp,
+                        modifier = Modifier
+                            .clickable {
+                                searchQuery = ""
+                                focusId = null
                             }
-                        }
-                    }
-                } else {
-                    // --- 2段階目: 各カテゴリの詳細設定 ---
-                    when (selectedCategory) {
-                        "lyrics" -> {
-                            item {
-                                Surface(
-                                    color = Color(0x99101728),
-                                    shape = RoundedCornerShape(20.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(20.dp),
-                                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                                    ) {
-                                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                                        Text("歌詞の表示モード", color = Color.White, fontSize = 14.sp)
-                                                        Row(
-                                                            modifier = Modifier.fillMaxWidth(),
-                                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                                        ) {
-                                                            LyricsModePreviewCard(
-                                                                mode = "line",
-                                                                label = "現在の行",
-                                                                selected = lyricsDisplayMode == "line",
-                                                                accentColor = currentAccentColor,
-                                                                modifier = Modifier.weight(1f)
-                                                            ) {
-                                                                lyricsDisplayMode = "line"
-                                                                repo.prefManager.setLyricsDisplayMode("line")
-                                                                onChanged()
-                                                            }
-                                                            LyricsModePreviewCard(
-                                                                mode = "video",
-                                                                label = "リリックビデオ",
-                                                                selected = lyricsDisplayMode == "video",
-                                                                accentColor = currentAccentColor,
-                                                                modifier = Modifier.weight(1f)
-                                                            ) {
-                                                                lyricsDisplayMode = "video"
-                                                                repo.prefManager.setLyricsDisplayMode("video")
-                                                                onChanged()
-                                                            }
-                                                            LyricsModePreviewCard(
-                                                                mode = "multi",
-                                                                label = "複数行",
-                                                                selected = lyricsDisplayMode == "multi",
-                                                                accentColor = currentAccentColor,
-                                                                modifier = Modifier.weight(1f)
-                                                            ) {
-                                                                lyricsDisplayMode = "multi"
-                                                                repo.prefManager.setLyricsDisplayMode("multi")
-                                                                onChanged()
-                                                            }
-                                                        }
-                                                        Text("複数行は円を下げて、できた空白に前・今・次の3行を表示します", color = Color.Gray, fontSize = 12.sp)
-                                                    }
-                                    }
-                                }
-                            }
-                            item {
-                                FontPickerCard(
-                                    title = "歌詞のフォント（全モード共通）",
-                                    options = listOf(
-                                        "default" to "システムフォント",
-                                        "receipt" to "レシートフォント (Receipt Font)",
-                                        "denkichip" to "でんきチップ (DenkiChip)",
-                                        "tsukuhou" to "築豊明朝 (Tsukuhou Mincho)",
-                                        "kaibunsho" to "怪聞書フォント (Kaibunsho)",
-                                        "custom" to "カスタムフォント (.ttf/.otf)"
-                                    ),
-                                    selected = lyricsPvFont,
-                                    accentColor = currentAccentColor,
-                                    expanded = fontPickerExpanded == "jp",
-                                    onToggle = { fontPickerExpanded = if (fontPickerExpanded == "jp") null else "jp" },
-                                    onSelected = { key ->
-                                        lyricsPvFont = key
-                                        repo.prefManager.setLyricsPvFont(key)
-                                        onChanged()
-                                    },
-                                    fontFor = { key -> parseFontFamily(key, if (key == "custom") customFontPath else null) },
-                                    sampleText = "あア 歌詞",
-                                    footer = {
-                                        Text("「カスタムフォント」はフォント設定で選んだファイルを使います", color = Color.Gray, fontSize = 12.sp)
-                                    }
-                                )
-                            }
-                            item {
-                                FontPickerCard(
-                                    title = "歌詞の英字フォント",
-                                    options = listOf(
-                                        "same" to "日本語フォントと同じ",
-                                        "freelicense" to "Free License",
-                                        "montserratbi" to "Montserrat Bold Italic",
-                                        "default" to "システムフォント",
-                                        "receipt" to "レシートフォント (Receipt Font)",
-                                        "denkichip" to "でんきチップ (DenkiChip)",
-                                        "tsukuhou" to "築豊明朝 (Tsukuhou Mincho)",
-                                        "kaibunsho" to "怪聞書フォント (Kaibunsho)",
-                                        "custom" to "カスタムフォント (.ttf/.otf)"
-                                    ),
-                                    selected = lyricsEnFont,
-                                    accentColor = currentAccentColor,
-                                    expanded = fontPickerExpanded == "en",
-                                    onToggle = { fontPickerExpanded = if (fontPickerExpanded == "en") null else "en" },
-                                    onSelected = { key ->
-                                        lyricsEnFont = key
-                                        repo.prefManager.setLyricsEnFont(key)
-                                        onChanged()
-                                    },
-                                    fontFor = { key ->
-                                        when (key) {
-                                            "same" -> parseFontFamily(lyricsPvFont, if (lyricsPvFont == "custom") customFontPath else null)
-                                            "custom" -> parseFontFamily("custom", lyricsEnCustomPath)
-                                            else -> parseFontFamily(key, null)
-                                        }
-                                    },
-                                    sampleText = "ABC abc",
-                                    footer = if (lyricsEnFont == "custom") {
-                                        {
-                                            Button(
-                                                onClick = { enFontPickerLauncher.launch("*/*") },
-                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F293D)),
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Text("英字用フォントファイル (.ttf / .otf) をインポート", color = Color.White, fontWeight = FontWeight.Light)
-                                            }
-                                            Text("英字フォント専用のファイルです（日本語用とは別に選べます）", color = Color.Gray, fontSize = 12.sp)
-                                        }
-                                    } else null
-                                )
-                            }
-                            item {
-                                Surface(
-                                    color = Color(0x99101728),
-                                    shape = RoundedCornerShape(20.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(20.dp),
-                                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text("歌詞を太字にする", color = Color.White, fontSize = 14.sp)
-                                                Text("デフォルトは細字。築豊明朝は細字が映えます", color = Color.Gray, fontSize = 12.sp)
-                                            }
-                                            Switch(
-                                                checked = lyricsBold,
-                                                onCheckedChange = {
-                                                    lyricsBold = it
-                                                    repo.prefManager.setLyricsBold(it)
-                                                    onChanged()
-                                                },
-                                                colors = switchColors
-                                            )
-                                        }
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text("文字をパーツに分けて入場させる", color = Color.White, fontSize = 14.sp)
-                                                Text("リリックビデオで、文字がスライス状のパーツになって集まります", color = Color.Gray, fontSize = 12.sp)
-                                            }
-                                            Switch(
-                                                checked = pvPartsEntry,
-                                                onCheckedChange = {
-                                                    pvPartsEntry = it
-                                                    repo.prefManager.setPvPartsEntryEnabled(it)
-                                                    onChanged()
-                                                },
-                                                colors = switchColors
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                            item {
-                                Surface(
-                                    color = Color(0x99101728),
-                                    shape = RoundedCornerShape(20.dp),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable(enabled = !fxChecking) {
-                                            fxMessage = null
-                                            fxChecking = true
-                                            settingsScope.launch {
-                                                val result = LyricEffectsData.refresh(context)
-                                                fxChecking = false
-                                                fxMessage = when (result) {
-                                                    1 -> "更新しました（データ v${LyricEffectsData.appliedVersion}）"
-                                                    0 -> "最新のデータです（データ v${LyricEffectsData.appliedVersion}）"
-                                                    else -> "確認に失敗しました" + (LyricEffectsData.lastRefreshError?.let { "（$it）" } ?: "")
-                                                }
-                                            }
-                                        }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(20.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column {
-                                            Text(
-                                                text = "歌詞エフェクトの更新",
-                                                color = Color.White,
-                                                fontSize = 16.sp,
-                                                fontWeight = FontWeight.Normal
-                                            )
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Text(
-                                                text = when {
-                                                    fxChecking -> "確認中…"
-                                                    fxMessage != null -> fxMessage!!
-                                                    else -> "単語アイコンや色の対応表を最新にします"
-                                                },
-                                                color = Color.Gray,
-                                                fontSize = 13.sp,
-                                                fontWeight = FontWeight.Light
-                                            )
-                                        }
-                                        Text(
-                                            text = "›",
-                                            color = Color.Gray,
-                                            fontSize = 22.sp,
-                                            fontWeight = FontWeight.Light
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                        "behavior" -> {
-                            item {
-                                Surface(
-                                    color = Color(0x99101728),
-                                    shape = RoundedCornerShape(20.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(20.dp),
-                                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                                    ) {
-                                        Text("ダイヤルの操作設定", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Normal)
-
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text("スクロール方向の反転", color = Color.White, fontSize = 14.sp)
-                                                Text("有効にすると、すべてのダイヤルとスクロールの方向が逆になります", color = Color.Gray, fontSize = 12.sp)
-                                            }
-                                            Switch(
-                                                checked = isReverseScroll,
-                                                onCheckedChange = {
-                                                    isReverseScroll = it
-                                                    repo.prefManager.setReverseScroll(it)
-                                                    onChanged()
-                                                },
-                                                colors = switchColors
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                                                "library" -> {
-                            item {
-                                Surface(
-                                    color = Color(0x99101728),
-                                    shape = RoundedCornerShape(20.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(20.dp),
-                                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                                    ) {
-                                        Text("曲データの更新", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Normal)
-                                        Text("端末内の曲の追加・削除・変更をチェックして、ライブラリに反映します（差分更新）。通常は起動時に自動でチェックされるため、手動更新が要るのは曲ファイルを入れ替えた直後などです。", color = Color.Gray, fontSize = 12.sp)
-                                        Button(
-                                            onClick = {
-                                                if (!isUpdatingLibrary) {
-                                                    isUpdatingLibrary = true
-                                                    libraryUpdateStatus = "更新中…"
-                                                    settingsScope.launch {
-                                                        val tracks = repo.getMusicTracks(forceRefresh = true)
-                                                        libraryUpdateStatus = "更新しました（全 ${tracks.size} 曲）"
-                                                        isUpdatingLibrary = false
-                                                        onLibraryUpdated()
-                                                    }
-                                                }
-                                            },
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F293D)),
-                                            elevation = null
-                                        ) {
-                                            Text("ライブラリを更新", color = Color.White, fontWeight = FontWeight.Light)
-                                        }
-                                        if (libraryUpdateStatus.isNotEmpty()) {
-                                            Text(libraryUpdateStatus, color = Color.Gray, fontSize = 13.sp)
-                                        }
-                                    }
-                                }
-                            }
-                            item {
-                                Surface(
-                                    color = Color(0x99101728),
-                                    shape = RoundedCornerShape(20.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(20.dp),
-                                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                                    ) {
-                                        Text("除外フォルダ", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Normal)
-                                        Text("ここに入れたフォルダ配下の曲は、ライブラリに表示されません。着信音やダウンロードした一時ファイルを置くフォルダなどにどうぞ。", color = Color.Gray, fontSize = 12.sp)
-                                        if (excludedFolders.isEmpty()) {
-                                            Text("（未設定）", color = Color.Gray, fontSize = 13.sp)
-                                        } else {
-                                            excludedFolders.forEach { folderPath ->
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Text(folderPath, color = Color.White, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                                                    OutlinedButton(
-                                                        onClick = {
-                                                            repo.prefManager.removeExcludedFolder(folderPath)
-                                                            excludedFolders = repo.prefManager.getExcludedFolders().sorted()
-                                                            onLibraryUpdated()
-                                                        },
-                                                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red)
-                                                    ) {
-                                                        Text("削除", fontWeight = FontWeight.Light)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                            Button(
-                                                onClick = { excludedFolderPickerLauncher.launch(null) },
-                                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F293D)),
-                                                elevation = null
-                                            ) {
-                                                Text("フォルダを選んで追加", color = Color.White, fontWeight = FontWeight.Light)
-                                            }
-                                            val downloadPath = android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS).absolutePath
-                                            if (!excludedFolders.contains(downloadPath)) {
-                                                OutlinedButton(
-                                                    onClick = {
-                                                        repo.prefManager.addExcludedFolder(downloadPath)
-                                                        excludedFolders = repo.prefManager.getExcludedFolders().sorted()
-                                                        onLibraryUpdated()
-                                                    },
-                                                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
-                                                ) {
-                                                    Text("Downloadを追加", fontWeight = FontWeight.Light)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        "appearance" -> {
-                            item {
-                                Surface(
-                                    color = Color(0x99101728),
-                                    shape = RoundedCornerShape(20.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 20.dp, vertical = 14.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text("ボタンでページ切り替え", color = Color.White, fontSize = 15.sp)
-                                            Text("オフにすると下部のダイヤルで切り替えます", color = Color.Gray, fontSize = 12.sp)
-                                        }
-                                        Switch(
-                                            checked = pageSwitchStyle == "buttons",
-                                            onCheckedChange = { useButtons ->
-                                                pageSwitchStyle = if (useButtons) "buttons" else "dial"
-                                                repo.prefManager.setPageSwitchStyle(pageSwitchStyle)
-                                                onChanged()
-                                            },
-                                            colors = SwitchDefaults.colors(
-                                                checkedThumbColor = Color.White,
-                                                checkedTrackColor = currentAccentColor,
-                                                uncheckedThumbColor = Color.White,
-                                                uncheckedTrackColor = Color(0xFF3A4358)
-                                            )
-                                        )
-                                    }
-                                }
-                            }
-                            item {
-                                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                                    // 外観サブタブ選択
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        listOf(
-                                            "wallpaper" to "壁紙",
-                                            "color" to "配色",
-                                            "font" to "フォント"
-                                        ).forEach { (tabId, label) ->
-                                            val isSelected = appearanceSubTab == tabId
-                                            Box(
-                                                modifier = Modifier
-                                                    .weight(1f)
-                                                    .height(40.dp)
-                                                    .clip(RoundedCornerShape(12.dp))
-                                                    .background(if (isSelected) currentAccentColor else Color(0x99101728))
-                                                    .clickable { appearanceSubTab = tabId },
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text(
-                                                    text = label,
-                                                    color = Color.White,
-                                                    fontSize = 14.sp,
-                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                                )
-                                            }
-                                        }
-                                    }
-
-                                    // サブタブ内容
-                                    when (appearanceSubTab) {
-                                        "wallpaper" -> {
-                                            Surface(
-                                                color = Color(0x99101728),
-                                                shape = RoundedCornerShape(20.dp),
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Column(
-                                                    modifier = Modifier.padding(20.dp),
-                                                    verticalArrangement = Arrangement.spacedBy(20.dp)
-                                                ) {
-                                                    Text("壁紙画像", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Normal)
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        Button(
-                                                            onClick = { imagePickerLauncher.launch("image/*") },
-                                                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1F293D)),
-                                                            elevation = null
-                                                        ) {
-                                                            Text("画像を選択", color = Color.White, fontWeight = FontWeight.Light)
-                                                        }
-                                                        if (backgroundPath != null) {
-                                                            OutlinedButton(
-                                                                onClick = {
-                                                                    repo.prefManager.setCustomBackgroundPath(null)
-                                                                    backgroundPath = null
-                                                                    onChanged()
-                                                                },
-                                                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
-                                                                border = null
-                                                            ) {
-                                                                Text("解除", fontWeight = FontWeight.Light)
-                                                            }
-                                                        }
-                                                    }
-
-                                                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-
-                                                    Column {
-                                                        Row(
-                                                            modifier = Modifier.fillMaxWidth(),
-                                                            horizontalArrangement = Arrangement.SpaceBetween
-                                                        ) {
-                                                            Text("ホーム背景の明るさ", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Light)
-                                                            Text("${((1f - wallpaperAlpha) * 100).toInt()}%", color = Color.LightGray, fontSize = 14.sp, fontWeight = FontWeight.Light)
-                                                        }
-                                                        Spacer(modifier = Modifier.height(8.dp))
-                                                        SimpleTickSlider(
-                                                            value = wallpaperAlpha,
-                                                            onValueChange = {
-                                                                wallpaperAlpha = it
-                                                                repo.prefManager.setHomeWallpaperAlpha(it)
-                                                                onChanged()
-                                                            },
-                                                            valueRange = 0.05f..0.9f,
-                                                            steps = 17,
-                                                            accentColor = currentAccentColor
-                                                        )
-                                                    }
-
-                                                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-
-                                                    Column {
-                                                        Text("ホーム画面の円の大きさ", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Normal)
-                                                        Spacer(modifier = Modifier.height(8.dp))
-                                                        Row(
-                                                            modifier = Modifier.fillMaxWidth(),
-                                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                                        ) {
-                                                            listOf(
-                                                                Triple("classic", "従来（均等）", "disc_classic"),
-                                                                Triple("artwork", "アートワーク大きめ", "disc_artwork"),
-                                                                Triple("auto", "自動", "disc_auto")
-                                                            ).forEach { (value, label, illo) ->
-                                                                IllustratedChoiceCard(
-                                                                    kind = illo,
-                                                                    label = label,
-                                                                    selected = homeDiscLayout == value,
-                                                                    accentColor = currentAccentColor,
-                                                                    modifier = Modifier.weight(1f)
-                                                                ) {
-                                                                    homeDiscLayout = value
-                                                                    repo.prefManager.setHomeDiscLayout(value)
-                                                                    onChanged()
-                                                                }
-                                                            }
-                                                        }
-                                                        Spacer(modifier = Modifier.height(8.dp))
-                                                        Text(
-                                                            "「自動」では、再生中だけアートワーク側の円が大きくなり、停止すると従来の位置に戻ります",
-                                                            color = Color.Gray,
-                                                            fontSize = 12.sp
-                                                        )
-                                                    }
-
-                                                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        Column(modifier = Modifier.weight(1f)) {
-                                                            Text("液体グラデーション背景", color = Color.White, fontSize = 14.sp)
-                                                            Text("未選択のとき背景でグラデーションがゆっくり動きます。再生中（配色連動ON時）はアートワーク背景の上にも重なります", color = Color.Gray, fontSize = 12.sp)
-                                                        }
-                                                        Switch(
-                                                            checked = liquidBackground,
-                                                            onCheckedChange = {
-                                                                liquidBackground = it
-                                                                repo.prefManager.setLiquidBackgroundEnabled(it)
-                                                                onChanged()
-                                                            },
-                                                            colors = switchColors
-                                                        )
-                                                    }
-
-                                                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        Column(modifier = Modifier.weight(1f)) {
-                                                            Text("UIを3D表示", color = Color.White, fontSize = 14.sp)
-                                                            Text("円・ダイヤル・歌詞PVなどを少し奥に倒して、立体的に見せます", color = Color.Gray, fontSize = 12.sp)
-                                                        }
-                                                        Switch(
-                                                            checked = disc3d,
-                                                            onCheckedChange = {
-                                                                disc3d = it
-                                                                repo.prefManager.setDisc3dEnabled(it)
-                                                                onChanged()
-                                                            },
-                                                            colors = switchColors
-                                                        )
-                                                    }
-
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        Column(modifier = Modifier.weight(1f)) {
-                                                            Text("端末の傾きで角度を変える", color = if (disc3d) Color.White else Color.Gray, fontSize = 14.sp)
-                                                            Text("スマホを傾けると、3Dの角度もついてきます（3D表示がオンのときだけ）", color = Color.Gray, fontSize = 12.sp)
-                                                        }
-                                                        Switch(
-                                                            checked = disc3dTilt,
-                                                            onCheckedChange = {
-                                                                disc3dTilt = it
-                                                                repo.prefManager.setDisc3dTiltEnabled(it)
-                                                                onChanged()
-                                                            },
-                                                            colors = switchColors,
-                                                            enabled = disc3d
-                                                        )
-                                                    }
-
-                                                }
-                                            }
-                                        }
-                                        "color" -> {
-                                            Surface(
-                                                color = Color(0x99101728),
-                                                shape = RoundedCornerShape(20.dp),
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Column(
-                                                    modifier = Modifier.padding(20.dp),
-                                                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                                                ) {
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        Column(modifier = Modifier.weight(1f)) {
-                                                            Text("アートワークに合わせる", color = Color.White, fontSize = 14.sp)
-                                                            Text("再生中の曲のアートワークから、アクセントと背景の色を自動で決めます", color = Color.Gray, fontSize = 12.sp)
-                                                        }
-                                                        Switch(
-                                                            checked = matchArtwork,
-                                                            onCheckedChange = {
-                                                                matchArtwork = it
-                                                                repo.prefManager.setMatchArtworkColor(it)
-                                                                onChanged()
-                                                            },
-                                                            colors = switchColors
-                                                        )
-                                                    }
-                                                    Text("アクセントカラー", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Normal)
-                                                    Row(
-                                                        modifier = Modifier.fillMaxWidth(),
-                                                        horizontalArrangement = Arrangement.SpaceBetween
-                                                    ) {
-                                                        ACCENT_PRESETS.forEach { (_, hex) ->
-                                                            val color = parseHexColor(hex)
-                                                            val isSelected = accentHex.equals(hex, ignoreCase = true)
-                                                            Box(
-                                                                modifier = Modifier
-                                                                    .size(36.dp)
-                                                                    .clip(CircleShape)
-                                                                    .background(color)
-                                                                    .clickable {
-                                                                        accentHex = hex
-                                                                        repo.prefManager.setAccentColorHex(hex)
-                                                                        onChanged()
-                                                                    },
-                                                                contentAlignment = Alignment.Center
-                                                            ) {
-                                                                if (isSelected) {
-                                                                    Box(
-                                                                        modifier = Modifier
-                                                                            .size(14.dp)
-                                                                            .clip(CircleShape)
-                                                                            .background(Color.White)
-                                                                    )
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        "font" -> {
-                                            Surface(
-                                                color = Color(0x99101728),
-                                                shape = RoundedCornerShape(20.dp),
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Column(
-                                                    modifier = Modifier.padding(20.dp),
-                                                    verticalArrangement = Arrangement.spacedBy(20.dp)
-                                                ) {
-                                                    FontSelectionSection(
-                                                        currentFontChoice = currentFontChoice,
-                                                        onFontSelected = { newChoice ->
-                                                            currentFontChoice = newChoice
-                                                            repo.prefManager.setFontChoice(newChoice)
-                                                            useCustomFont = newChoice == "custom"
-                                                            repo.prefManager.setUseCustomFont(newChoice == "custom")
-                                                            onChanged()
-                                                        },
-                                                        onImportClick = { fontPickerLauncher.launch("*/*") },
-                                                        customFontPath = customFontPath,
-                                                        useCustomFont = useCustomFont,
-                                                        onUseCustomFontChanged = { use ->
-                                                            useCustomFont = use
-                                                            repo.prefManager.setUseCustomFont(use)
-                                                            onChanged()
-                                                        },
-                                                        switchColors = switchColors
-                                                    )
-
-                                                    HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
-
-                                                    // 1. アイコンサイズ
-                                                    Column {
-                                                        Row(
-                                                            modifier = Modifier.fillMaxWidth(),
-                                                            horizontalArrangement = Arrangement.SpaceBetween
-                                                        ) {
-                                                            Text("アイコンサイズ", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Light)
-                                                            Text("${iconSize.toInt()} dp", color = Color.LightGray, fontSize = 14.sp, fontWeight = FontWeight.Light)
-                                                        }
-                                                        Spacer(modifier = Modifier.height(6.dp))
-                                                        SimpleTickSlider(
-                                                            value = iconSize,
-                                                            onValueChange = {
-                                                                iconSize = it
-                                                                repo.prefManager.setAppDiscIconSizeDp(it)
-                                                                onChanged()
-                                                            },
-                                                            valueRange = 16f..32f,
-                                                            steps = 15,
-                                                            accentColor = currentAccentColor
-                                                        )
-                                                    }
-
-                                                    // 2. テキストサイズ
-                                                    Column {
-                                                        Row(
-                                                            modifier = Modifier.fillMaxWidth(),
-                                                            horizontalArrangement = Arrangement.SpaceBetween
-                                                        ) {
-                                                            Text("テキストサイズ", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Light)
-                                                            Text("${textSize.toInt()} sp", color = Color.LightGray, fontSize = 14.sp, fontWeight = FontWeight.Light)
-                                                        }
-                                                        Spacer(modifier = Modifier.height(6.dp))
-                                                        SimpleTickSlider(
-                                                            value = textSize,
-                                                            onValueChange = {
-                                                                textSize = it
-                                                                repo.prefManager.setAppDiscTextSizeSp(it)
-                                                                onChanged()
-                                                            },
-                                                            valueRange = 12f..22f,
-                                                            steps = 9,
-                                                            accentColor = currentAccentColor
-                                                        )
-                                                    }
-
-                                                    // 3. 文字間隔
-                                                    Column {
-                                                        Row(
-                                                            modifier = Modifier.fillMaxWidth(),
-                                                            horizontalArrangement = Arrangement.SpaceBetween
-                                                        ) {
-                                                            Text("文字間隔", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Light)
-                                                            Text(String.format(java.util.Locale.ROOT, "%.1f sp", letterSpacing), color = Color.LightGray, fontSize = 14.sp, fontWeight = FontWeight.Light)
-                                                        }
-                                                        Spacer(modifier = Modifier.height(6.dp))
-                                                        SimpleTickSlider(
-                                                            value = letterSpacing,
-                                                            onValueChange = {
-                                                                letterSpacing = it
-                                                                repo.prefManager.setAppDiscLetterSpacingSp(it)
-                                                                onChanged()
-                                                            },
-                                                            valueRange = 0.5f..3.0f,
-                                                            steps = 25,
-                                                            accentColor = currentAccentColor
-                                                        )
-                                                    }
-
-                                                    // 4. リストの間隔
-                                                    Column {
-                                                        Row(
-                                                            modifier = Modifier.fillMaxWidth(),
-                                                            horizontalArrangement = Arrangement.SpaceBetween
-                                                        ) {
-                                                            Text("リストの間隔", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Light)
-                                                            Text(String.format(java.util.Locale.ROOT, "%.1f°", stepAngle), color = Color.LightGray, fontSize = 14.sp, fontWeight = FontWeight.Light)
-                                                        }
-                                                        Spacer(modifier = Modifier.height(6.dp))
-                                                        SimpleTickSlider(
-                                                            value = stepAngle,
-                                                            onValueChange = {
-                                                                stepAngle = it
-                                                                repo.prefManager.setAppDiscStepAngle(it)
-                                                                onChanged()
-                                                            },
-                                                            valueRange = 10f..20f,
-                                                            steps = 20,
-                                                            accentColor = currentAccentColor
-                                                        )
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        "security" -> {
-                            item {
-                                Surface(
-                                    color = Color(0x99101728),
-                                    shape = RoundedCornerShape(20.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(20.dp),
-                                        verticalArrangement = Arrangement.spacedBy(20.dp)
-                                    ) {
-                                        Text("セキュリティ設定", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Normal)
-
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Column(modifier = Modifier.weight(1f)) {
-                                                Text("非表示アプリのパスコード認証", color = Color.White, fontSize = 14.sp)
-                                                Text("有効にすると、非表示リストを開く際にパスコード認証を行います", color = Color.Gray, fontSize = 12.sp)
-                                            }
-                                            Switch(
-                                                checked = usePasscodeForHidden,
-                                                onCheckedChange = {
-                                                    usePasscodeForHidden = it
-                                                    repo.prefManager.setUsePasscodeForHidden(it)
-                                                    onChanged()
-                                                },
-                                                colors = switchColors
-                                            )
-                                        }
-
-                                        Column {
-                                            Text("パスコード (PIN)", color = Color.White, fontSize = 14.sp)
-                                            Spacer(modifier = Modifier.height(8.dp))
-                                            OutlinedButton(
-                                                onClick = {
-                                                    newPasscodeField = repo.prefManager.getPasscode()
-                                                    showPasscodeChangeDialog = true
-                                                },
-                                                modifier = Modifier.fillMaxWidth(),
-                                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
-                                            ) {
-                                                Text("パスコードを変更する")
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        "tutorial" -> {
-                            item {
-                                Surface(
-                                    color = Color(0x99101728),
-                                    shape = RoundedCornerShape(20.dp),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Column(
-                                        modifier = Modifier.padding(20.dp),
-                                        verticalArrangement = Arrangement.spacedBy(20.dp)
-                                    ) {
-                                        Text("チュートリアル設定", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Normal)
-
-                                        Column {
-                                            Text("ガイドの再表示", color = Color.White, fontSize = 14.sp)
-                                            Spacer(modifier = Modifier.height(8.dp))
-                                            OutlinedButton(
-                                                onClick = {
-                                                    repo.prefManager.setFirstWelcomeTutorialShown(false)
-                                                    repo.prefManager.setFirstIndexTutorialShown(false)
-                                                    repo.prefManager.setFirstHideTutorialShown(false)
-                                                    Toast.makeText(context, "チュートリアルを再表示するように設定しました", Toast.LENGTH_SHORT).show()
-                                                    onChanged()
-                                                },
-                                                modifier = Modifier.fillMaxWidth(),
-                                                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
-                                            ) {
-                                                Text("チュートリアルを再表示する")
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                            .padding(start = 8.dp)
+                    )
                 }
             }
         }
 
-        if (showPasscodeChangeDialog) {
+        // --- チップ（タイトル＋戻る / 検索結果のクリア） ---
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = statusTopDp + 106.dp),
+            contentAlignment = Alignment.TopCenter
+        ) {
+            if (searchQuery.isNotBlank()) {
+                DiscInfoChip(
+                    label = "「${searchQuery}」の結果 ${searchResults.size}件",
+                    accentColor = currentAccentColor,
+                    onClear = {
+                        searchQuery = ""
+                        focusId = null
+                    }
+                )
+            } else if (navPath.isNotEmpty()) {
+                DiscInfoChip(
+                    label = "‹ ${ownerNode?.label ?: "設定"}",
+                    accentColor = currentAccentColor,
+                    onClick = { startBackFlight(); navigateAnimated { goBack() } }
+                )
+            }
+        }
+
+        // --- 階層遷移のラベル飛行（右円の選択ラベル → 左円の縦ラベル） ---
+        flightLabel?.let { label ->
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val p = flightAnim.value
+                val measurer = rememberTextMeasurer()
+                val textW = remember(label) {
+                    measurer.measure(label, TextStyle(fontSize = 15.sp, fontWeight = FontWeight.Bold), softWrap = false).size.width
+                }
+                val boxWDp = with(LocalDensity.current) { textW.toDp().value }.coerceIn(40f, 200f)
+                val rightCenterX = maxWidth.value - 93f - boxWDp / 2f
+                val centerX = if (flightReverse) 25f + (rightCenterX - 25f) * p else rightCenterX + (25f - rightCenterX) * p
+                val centerY = maxHeight.value / 2f
+                Box(
+                    modifier = Modifier
+                        .offset { IntOffset(((centerX - boxWDp / 2f).dp.roundToPx()), ((centerY - 22f).dp.roundToPx())) }
+                        .size(boxWDp.dp, 44.dp)
+                        .graphicsLayer {
+                            rotationZ = if (flightReverse) -90f * (1f - p) else -90f * p
+                            alpha = if (flightReverse) {
+                                if (p < 0.85f) 1f else (1f - (p - 0.85f) / 0.15f).coerceIn(0f, 1f)
+                            } else if (p < 0.82f) 1f else (1f - (p - 0.82f) / 0.18f).coerceIn(0f, 1f)
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = label,
+                        color = currentAccentColor,
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+
+        if (showExcludedFoldersDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showExcludedFoldersDialog = false },
+            title = { androidx.compose.material3.Text("除外フォルダ") },
+            text = {
+                androidx.compose.foundation.layout.Column {
+                    if (excludedFolders.isEmpty()) {
+                        androidx.compose.material3.Text("除外フォルダはありません")
+                    } else {
+                        excludedFolders.forEach { path ->
+                            androidx.compose.foundation.layout.Row(
+                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                            ) {
+                                androidx.compose.material3.Text(
+                                    path, fontSize = 12.sp,
+                                    modifier = androidx.compose.ui.Modifier.weight(1f)
+                                )
+                                androidx.compose.material3.TextButton(onClick = {
+                                    repo.prefManager.removeExcludedFolder(path)
+                                    excludedFolders = repo.prefManager.getExcludedFolders().sorted()
+                                    onAppsUpdated()
+                                }) { androidx.compose.material3.Text("削除") }
+                            }
+                        }
+                    }
+                    androidx.compose.material3.TextButton(onClick = { excludedFolderPickerLauncher.launch(null) }) {
+                        androidx.compose.material3.Text("フォルダを追加")
+                    }
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { showExcludedFoldersDialog = false }) {
+                    androidx.compose.material3.Text("閉じる")
+                }
+            }
+        )
+    }
+    if (showPasscodeChangeDialog) {
             AlertDialog(
                 onDismissRequest = { showPasscodeChangeDialog = false },
                 confirmButton = {
@@ -1740,4 +1693,15 @@ fun SettingsScreen(
     }
 }
 
-/** 歌詞表示モードのプレビューカード（ミニ画面のモック＋ラベル＋ラジオ） */
+fun treeUriToPath(uri: android.net.Uri): String? {
+    return try {
+        val docId = android.provider.DocumentsContract.getTreeDocumentId(uri)
+        val parts = docId.split(":", limit = 2)
+        if (parts.size < 2) return null
+        val base = if (parts[0] == "primary") "/storage/emulated/0" else "/storage/${parts[0]}"
+        val relative = parts[1].trim('/')
+        if (relative.isEmpty()) base else "${base}/${relative}"
+    } catch (_: Exception) {
+        null
+    }
+}
