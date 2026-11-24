@@ -202,7 +202,7 @@ fun MusicVinylWidget(
                             var stepBaseY = down.position.y
                             // 共通の「スクロール方向の反転」設定に従う（OFF時の基準方向:
                             // 上へドラッグで次の曲、下で前の曲。ONなら逆になる）
-                            val dirSign = if (prefManager.isReverseScroll()) -1 else 1
+                            val dirSign = if (prefManager.isRackReverseScroll()) -1 else 1
                             val stopThresholdPx = 110.dp.toPx()
 
                             drag(down.id) { change ->
@@ -343,7 +343,7 @@ fun MusicVinylWidget(
                             .clip(CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        val art = rackArt(targetTrackIdx)
+                        val art = if (prefManager.isArtworkEnabled()) rackArt(targetTrackIdx) else null
                         if (art != null) {
                             Image(
                                 bitmap = art.asImageBitmap(),
@@ -417,7 +417,7 @@ fun MusicVinylWidget(
                         .clip(CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
-                    val bitmap = albumArtBitmap
+                    val bitmap = if (prefManager.isArtworkEnabled()) albumArtBitmap else null
                     if (bitmap != null) {
                         Image(
                             bitmap = bitmap.asImageBitmap(),
