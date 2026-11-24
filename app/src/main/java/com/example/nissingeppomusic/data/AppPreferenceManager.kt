@@ -313,6 +313,11 @@ class AppPreferenceManager(private val context: Context) {
 
     // ライブラリの並び替え基準 ("title" = 曲名, "artist" = アーティスト, "album" = アルバム)
     fun getLibrarySortMode(): String = prefs.getString("library_sort_mode", "title") ?: "title"
+    // スリープタイマー: 終了時刻（epoch ms、0=無効）と選択中の分数
+    fun getSleepTimerEndMs(): Long = prefs.getLong("sleep_timer_end_ms", 0L)
+    fun setSleepTimerEndMs(value: Long) { prefs.edit().putLong("sleep_timer_end_ms", value).apply() }
+    fun getSleepTimerMinutes(): Int = prefs.getInt("sleep_timer_minutes", 0)
+    fun setSleepTimerMinutes(value: Int) { prefs.edit().putInt("sleep_timer_minutes", value).apply() }
     fun setLibrarySortMode(mode: String) = prefs.edit().putString("library_sort_mode", mode).apply()
 
 
