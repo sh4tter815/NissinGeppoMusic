@@ -18,6 +18,8 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.infiniteRepeatable
@@ -42,6 +44,7 @@ import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
@@ -276,6 +279,24 @@ fun MainLauncherScreen() {
     val configuration = LocalConfiguration.current
     val haptic = LocalHapticFeedback.current
     val view = LocalView.current
+    LaunchedEffect(keepScreenOnPref, musicPlayerManager.isPlaying) {
+        view.keepScreenOn = keepScreenOnPref && musicPlayerManager.isPlaying
+    }
+    LaunchedEffect(Unit) {
+        while (true) {
+            val sleepEnd = repo.prefManager.getSleepTimerEndMs()
+            if (sleepEnd > 0L && System.currentTimeMillis() >= sleepEnd) {
+                musicPlayerManager.stopPlayback()
+                repo.prefManager.setSleepTimerEndMs(0L)
+            }
+            delay(15000)
+        }
+    }
+    LaunchedEffect(currentLauncherPage) {
+        if (currentLauncherPage == 1 && repo.prefManager.consumeLayoutEditRequest()) {
+            layoutEditMode = true
+        }
+    }
 
     val insets = WindowInsets.systemBars.asPaddingValues()
     val topPaddingDp = insets.calculateTopPadding()
@@ -337,7 +358,8 @@ fun MainLauncherScreen() {
     }
 
     // ページ管理 (0: 設定, 1: ホーム, 2: アプリ一覧, 3: フォルダ)
-    var currentLauncherPage by remember { mutableIntStateOf(1) }
+    var currentLauncherPage by remember { mutableIntStateOf(if (repo.prefManager.getStartupPage() == "last") repo.prefManager.getLastPage().coerceIn(0, 3) else 1) }
+    LaunchedEffect(currentLauncherPage) { repo.prefManager.setLastPage(currentLauncherPage) }
 
     var accentHex by remember { mutableStateOf(repo.prefManager.getAccentColorHex()) }
     val manualAccentColor = remember(accentHex) { parseHexColor(accentHex) }
@@ -374,6 +396,28 @@ fun MainLauncherScreen() {
         onDispose { sm.unregisterListener(listener) }
     }
     var liquidBackground by remember { mutableStateOf(repo.prefManager.isLiquidBackgroundEnabled()) }
+    var liquidSpeed by remember { mutableFloatStateOf(repo.prefManager.getLiquidSpeed()) }
+    var liquidAlpha by remember { mutableFloatStateOf(repo.prefManager.getLiquidAlpha()) }
+    var wallpaperBlur by remember { mutableFloatStateOf(repo.prefManager.getWallpaperBlurDp()) }
+    var pvFontScale by remember { mutableFloatStateOf(repo.prefManager.getPvFontScale()) }
+    var pvTopOffset by remember { mutableFloatStateOf(repo.prefManager.getPvTopOffsetDp()) }
+    var pvTextColorMode by remember { mutableStateOf(repo.prefManager.getPvTextColor()) }
+    var pvRuby by remember { mutableStateOf(repo.prefManager.isPvRubyEnabled()) }
+    var pvInterludeArt by remember { mutableStateOf(repo.prefManager.isPvInterludeArtEnabled()) }
+    var lyricsMasterEnabled by remember { mutableStateOf(repo.prefManager.isLyricsEnabled()) }
+    var dopagakiMode by remember { mutableStateOf(repo.prefManager.isDopagakiEnabled()) }
+    var keepScreenOnPref by remember { mutableStateOf(repo.prefManager.isKeepScreenOn()) }
+    var dialVisibility by remember { mutableStateOf(repo.prefManager.getDialVisibility()) }
+    var pageTransitionSpeed by remember { mutableFloatStateOf(repo.prefManager.getPageTransitionSpeed()) }
+    var dateDisplayMode by remember { mutableStateOf(repo.prefManager.getDateDisplayMode()) }
+    var clockSeconds by remember { mutableStateOf(repo.prefManager.isClockShowSeconds()) }
+    var clock12h by remember { mutableStateOf(repo.prefManager.isClock12h()) }
+    var clockBattery by remember { mutableStateOf(repo.prefManager.isClockShowBattery()) }
+    var dateWareki by remember { mutableStateOf(repo.prefManager.isDateWareki()) }
+    var clockOffsetX by remember { mutableFloatStateOf(repo.prefManager.getClockOffsetXDp()) }
+    var clockOffsetY by remember { mutableFloatStateOf(repo.prefManager.getClockOffsetYDp()) }
+    var pvOffsetX by remember { mutableFloatStateOf(repo.prefManager.getPvOffsetXDp()) }
+    var layoutEditMode by remember { mutableStateOf(false) }
     var lyricsDisplayMode by remember { mutableStateOf(repo.prefManager.getLyricsDisplayMode()) }
     val lyricsPvMode = lyricsDisplayMode == "video"
     var lyricsPvFont by remember { mutableStateOf(repo.prefManager.getLyricsPvFont()) }
@@ -683,8 +727,8 @@ fun MainLauncherScreen() {
     // PV表示中は左右の円盤を少し下げて、上の歌詞文字と被らないようにする
     val pvDiscShiftY by animateFloatAsState(
         targetValue = when {
-            lyricsDisplayMode == "multi" && showLyrics && currentLauncherPage == 1 && !isLyricsBrowsing && lyricsLines != null -> 120f
-            lyricsPvMode && showLyrics && currentLauncherPage == 1 && !isLyricsBrowsing && lyricsLines != null -> 80f
+            lyricsDisplayMode == "multi" && showLyrics && lyricsMasterEnabled && currentLauncherPage == 1 && !isLyricsBrowsing && lyricsLines != null -> 120f
+            lyricsPvMode && showLyrics && lyricsMasterEnabled && currentLauncherPage == 1 && !isLyricsBrowsing && lyricsLines != null -> 80f
             else -> 0f
         },
         animationSpec = tween(durationMillis = 450, easing = FastOutSlowInEasing),
@@ -748,7 +792,7 @@ fun MainLauncherScreen() {
             isHoldingRight = false
             isHoldingFolderWheel = false
             isTransitioning = true
-            delay(220)
+            delay((220 / pageTransitionSpeed).toLong().coerceAtLeast(0L))
             currentLauncherPage = targetPage
             isSearchActive = false
             searchQuery = ""
@@ -817,13 +861,16 @@ fun MainLauncherScreen() {
             modifier = Modifier.fillMaxSize()
         ) {
             WallpaperBackground(
-                customPath = customBackgroundPath,
+                customPath = repo.prefManager.getPageWallpaperPath(currentLauncherPage) ?: customBackgroundPath,
                 updateKey = backgroundUpdateKey,
                 isHome = (currentLauncherPage == 1),
                 currentAlbumArt = musicPlayerManager.currentAlbumArt,
                 dynamicBackground = if (matchArtwork) artworkBackground else null,
                 liquidEnabled = liquidBackground,
-                liquidAccent = effectiveAccent
+                liquidAccent = effectiveAccent,
+                liquidSpeed = liquidSpeed,
+                liquidAlphaMul = liquidAlpha,
+                wallpaperBlurDp = wallpaperBlur
             )
 
             // 文字PV風レイヤー: 背景のすぐ上（他の要素の奥）に、行ごとに大きさ・傾き・位置を変えて大きく表示
@@ -833,32 +880,50 @@ fun MainLauncherScreen() {
             val pvPartsEntry = repo.prefManager.isPvPartsEntryEnabled()
             val lyricsBold = repo.prefManager.isLyricsBold()
             val lyricWeight = if (lyricsBold) FontWeight.Bold else FontWeight.Normal
-            if (lyricsPvMode && showLyrics && currentLauncherPage == 1 && !isLyricsBrowsing) {
+            if (lyricsPvMode && showLyrics && lyricsMasterEnabled && currentLauncherPage == 1 && !isLyricsBrowsing) {
                 val pvLines = lyricsLines
                 if (pvLines != null) {
-                    LyricsPvLayer(
-                        lines = pvLines,
-                        positionMs = musicPlayerManager.currentPosition,
-                        lyricOffsetMs = lyricOffsetMs,
-                        bold = lyricsBold,
-                        fontFamily = lyricsFontFamily,
-                        accentColor = effectiveAccent,
-                        screenWidthDp = screenWidthDp,
-                        translationEnabled = translationEnabled,
-                        translations = lyricTranslations,
-                        pvTopDp = 195.dp,
-                        interludeTopDp = 175.dp,
-                        translationTopDp = 350.dp,
-                        partsEntry = pvPartsEntry,
-                        enFontFamily = lyricsEnFontFamily,
-                        onAccentFlash = { pvFlashColor = it },
-                        pvTilt3d = disc3d
-                    )
+                    Box(modifier = Modifier.offset(x = pvOffsetX.dp)) {
+                        LyricsPvLayer(
+                            lines = pvLines,
+                            positionMs = musicPlayerManager.currentPosition,
+                            lyricOffsetMs = lyricOffsetMs,
+                            bold = lyricsBold,
+                            fontFamily = lyricsFontFamily,
+                            accentColor = effectiveAccent,
+                            screenWidthDp = screenWidthDp,
+                            translationEnabled = translationEnabled,
+                            translations = lyricTranslations,
+                            pvTopDp = (195f + pvTopOffset).dp,
+                            interludeTopDp = (175f + pvTopOffset).dp,
+                            translationTopDp = 350.dp,
+                            partsEntry = pvPartsEntry,
+                            enFontFamily = lyricsEnFontFamily,
+                            onAccentFlash = { pvFlashColor = it },
+                            pvTilt3d = disc3d,
+                            dopagaki = dopagakiMode,
+                            tiltX = discTiltX,
+                            tiltY = discTiltY,
+                            onSeek = { ms -> musicPlayerManager.seekTo(ms) },
+                            onNextTrack = {
+                                val qi = musicPlayerManager.currentQueueIndex
+                                if (qi >= 0) musicPlayerManager.playAtQueuePosition(qi + 1)
+                            },
+                            pvFontScale = pvFontScale,
+                            pvBaseColor = when (pvTextColorMode) {
+                                "accent" -> effectiveAccent
+                                "black" -> Color.Black
+                                else -> Color.White
+                            },
+                            pvRuby = pvRuby,
+                            pvInterludeArt = pvInterludeArt
+                        )
+                    }
                 }
             }
 
             // 歌詞の取得中は、PV／複数行モードでも前の曲の歌詞を残さず読み込み表示を出す
-            if (showLyrics && currentLauncherPage == 1 && !isLyricsBrowsing && lyricsLoading && lyricsLines == null && lyricsDisplayMode != "line") {
+            if (showLyrics && lyricsMasterEnabled && currentLauncherPage == 1 && !isLyricsBrowsing && lyricsLoading && lyricsLines == null && lyricsDisplayMode != "line") {
                 Box(
                     modifier = Modifier.fillMaxWidth().padding(top = 215.dp),
                     contentAlignment = Alignment.Center
@@ -875,7 +940,7 @@ fun MainLauncherScreen() {
                 }
             }
 
-            if (showLyrics && currentLauncherPage == 1 && !isLyricsBrowsing && notFoundMsgVisible && lyricsDisplayMode != "line") {
+            if (showLyrics && lyricsMasterEnabled && currentLauncherPage == 1 && !isLyricsBrowsing && notFoundMsgVisible && lyricsDisplayMode != "line") {
                 Box(
                     modifier = Modifier.fillMaxWidth().padding(top = 215.dp),
                     contentAlignment = Alignment.Center
@@ -890,7 +955,7 @@ fun MainLauncherScreen() {
             }
 
             // 複数行モード: 円を下げてできた上の空白に、前・今・次の3行を表示（今の行が大きめ）
-            if (lyricsDisplayMode == "multi" && showLyrics && currentLauncherPage == 1 && !isLyricsBrowsing) {
+            if (lyricsDisplayMode == "multi" && showLyrics && lyricsMasterEnabled && currentLauncherPage == 1 && !isLyricsBrowsing) {
                 val multiLines = lyricsLines
                 if (multiLines != null) {
                     MusicMultiLineLyrics(
@@ -929,11 +994,36 @@ fun MainLauncherScreen() {
                                 customFontPath = repo.prefManager.getCustomFontPath()
                                 useCustomFont = repo.prefManager.isUseCustomFont()
                                 fontChoice = repo.prefManager.getFontChoice()
+                                liquidBackground = repo.prefManager.isLiquidBackgroundEnabled()
+                                liquidSpeed = repo.prefManager.getLiquidSpeed()
+                                liquidAlpha = repo.prefManager.getLiquidAlpha()
+                                wallpaperBlur = repo.prefManager.getWallpaperBlurDp()
+                                pvFontScale = repo.prefManager.getPvFontScale()
+                                pvTopOffset = repo.prefManager.getPvTopOffsetDp()
+                                pvTextColorMode = repo.prefManager.getPvTextColor()
+                                pvRuby = repo.prefManager.isPvRubyEnabled()
+                                pvInterludeArt = repo.prefManager.isPvInterludeArtEnabled()
+                                lyricsMasterEnabled = repo.prefManager.isLyricsEnabled()
+                                dopagakiMode = repo.prefManager.isDopagakiEnabled()
+                                keepScreenOnPref = repo.prefManager.isKeepScreenOn()
+                                dialVisibility = repo.prefManager.getDialVisibility()
+                                pageTransitionSpeed = repo.prefManager.getPageTransitionSpeed()
+                                dateDisplayMode = repo.prefManager.getDateDisplayMode()
+                                clockSeconds = repo.prefManager.isClockShowSeconds()
+                                clock12h = repo.prefManager.isClock12h()
+                                clockBattery = repo.prefManager.isClockShowBattery()
+                                dateWareki = repo.prefManager.isDateWareki()
+                                clockOffsetX = repo.prefManager.getClockOffsetXDp()
+                                clockOffsetY = repo.prefManager.getClockOffsetYDp()
+                                pvOffsetX = repo.prefManager.getPvOffsetXDp()
                             },
-                            onLibraryUpdated = {
+                            onAppsUpdated = {
                                 refreshApps()
                             },
-                            accentColor = accentColor
+                            accentColor = accentColor,
+                            disc3d = disc3d,
+                            tiltX = discTiltX,
+                            tiltY = discTiltY
                         )
                     }
                 1 -> {
@@ -1513,8 +1603,100 @@ fun MainLauncherScreen() {
             }
         }
 
+
+        // --- 時計（ホームのみ。レイアウト編集モードで移動可能） ---
+        if (currentLauncherPage == 1 && !pvFullscreen && !isLyricsBrowsing) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = 20.dp, top = 54.dp)
+                    .offset(x = clockOffsetX.dp, y = clockOffsetY.dp)
+                    .zIndex(90f)
+                    .then(
+                        if (layoutEditMode) {
+                            Modifier
+                                .border(2.dp, accentColor, RoundedCornerShape(8.dp))
+                                .pointerInput(Unit) {
+                                    detectDragGestures(
+                                        onDragEnd = { repo.prefManager.setClockOffset(clockOffsetX, clockOffsetY) }
+                                    ) { change, dragAmount ->
+                                        change.consume()
+                                        clockOffsetX += dragAmount.x / density
+                                        clockOffsetY += dragAmount.y / density
+                                    }
+                                }
+                        } else {
+                            Modifier.combinedClickable(
+                                onClick = {},
+                                onLongClick = { layoutEditMode = true }
+                            )
+                        }
+                    )
+            ) {
+                ClockWidget(
+                    dateMode = dateDisplayMode,
+                    glowColor = effectiveAccent,
+                    showSeconds = clockSeconds,
+                    hour12 = clock12h,
+                    showBattery = clockBattery,
+                    wareki = dateWareki,
+                    dopagaki = dopagakiMode
+                )
+            }
+        }
+
+        // --- レイアウト編集モードのUI ---
+        if (layoutEditMode && currentLauncherPage == 1) {
+            BackHandler(enabled = true) { layoutEditMode = false }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = (195f + pvTopOffset).dp)
+                    .offset(x = pvOffsetX.dp)
+                    .zIndex(95f)
+                    .size(width = 104.dp, height = 44.dp)
+                    .background(accentColor.copy(alpha = 0.85f), RoundedCornerShape(10.dp))
+                    .pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragEnd = {
+                                repo.prefManager.setPvOffsetX(pvOffsetX)
+                                repo.prefManager.setPvTopOffsetDp(pvTopOffset)
+                            }
+                        ) { change, dragAmount ->
+                            change.consume()
+                            pvOffsetX += dragAmount.x / density
+                            pvTopOffset = (pvTopOffset + dragAmount.y / density).coerceIn(-120f, 300f)
+                        }
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                Text("PV", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 40.dp)
+                    .zIndex(96f)
+                    .background(accentColor, RoundedCornerShape(999.dp))
+                    .clickable { layoutEditMode = false }
+                    .padding(horizontal = 22.dp, vertical = 9.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("完了", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+            Text(
+                text = "時計とPVをドラッグで移動できます",
+                color = Color.White.copy(alpha = 0.85f),
+                fontSize = 12.sp,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 110.dp)
+                    .zIndex(96f)
+            )
+        }
+
                 // --- 画面下部 ページ切り替え (ボタン式 / ダイヤル式を設定で切替、ラック表示中は隠す) ---
-        if (!isRackShown && !isLyricsBrowsing && !pvFullscreen) {
+        if (!isRackShown && !isLyricsBrowsing && !pvFullscreen && dialVisibility != "hidden") {
         if (repo.prefManager.getPageSwitchStyle() == "dial") {
             // ダイヤルは6ストップ: 0=設定, 1=ホーム(再生中), 2=曲名, 3=アーティスト, 4=アルバム, 5=プレイリスト(フォルダ)
             PeekPageDial(

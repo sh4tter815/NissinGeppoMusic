@@ -25,6 +25,7 @@ import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.animateFloat
 import android.view.HapticFeedbackConstants
@@ -33,6 +34,15 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import android.graphics.SurfaceTexture
+import android.media.MediaPlayer
+import android.view.Surface
+import android.view.TextureView
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.viewinterop.AndroidView
+import com.example.nissingeppomusic.R
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
@@ -43,18 +53,6 @@ import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.RepeatOne
-import androidx.compose.material.icons.filled.Lyrics
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.FullscreenExit
-import androidx.compose.material.icons.filled.Shuffle
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -77,6 +75,7 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.layer.drawLayer
@@ -96,6 +95,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -109,6 +109,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.example.nissingeppomusic.data.AppInfo
+import com.example.nissingeppomusic.data.AppRepository
 import com.example.nissingeppomusic.data.LyricLine
 import com.example.nissingeppomusic.data.LyricWord
 import com.example.nissingeppomusic.data.LyricsManager
@@ -135,8 +136,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.material.icons.filled.Translate
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.runtime.key
 import com.example.nissingeppomusic.ui.components.LiquidGradientBackground
 import kotlin.math.floor
@@ -559,6 +558,17 @@ fun fitFontSizeSp(text: String, baseSp: Float, availWidthDp: Float): Float {
 }
 
 /** コーラスの掛け声（yeah / ah / ラララ等）かどうか */
+/**
+ * 間奏とみなす行間のしきい値（ミリ秒）。曲全体の行間隔の平均 + 10秒。
+ * 曲のペースに合わせて変わるので、速い曲では短い空白でも間奏になり、遅い曲では相当長くないとならない。
+ */
+fun lyricInterludeThresholdMs(lines: List<LyricLine>): Long {
+    if (lines.size < 2) return Long.MAX_VALUE / 4
+    var sum = 0L
+    for (i in 0 until lines.size - 1) sum += (lines[i + 1].timeMs - lines[i].timeMs).coerceAtLeast(0L)
+    return sum / (lines.size - 1) + 10000L
+}
+
 /** 間奏中に出す、曲線がいろんな方向に交差するビジュアルアート */
 @Composable
 fun PvInterludeArt(accentColor: Color, modifier: Modifier = Modifier) {
@@ -586,6 +596,30 @@ fun PvInterludeArt(accentColor: Color, modifier: Modifier = Modifier) {
                 )
             }
             drawPath(path, colr, style = Stroke(width = 2.2f + (i % 3) * 0.9f, cap = StrokeCap.Round))
+        }
+        // 漂う粒子: ゆっくり上昇しながら漂い、明滅する小さな点
+        for (i in 0 until 22) {
+            val s1 = ((i * 37) % 100) / 100f
+            val s2 = ((i * 53 + 17) % 100) / 100f
+            val driftX = sin(ph * 0.35f + i * 1.7f) * w * 0.03f
+            val rise = (s2 + t * (0.02f + 0.015f * (i % 4))) % 1f
+            val px = (s1 * w + driftX).coerceIn(0f, w)
+            val py = h * (1f - rise)
+            val tw = 0.5f + 0.5f * sin(ph * (0.8f + (i % 5) * 0.23f) + i * 2.1f)
+            val r = (1.3f + (i % 3) * 0.8f) * (0.7f + 0.5f * tw)
+            drawCircle(
+                color = (if (i % 4 == 0) Color.White else accentColor).copy(alpha = 0.10f + 0.30f * tw),
+                radius = r,
+                center = Offset(px, py)
+            )
+        }
+        // たまにキラッと光る星: 3点が順番に明滅する
+        for (i in 0 until 3) {
+            val sx = w * (0.22f + 0.27f * i)
+            val sy = h * (0.30f + 0.18f * ((i * 2) % 3))
+            val pulse = sin(ph * 0.9f + i * 2.1f) * 0.5f + 0.5f
+            val sa = pulse * pulse * pulse * 0.85f
+            if (sa > 0.03f) drawSparkle(sx, sy, 9f + 5f * pulse, Color(0xFFFFF2B0), sa)
         }
         // 円は出さない（波の線だけにする）
     }
@@ -623,6 +657,11 @@ fun lyricMixedFontText(text: String, enFontFamily: FontFamily?): androidx.compos
     for (k in runs.indices) {
         if (!runs[k].third || useEn[k]) continue
         useEn[k] = if (k > 0) useEn[k - 1] else (if (runs.size > 1) useEn[k + 1] else false)
+    }
+    // 1文字だけのランは、日本語の流れの一部として日本語フォントにする（「電ポルP」の P など）
+    for (k in runs.indices) {
+        val (s, e, _) = runs[k]
+        if (e - s == 1) useEn[k] = false
     }
     return buildAnnotatedString {
         for (k in runs.indices) {
@@ -678,6 +717,11 @@ fun KaraokeLyricText(
         }
         list
     }
+    // 前後が半角でない孤立した1文字の半角は、日本語フォントのままにする
+    val enCharFlags = BooleanArray(line.text.length) { idx ->
+        if (line.text[idx] !in ' '..'~') false
+        else (idx > 0 && line.text[idx - 1] in ' '..'~') || (idx < line.text.length - 1 && line.text[idx + 1] in ' '..'~')
+    }
     val annotated = buildAnnotatedString {
         var ci = 0
         for (ch in line.text) {
@@ -688,7 +732,7 @@ fun KaraokeLyricText(
                 positionMs <= t.first -> baseColor
                 else -> lerp(baseColor, sungColor, ((positionMs - t.first).toFloat() / (t.second - t.first).coerceAtLeast(1L).toFloat()).coerceIn(0f, 1f))
             }
-            withStyle(SpanStyle(color = col, fontFamily = if (enFontFamily != null && ch in ' '..'~') enFontFamily else null)) { append(ch) }
+            withStyle(SpanStyle(color = col, fontFamily = if (enFontFamily != null && enCharFlags.getOrElse(ci) { false }) enFontFamily else null)) { append(ch) }
             ci++
         }
     }
@@ -742,6 +786,11 @@ fun PvLyricLine(
     enFontFamily: FontFamily? = null,
     camFlow: Int = -1,
     tilt3d: Boolean = false,
+    dopagaki: Boolean = false,
+    // 追加設定: 文字サイズ倍率 / 素の文字色 / ルビ表示
+    fontScale: Float = 1f,
+    baseColor: Color = Color.White,
+    rubyEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val pvEaseIn = CubicBezierEasing(0.42f, 0f, 1f, 1f)
@@ -979,6 +1028,7 @@ fun PvLyricLine(
             val u = flat[idx]
             when {
                 u.isEmpty() || u.any { it !in ' '..'~' } -> 0
+                u.length == 1 -> 0 // 1文字だけのユニットは日本語の流れとして日本語フォント
                 u.any { it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9' } -> 1
                 else -> -1
             }
@@ -1005,7 +1055,7 @@ fun PvLyricLine(
         else -> 64f
     }
     val heightCap = if (bigText) heightCapBase * 1.8f else heightCapBase
-    val fitSize = minOf((screenWidthDp - 8f) / (longestRowEm * 1.06f), heightCap)
+    val fitSize = (if (dopagaki) minOf((screenWidthDp - 2f) / (longestRowEm * 1.01f), heightCap * 1.7f) else minOf((screenWidthDp - 8f) / (longestRowEm * 1.06f), heightCap)) * fontScale
     val lineOffsetX = ((baseSeed / 7) % 17 - 8).dp
     val lineOffsetY = ((baseSeed / 11) % 13 - 6).dp
     val row2Indent = ((baseSeed / 13) % 4 * 14).dp
@@ -1049,9 +1099,9 @@ fun PvLyricLine(
         label = "wavePhase"
     )
     // カメラワーク: 全行に、入場と退場がつながるカメラの流れを付ける。
-    // camFlow: 0=右へ流れる（退場は右へ・入場は左から） 1=左へ 2=上へ 3=下へ 4=押し込む（ズームイン系） 5=引く（ズームアウト系）
+    // camFlow: 0=右へ流れる（退場は右へ・入場は左から） 1=左へ 2=上へ 3=下へ 4=押し込む（ズームイン系） 5=引く（ズームアウト系） 6=回転（傾いて入ってまっすぐに戻る。退場は同じ向きに回転し続けて抜ける）
     // -1 のときは baseSeed から決める。入場はイーズアウト、退場はイーズインで、退場と次の入場が同じ流れを共有する
-    val camFlowEff = if (camFlow >= 0) camFlow else Math.floorMod(baseSeed * 13 + 7, 6)
+    val camFlowEff = if (camFlow >= 0) camFlow else Math.floorMod(baseSeed * 13 + 7, 7)
     val camAnim = remember { Animatable(if (exiting) 1f else 0f) }
     if (!exiting) {
         LaunchedEffect(Unit) {
@@ -1059,11 +1109,29 @@ fun PvLyricLine(
         }
     }
     val camDensity = LocalDensity.current
-    val camSlideXPx = with(camDensity) { (screenWidthDp * 0.24f).dp.toPx() }
-    val camSlideYPx = with(camDensity) { (fitSize * 1.7f).dp.toPx() }
-    val camDriftAmpXPx = with(camDensity) { 5.dp.toPx() }
-    val camDriftAmpYPx = with(camDensity) { 3.5.dp.toPx() }
+    val camSlideXPx = with(camDensity) { (screenWidthDp * 0.24f * TUNE_CAM_SLIDE).dp.toPx() }
+    val camSlideYPx = with(camDensity) { (fitSize * 1.7f * TUNE_CAM_SLIDE).dp.toPx() }
+    val camDriftAmpXPx = with(camDensity) { (5f * TUNE_DRIFT_AMP).dp.toPx() }
+    val camDriftAmpYPx = with(camDensity) { (3.5f * TUNE_DRIFT_AMP).dp.toPx() }
     // 規制の白塗りは行全体で1つの時計を共有し、連なった伏せ字を一気に覆う
+    // ドパガキモード: 行全体で共有する虹色の位相（約1.4秒で色相が一周する）
+    val dopaPhaseState = if (dopagaki) {
+        val dopaTransition = rememberInfiniteTransition(label = "dopa")
+        dopaTransition.animateFloat(
+            initialValue = 0f, targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(2800, easing = LinearEasing), RepeatMode.Restart),
+            label = "dopaPhase"
+        )
+    } else null
+    // ドパガキモード: 鼓動の位相（約1.05秒周期、行全体で共有する）
+    val dopaBeatState = if (dopagaki) {
+        val beatTransition = rememberInfiniteTransition(label = "dopaBeat")
+        beatTransition.animateFloat(
+            initialValue = 0f, targetValue = 1f,
+            animationSpec = infiniteRepeatable(tween(1050, easing = LinearEasing), RepeatMode.Restart),
+            label = "dopaBeatPh"
+        )
+    } else null
     val censorProgress = remember { Animatable(if (exiting) 1f else 0f) }
     if (!exiting) {
         LaunchedEffect(Unit) {
@@ -1152,6 +1220,10 @@ fun PvLyricLine(
                     2 -> translationY = (if (exiting) -camP else 1f - camP) * camSlideYPx
                     3 -> translationY = (if (exiting) camP else camP - 1f) * camSlideYPx
                     4 -> { val s = if (exiting) 1f + 0.5f * camP else 0.72f + 0.28f * camP; scaleX = s; scaleY = s }
+                    6 -> {
+                        rotationZ = if (exiting) 10f * camP else -14f * (1f - camP)
+                        val s = if (exiting) 1f else 0.92f + 0.08f * camP; scaleX = s; scaleY = s
+                    }
                     else -> { val s = if (exiting) 1f - 0.3f * camP else 1.45f - 0.45f * camP; scaleX = s; scaleY = s }
                 }
                 // 手ブレ（サイン波の重ね合わせで、ゆるく漂い続ける）
@@ -1160,7 +1232,7 @@ fun PvLyricLine(
                 val driftY = (Math.sin(driftT * 0.938 + 0.6) * 0.7 + Math.sin(driftT * 0.556 + 3.1) * 0.3).toFloat()
                 translationX += driftX * camDriftAmpXPx
                 translationY += driftY * camDriftAmpYPx
-                rotationZ = (Math.sin(driftT * 0.647 + 2.0) * 0.35).toFloat()
+                rotationZ += (Math.sin(driftT * 0.647 + 2.0) * 0.35).toFloat()
                 // 3Dモード: 行全体を1枚の面として少し奥へ倒す
                 if (tilt3d) {
                     rotationX = 15f
@@ -1304,18 +1376,30 @@ fun PvLyricLine(
                     val pe = 1f - (1f - ft) * (1f - ft) * (1f - ft)
                     val bcx = size.width / 2f
                     val bcy = size.height / 2f
-                    for (i in 0 until 12) {
+                    for (i in 0 until if (dopagaki) 26 else 12) {
                         val ang = (i * 137.5f + baseSeed * 7f) * 0.0174533f
                         val dist = pe * size.width * (0.16f + (i % 4) * 0.05f)
                         val px = bcx + kotlin.math.cos(ang.toDouble()).toFloat() * dist
                         val py = bcy + kotlin.math.sin(ang.toDouble()).toFloat() * dist * 0.6f
                         val pa = (1f - ft) * 0.8f
                         if (i % 3 == 0) {
-                            drawSparkle(px, py, (1f - ft * 0.5f) * 13f, accentColor, pa)
+                            drawSparkle(px, py, (1f - ft * 0.5f) * 13f, if (dopagaki) Color(0xFFFFE97A) else accentColor, pa)
                         } else {
-                            drawCircle(color = accentColor.copy(alpha = pa), radius = 3.2f, center = Offset(px, py))
+                            drawCircle(color = (if (dopagaki) Color(0xFFFFF2B0) else accentColor).copy(alpha = pa), radius = if (dopagaki) 4.6f else 3.2f, center = Offset(px, py))
                         }
                     }
+                }
+            }
+        }
+        if (dopagaki && !exiting) {
+            // ドパガキ改: 行のまわりに星屑を散らして瞬かせる
+            Canvas(modifier = Modifier.matchParentSize().zIndex(6f)) {
+                val phV = dopaPhaseState?.value ?: 0f
+                for (i in 0 until 40) {
+                    val sx = ((i * 389 + baseSeed * 53) % 100) / 100f * size.width
+                    val sy = ((i * 641 + baseSeed * 29) % 100) / 100f * size.height
+                    val al = (0.35f + 0.6f * ((i * 29) % 10) / 10f) * (0.55f + 0.45f * sin(phV * 6.2832f + i * 2.39f))
+                    drawSparkle(sx, sy, 7f + (i % 3) * 3.5f, Color(0xFFFFF2B0), al * 0.9f)
                 }
             }
         }
@@ -1425,7 +1509,8 @@ fun PvLyricLine(
         // （例: 「恋情（イエス）」のようなカナだけのコーラスは誤判定しうるが、それは仕様として許容する）
         val rubyModeArr = IntArray(rowUnitTexts.size) // 0=なし 1=括弧（表示しない） 2=ルビのかな
         val rubyShiftArr = FloatArray(rowUnitTexts.size)
-        run {
+        val rubyBaseSizeArr = FloatArray(rowUnitTexts.size)
+        if (rubyEnabled) run {
             val rowText = rowUnitTexts.joinToString("")
             val unitStartArr = IntArray(rowUnitTexts.size)
             var upos = 0
@@ -1436,6 +1521,52 @@ fun PvLyricLine(
                 return lo
             }
             fun isKanjiCh(c: Char): Boolean = c in '一'..'鿿' || c == '々' || c == '〆'
+            // 各ユニットの実効シードとサイズ係数を、レイアウト側の uSize 計算とまったく同じ手順で再現する。
+            // ルビの位置はこの「実際の送り幅」の見積もり精度で決まるため、ランダムな大きさの係数まで一致させる
+            val rowGiStart = globalIndex
+            val effGiArr = IntArray(rowUnitTexts.size)
+            val sizeFactorArr = FloatArray(rowUnitTexts.size)
+            run {
+                var prevGi = -1
+                var prevFactor = 1f
+                for (u in rowUnitTexts.indices) {
+                    val ru = rowUnitTexts[u]
+                    val gi = rowGiStart + u
+                    val eGi = if (ru == "ー" && prevGi >= 0) prevGi else gi
+                    effGiArr[u] = eGi
+                    val cf = when {
+                        ru.length > 1 && ru.all { it in '゠'..'ヿ' } -> 1.05f
+                        ru.length > 1 -> 0.98f
+                        ru.isNotEmpty() && ru[0] in "ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ" -> 1.0f
+                        ru.isNotEmpty() && (ru[0] in '一'..'鿿' || ru[0] == '々' || ru[0] == '〆' || ru[0] == 'ヶ') -> 1.25f
+                        ru.isNotEmpty() && ru[0] in 'ぁ'..'ゟ' -> 0.82f
+                        ru.isNotEmpty() && ru[0] in '゠'..'ヿ' -> 1.05f
+                        else -> 0.98f
+                    }
+                    val ecf = if (ru == "ー" && eGi != gi) prevFactor else cf
+                    sizeFactorArr[u] = if (gi == 0 && leadHiraganaBoost) 1.25f else ecf
+                    prevGi = gi
+                    prevFactor = ecf
+                }
+            }
+            // ユニットの送り幅（フォントサイズ×グリフ幅。全角は1em、小書きかなはスパンで0.6倍、括弧ユニットは非表示で0）
+            fun unitAdvance(u: Int): Float {
+                if (rubyModeArr[u] == 1) return 0f
+                val ru = rowUnitTexts[u]
+                val seed = Math.floorMod(baseSeed * 7 + effGiArr[u] * 131, 997)
+                val rand = if (rubyModeArr[u] == 2) 1f else 0.92f + (seed % 22) / 100f
+                var sz = (fitSize * rand * sizeFactorArr[u]).coerceIn(fitSize * 0.55f, fitSize * 1.35f)
+                if (rubyModeArr[u] == 2) sz *= 0.52f
+                var adv = 0f
+                for (ch in ru) adv += sz * (if (ch in "ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶ") 0.6f else 1f)
+                return adv
+            }
+            fun flowLeft(u: Int): Float {
+                var acc = 0f
+                for (k in 0 until u) acc += unitAdvance(k)
+                return acc
+            }
+            fun uXShiftOf(u: Int): Float = ((unitsInRow - 1) / 2f - u) * fitSize * 0.05f
             var i = 0
             while (i < rowText.length) {
                 val open = rowText[i]
@@ -1452,24 +1583,60 @@ fun PvLyricLine(
                             if (baseLen in 1..6 && content.length >= baseLen) {
                                 rubyModeArr[unitIndexAt(i)] = 1
                                 rubyModeArr[unitIndexAt(close)] = 1
-                                var baseEm = 0f
-                                for (u in unitIndexAt(b)..unitIndexAt(i - 1)) baseEm += rowUnitTexts[u].sumOf { ch -> charEm(ch).toDouble() }.toFloat()
-                                var rubyEm = 0f
+                                val baseFirst = unitIndexAt(b)
+                                val baseLast = unitIndexAt(i - 1)
                                 val firstRubyUnit = unitIndexAt(i + 1)
                                 val lastRubyUnit = unitIndexAt(close - 1)
-                                for (u in firstRubyUnit..lastRubyUnit) {
-                                    rubyModeArr[u] = 2
-                                    rubyEm += rowUnitTexts[u].sumOf { ch -> charEm(ch).toDouble() }.toFloat()
+                                for (u in firstRubyUnit..lastRubyUnit) rubyModeArr[u] = 2
+                                // グループルビ: 漢字全体の見た目の幅をルビのユニット数で等分し、各かなをその区間の中央に置く。
+                                // 送り幅と寄せ量（uXShift）まで含めて実レイアウトと一致させるので、漢字の大きさがバラついてもずれない
+                                val baseVisualLeft = flowLeft(baseFirst) + uXShiftOf(baseFirst)
+                                val baseVisualRight = flowLeft(baseLast) + unitAdvance(baseLast) + uXShiftOf(baseLast)
+                                val baseVisualWidth = baseVisualRight - baseVisualLeft
+                                val rubyCount = lastRubyUnit - firstRubyUnit + 1
+                                if (rubyCount > 0) {
+                                    var baseSizeSum = 0f
+                                    for (u in baseFirst..baseLast) {
+                                        val bSeed = Math.floorMod(baseSeed * 7 + effGiArr[u] * 131, 997)
+                                        val bRand = 0.92f + (bSeed % 22) / 100f
+                                        baseSizeSum += (fitSize * bRand * sizeFactorArr[u]).coerceIn(fitSize * 0.55f, fitSize * 1.35f)
+                                    }
+                                    val baseAvg = baseSizeSum / (baseLast - baseFirst + 1)
+                                    for (u in firstRubyUnit..lastRubyUnit) rubyBaseSizeArr[u] = baseAvg
                                 }
-                                // ルビ全体が漢字の真上に来るよう、全ルビ文字を同じ量だけ左へ寄せる
-                                val shift = -(baseEm + rubyEm * 0.52f) / 2f * fitSize
-                                for (u in firstRubyUnit..lastRubyUnit) rubyShiftArr[u] = shift
+                                if (rubyCount > 0 && baseVisualWidth > 0f) {
+                                    for (j in 0 until rubyCount) {
+                                        val u = firstRubyUnit + j
+                                        val targetCenter = baseVisualLeft + (j + 0.5f) * baseVisualWidth / rubyCount
+                                        rubyShiftArr[u] = targetCenter - unitAdvance(u) / 2f - flowLeft(u) - uXShiftOf(u)
+                                    }
+                                }
                                 i = close
                             }
                         }
                     }
                 }
                 i++
+            }
+            // ルビのかなは Row の中で実幅を取ってしまうため、かなの後ろのユニットを
+            // かな幅の累計分だけ引き戻し、漢字の次の文字との間隔が空かないようにする
+            run {
+                var pullAcc = 0f
+                val pullArr = FloatArray(rowUnitTexts.size)
+                var u = 0
+                while (u < rowUnitTexts.size) {
+                    if (rubyModeArr[u] == 2) {
+                        var kanaTotal = 0f
+                        var v = u
+                        while (v < rowUnitTexts.size && rubyModeArr[v] == 2) { kanaTotal += unitAdvance(v); v++ }
+                        pullAcc += kanaTotal
+                        u = v
+                    } else {
+                        pullArr[u] = pullAcc
+                        u++
+                    }
+                }
+                for (w in rowUnitTexts.indices) rubyShiftArr[w] -= pullArr[w]
             }
         }
         val stretchPushArr = FloatArray(rowUnitTexts.size) { r ->
@@ -1605,6 +1772,12 @@ fun PvLyricLine(
                 val chunkPartsStart = chunkPartsWord?.let { chunk.indexOf(it) } ?: -1
                 val chunkMosaicWord = MOSAIC_WORDS.firstOrNull { chunk.contains(it) }
                 val chunkMosaicStart = chunkMosaicWord?.let { chunk.indexOf(it) } ?: -1
+                // 跳ねる系の単語は、対象の文字だけスプリングで弾んで入場する（対象語はデータ配信側で管理）
+                val chunkBounceWord = BOUNCE_WORDS.firstOrNull { chunk.contains(it) }
+                val chunkBounceStart = chunkBounceWord?.let { chunk.indexOf(it) } ?: -1
+                // 震える系の単語は、対象の文字だけ表示中ずっと小刻みに震える（対象語はデータ配信側で管理）
+                val chunkQuakeWord = QUAKE_WORDS.firstOrNull { chunk.contains(it) }
+                val chunkQuakeStart = chunkQuakeWord?.let { chunk.indexOf(it) } ?: -1
                 // 複数文字の色ワード（希望・想い等）は塊単位で判定し、該当する文字だけに色を渡す
                 val chunkColorHit = (COLOR_WORDS + ASSOC_COLOR_WORDS).firstOrNull { (w, _) -> w.length > 1 && chunk.contains(w) }
                 val chunkColorStart = chunkColorHit?.let { chunk.indexOf(it.first) } ?: -1
@@ -1679,6 +1852,8 @@ fun PvLyricLine(
                     val unitPile = chunkPileWord != null && unitStart < chunkPileStart + chunkPileWord.length && unitStart + ru.length > chunkPileStart
                     val unitDrip = if (chunkDrip != null && unitStart < chunkDripStart + chunkDrip.first.length && unitStart + ru.length > chunkDripStart) chunkDrip.second else null
                     val unitParts = chunkPartsWord != null && unitStart < chunkPartsStart + chunkPartsWord.length && unitStart + ru.length > chunkPartsStart
+                    val unitBounce = chunkBounceWord != null && unitStart < chunkBounceStart + chunkBounceWord.length && unitStart + ru.length > chunkBounceStart
+                    val unitQuake = chunkQuakeWord != null && unitStart < chunkQuakeStart + chunkQuakeWord.length && unitStart + ru.length > chunkQuakeStart
                     val unitChunkColor = if (chunkColorHit != null && unitStart < chunkColorStart + chunkColorHit.first.length && unitStart + ru.length > chunkColorStart) chunkColorHit.second else null
                     val censorStartHere = censorStartArr.getOrElse(rIdx) { 0f }
                     val censorEndHere = censorEndArr.getOrElse(rIdx) { 0f }
@@ -1686,9 +1861,9 @@ fun PvLyricLine(
                     PvLyricUnit(
                         bold = bold,
                         unitText = if (rubyModeHere == 1) "" else ru,
-                        uSize = ((fitSize * (0.92f + (uSeed % 22) / 100f) * sizeFactor).coerceIn(fitSize * 0.55f, fitSize * 1.35f) * (if (rubyModeHere == 2) 0.52f else 1f)).sp,
-                        uRot = if (unitCensored) 0f else ((uSeed / 3) % 29 - 14).toFloat(),
-                        uYOffset = if (unitCensored) 0.dp else ((uSeed / 5) % 17 - 8).dp,
+                        uSize = if (rubyModeHere == 2) ((fitSize * sizeFactor).coerceIn(fitSize * 0.55f, fitSize * 1.35f) * 0.52f).sp else ((fitSize * (0.92f + (uSeed % 22) / 100f) * sizeFactor).coerceIn(fitSize * 0.55f, fitSize * 1.35f)).sp,
+                        uRot = if (unitCensored || rubyModeHere == 2) 0f else ((uSeed / 3) % 29 - 14).toFloat(),
+                        uYOffset = if (unitCensored || rubyModeHere == 2) 0.dp else ((uSeed / 5) % 17 - 8).dp,
                         uXShiftDp = if (unitCensored) 0f else uXShiftTotal,
                         staggerIndex = effGi,
                         exiting = exiting,
@@ -1707,11 +1882,17 @@ fun PvLyricLine(
                         windExit = false,
                         crumbleExit = if (fallLine) 0 else if (sandLine) 1 else if (windLine) 2 else 0,
                         chunkColor = unitChunkColor,
+                        baseColor = baseColor,
                         arrowUnder = chunkArrow && ru == "行",
-                        swayScale = if (unitCensored) 0f else if (bigText) 2.8f else 1f,
+                        swayScale = if (unitCensored || rubyModeHere == 2) 0f else if (bigText) 2.8f else 1f,
                         entryDelayMs = unitDelayMs,
                         partsEntry = partsEntry,
                         wordParts = unitParts,
+                        bounce = unitBounce,
+                        quake = unitQuake,
+                        dopagaki = dopagaki,
+                        dopaPhase = dopaPhaseState,
+                        dopaBeat = dopaBeatState,
                         repeatIndex = repeatIdxHere,
                         repeatCount = repeatLenHere,
                         stretchKind = unitStretchKind,
@@ -1726,8 +1907,9 @@ fun PvLyricLine(
                         censorT = censorProgress.value,
                         lineDurationMs = lineDurationMs,
                         rubyKana = rubyModeHere == 2,
+                        rubyBaseSizeSp = rubyBaseSizeArr.getOrElse(rIdx) { 0f },
                         parallaxState = camTransState,
-                        parallaxDepth = effCharFactor - 1f
+                        parallaxDepth = if (rubyModeHere == 2) 0.25f else effCharFactor - 1f
                     )
                 }
             }
@@ -1782,10 +1964,16 @@ fun PvLyricUnit(
     windExit: Boolean = false,
     crumbleExit: Int = 0,
     chunkColor: Color? = null,
+    baseColor: Color = Color.White,
     arrowUnder: Boolean = false,
     entryDelayMs: Long = -1L,
     partsEntry: Boolean = false,
     wordParts: Boolean = false,
+    bounce: Boolean = false,
+    quake: Boolean = false,
+    dopagaki: Boolean = false,
+    dopaPhase: State<Float>? = null,
+    dopaBeat: State<Float>? = null,
     repeatIndex: Int = -1,
     repeatCount: Int = 0,
     stretchKind: Int = 0,
@@ -1800,6 +1988,7 @@ fun PvLyricUnit(
     censorBandSp: Float = 0f,
     lineDurationMs: Long = 0L,
     rubyKana: Boolean = false,
+    rubyBaseSizeSp: Float = 0f,
     parallaxState: State<Offset>? = null,
     parallaxDepth: Float = 0f
 ) {
@@ -1808,6 +1997,23 @@ fun PvLyricUnit(
     val effDelayMs = if (entryDelayMs >= 0L) entryDelayMs else staggerIndex * 45L
     val uSeed = staggerIndex
     val uAnim = remember(staggerIndex) { Animatable(0f) }
+    // 跳ねる単語の文字は、少し上からスプリングで落ちてきて、着地で小さく跳ね返る
+    val bounceLift = remember(staggerIndex) { Animatable(1f) }
+    if (!exiting && bounce) {
+        LaunchedEffect(staggerIndex) {
+            delay(effDelayMs)
+            bounceLift.animateTo(0f, animationSpec = spring(dampingRatio = 0.32f, stiffness = 320f))
+        }
+    }
+    // 震える単語の文字だけ、速い周期の位相を共有する（対象ユニットが少ないのでコストは小さい）
+    val quakePhaseState = if (quake && !exiting) {
+        val quakeTransition = rememberInfiniteTransition(label = "quake")
+        quakeTransition.animateFloat(
+            initialValue = 0f, targetValue = 6.2832f,
+            animationSpec = infiniteRepeatable(tween(300, easing = LinearEasing), RepeatMode.Restart),
+            label = "quakePhase"
+        )
+    } else null
     // 表示中ずっと、位置がごく小さくぐらぐら揺れる（角度は変えない）
     // 退場用インスタンスでは揺れ時計を表示経過時間から逆算した位相で止める。
     // 位相が0に戻ると液体ドリップなどが退場の瞬間にパッと縮んで「外れた」ように見えるため
@@ -1820,7 +2026,7 @@ fun PvLyricUnit(
     if (!exiting) {
         LaunchedEffect(staggerIndex) {
             delay(effDelayMs)
-            uAnim.animateTo(1f, animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing))
+            uAnim.animateTo(1f, animationSpec = if (dopagaki) tween(durationMillis = 360, easing = FastOutSlowInEasing) else tween(durationMillis = 380, easing = FastOutSlowInEasing))
         }
         LaunchedEffect(staggerIndex) {
             sway.animateTo(
@@ -1832,6 +2038,11 @@ fun PvLyricUnit(
             )
         }
     }
+    // ドパガキ中は文字の周りのグローを虹色にする（位相は24段階に量子化して再描画を抑える）
+    val glowColor = if (dopagaki) {
+        val ph = dopaPhase?.value ?: 0f
+        Color.hsv((((ph * 24f).toInt() * 15 + uSeed * 47) % 360).toFloat(), 0.62f, 1f)
+    } else accentColor
     val annotatedUnit = remember(unitText, uSize) {
         buildAnnotatedString {
             for (ch in unitText) {
@@ -1985,7 +2196,7 @@ fun PvLyricUnit(
                     rotationZ = uRot * (2f - a)
                     translationY = (1f - a) * 30f
                 } else {
-                    val a = if (partsEntry || wordParts) 1f else uAnim.value
+                    val a = if ((partsEntry || wordParts)) 1f else uAnim.value
                     val blinkF = if (effectKind == 3 && fxT.value < 1f) {
                         if (sin(fxT.value * 21.99f + uSeed * 1.3f) > -0.2f) 1f else 0.12f
                     } else 1f
@@ -1998,11 +2209,31 @@ fun PvLyricUnit(
                     val dir = PV_ENTRY_DIRS[Math.floorMod(uSeed * 131 + 7, 8)]
                     // 波に乗るような揺れ: サイン波でなめらかに、位相は文字ごとにずらす
                     val ph = sway.value * 6.2832f + (uSeed % 7) * 0.9f
-                    val swx = sin(ph) * 3.4f * swayScale
-                    val swy = sin(ph + 1.3f) * 2.6f * swayScale
+                    val swx = sin(ph) * 3.4f * swayScale * TUNE_SWAY_AMP
+                    val swy = sin(ph + 1.3f) * 2.6f * swayScale * TUNE_SWAY_AMP
                     if (swayScale > 1f) rotationZ += sin(ph + 0.7f) * 2.4f * (swayScale - 1f)
                     translationX = dir.first * 52f * (1f - a) + swx * a + if (effectKind == 4 && fxT.value < 1f) sin(fxT.value * 55f + uSeed * 2.7f) * 5f * (1f - fxT.value) else 0f
                     translationY = dir.second * 52f * (1f - a) + swy * a + if (effectKind == 7) sin(a * 6.2832f + uSeed * 0.8f) * 15f * (1f - a) else 0f
+                    if (bounce) translationY -= bounceLift.value * uSize.value * 1.15f
+                    if (quake) {
+                        val qp = quakePhaseState?.value ?: 0f
+                        translationX += sin(qp * 3f + uSeed * 2.2f) * 1.7f
+                        translationY += cos(qp * 4f + uSeed * 1.7f) * 1.4f
+                    }
+                    if (dopagaki) {
+                        // ドパガキ改: 入場や揺れは通常PVのまま、鼓動パルスだけ上乗せする
+                        val bt = dopaBeat?.value ?: 0f
+                        val bump1 = if (bt < 0.18f) sin(bt / 0.18f * 3.14159f) else 0f
+                        val bump2 = if (bt >= 0.24f && bt < 0.42f) sin((bt - 0.24f) / 0.18f * 3.14159f) else 0f
+                        val pulseS = 1f + 0.10f * bump1 + 0.07f * bump2
+                        scaleX *= pulseS
+                        scaleY *= pulseS
+                    }
+                    if (rubyKana) {
+                        // ルビは散らさない: 入場の飛来と揺れを消して、定位置にすっと出す
+                        translationX = 0f
+                        translationY = 0f
+                    }
                 }
                 // 句読点の扱い: ！？は大きく傾け、。、・…は小さくする
                 when (unitText) {
@@ -2017,11 +2248,15 @@ fun PvLyricUnit(
                 if (stretchKind == 2) {
                     scaleX *= 1f + 0.7f * stretchProgress
                 }
-                if (pushXFactor != 0f) {
+                if (pushXFactor != 0f && !rubyKana) {
                     translationX += pushXFactor * stretchProgress * uSize.value * 1.05f
                 }
-                // ルビのかなは漢字の真上に来るよう持ち上げる（uSize はルビ側の小さいサイズ基準）
-                if (rubyKana) translationY -= uSize.value * 1.25f
+                // ルビのかなは漢字の真上に確実に置く。持ち上げ量は密度込みで計算する
+                // （sp の数値をそのまま px として使うと、持ち上げが足りず漢字に被ってしまう）
+                if (rubyKana) {
+                    val baseSp = if (rubyBaseSizeSp > 0f) rubyBaseSizeSp else uSize.value / 0.52f
+                    translationY -= (0.40f * (baseSp + uSize.value) + 2f) * density
+                }
                 // 疑似視差: カメラの平行移動に対し、文字の大きさ（奥行き）ぶんだけズレを足す。
                 // 大きい文字（手前）ほど大きく、小さい文字（奥）ほど小さくズレる。
                 // 落下・風・粒子化の退場中は専用の動きが付いているので足さない
@@ -2081,7 +2316,7 @@ fun PvLyricUnit(
                 for (layer in 2 downTo 1) {
                     Text(
                         text = annotatedUnit,
-                        color = Color.White.copy(alpha = (if (dimmed) 0.40f else 0.92f) * (if (layer == 1) 0.38f else 0.20f)),
+                        color = baseColor.copy(alpha = (if (dimmed) 0.40f else 0.92f) * (if (layer == 1) 0.38f else 0.20f)),
                         fontSize = uSize,
                         fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
                         textAlign = TextAlign.Center,
@@ -2104,7 +2339,7 @@ fun PvLyricUnit(
                         val sliceSwayY = if (wordParts) cos(sway.value * 6.2832f + slice * 1.7f + uSeed) * 1.3f else 0f
                         Text(
                             text = annotatedUnit,
-                            color = Color.White.copy(alpha = if (dimmed) 0.40f else 0.92f),
+                            color = baseColor.copy(alpha = if (dimmed) 0.40f else 0.92f),
                             fontSize = uSize,
                             fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
                             textAlign = TextAlign.Center,
@@ -2112,7 +2347,7 @@ fun PvLyricUnit(
                             style = LocalTextStyle.current.copy(
                                 fontFamily = fontFamily,
                                 lineHeight = uSize * 1.02f,
-                                shadow = Shadow(color = accentColor.copy(alpha = if (dimmed) 0.35f else 0.85f), blurRadius = 22f)
+                                shadow = Shadow(color = glowColor.copy(alpha = if (dimmed) 0.35f else 0.9f), blurRadius = if (dopagaki) 46f else 22f)
                             ),
                             modifier = Modifier
                                 .graphicsLayer {
@@ -2133,7 +2368,7 @@ fun PvLyricUnit(
             } else {
             Text(
                 text = annotatedUnit,
-            color = Color.White.copy(alpha = if (dimmed) 0.40f else 0.92f),
+            color = baseColor.copy(alpha = if (dimmed) 0.40f else 0.92f),
             fontSize = uSize,
             fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
             textAlign = TextAlign.Center,
@@ -2141,7 +2376,7 @@ fun PvLyricUnit(
             style = LocalTextStyle.current.copy(
                 fontFamily = fontFamily,
                 lineHeight = uSize * 1.02f,
-                    shadow = Shadow(color = accentColor.copy(alpha = if (dimmed) 0.35f else 0.85f), blurRadius = 22f)
+                    shadow = Shadow(color = glowColor.copy(alpha = if (dimmed) 0.35f else 0.9f), blurRadius = if (dopagaki) 46f else 22f)
                 )
             )
             }
@@ -2734,14 +2969,15 @@ fun LyricTagSearchDialog(
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(
                         onClick = {
-                            LyricsManager.clearLyricsOverride(context, currentTitle, currentArtist, currentAlbum)
-                            hasOverride = false
-                            instApplied = false
+                            // 外したら「歌詞なし」にする（自動取得に戻すと、間違った歌詞がまた付いてしまうため）
+                            LyricsManager.removeLyricsToNone(context, currentTitle, currentArtist, currentAlbum)
+                            hasOverride = true
+                            instApplied = true
                             onCleared()
                             onDismiss()
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("歌詞の指定を解除（自動取得に戻す）") }
+                    ) { Text("歌詞を外す（歌詞なしにする）") }
                 }
                 message?.let {
                     Spacer(Modifier.height(8.dp))
@@ -2885,6 +3121,105 @@ fun LyricTagSearchDialog(
 
 /** PVレイヤー: 現在の行を文字PVで表示し、前行を退場アニメーションで消す。対訳もここに出す */
 @Composable
+fun PvDopagakiBackground(modifier: Modifier = Modifier, rotate90: Boolean = false) {
+    // ドパガキ専用背景: 金の渦の動画をループ再生する。ホーム（縦画面）では90度回して敷き、フルスクリーン（横画面）ではそのまま流す
+    val videoAspect = 16f / 9f
+    BoxWithConstraints(modifier = modifier.background(Color.Black), contentAlignment = Alignment.Center) {
+        val areaW = if (rotate90) maxHeight.value else maxWidth.value
+        val areaH = if (rotate90) maxWidth.value else maxHeight.value
+        val viewW: Float
+        val viewH: Float
+        if (areaW / areaH > videoAspect) {
+            viewW = areaW
+            viewH = areaW / videoAspect
+        } else {
+            viewH = areaH
+            viewW = areaH * videoAspect
+        }
+        AndroidView(
+            factory = { ctx ->
+                TextureView(ctx).apply {
+                    var mp: MediaPlayer? = null
+                    surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+                        override fun onSurfaceTextureAvailable(st: SurfaceTexture, width: Int, height: Int) {
+                            val player = MediaPlayer()
+                            mp = player
+                            try {
+                                player.setSurface(Surface(st))
+                                player.setDataSource(ctx, Uri.parse("android.resource://" + ctx.packageName + "/" + R.raw.dopagaki_bg))
+                                player.isLooping = true
+                                player.setVolume(0f, 0f)
+                                player.setOnPreparedListener { it.start() }
+                                player.prepareAsync()
+                            } catch (e: Exception) {
+                            }
+                        }
+                        override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, width: Int, height: Int) {}
+                        override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
+                            try { mp?.stop() } catch (e: Exception) {
+                            }
+                            mp?.release()
+                            mp = null
+                            return true
+                        }
+                        override fun onSurfaceTextureUpdated(st: SurfaceTexture) {}
+                    }
+                }
+            },
+            modifier = Modifier
+                .requiredSize(viewW.dp, viewH.dp)
+                .then(if (rotate90) Modifier.rotate(90f) else Modifier)
+        )
+    }
+}
+
+@Composable
+private fun PvSkipInterludeButton(label: String, dopagaki: Boolean, fontFamily: FontFamily?, accentColor: Color, big: Boolean = false, onClick: () -> Unit) {
+    val skipCtx = LocalContext.current
+    // 間奏スキップ（大きめ表示用）: 半透明の黒ピルに白太文字の、普通のボタン
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(Color(0xD90A0A14))
+            .border(2.dp, accentColor, RoundedCornerShape(999.dp))
+            .clickable {
+                Toast.makeText(skipCtx, if (label.contains("次の曲")) "次の曲へ" else if (label.contains("前奏")) "前奏をスキップ" else "間奏をスキップ", Toast.LENGTH_SHORT).show()
+                onClick()
+            }
+            .padding(horizontal = if (big) 38.dp else 24.dp, vertical = if (big) 21.dp else 13.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = Color.White,
+            fontSize = if (big) 27.sp else 19.sp,
+            fontWeight = FontWeight.Bold,
+            style = LocalTextStyle.current.copy(fontFamily = fontFamily)
+        )
+    }
+}
+
+// 通常モード用: 小さな文字だけの控えめなスキップ表示
+@Composable
+private fun PvSkipInterludeText(label: String, fontFamily: FontFamily?, big: Boolean = false, accentColor: Color = Color.Transparent, onClick: () -> Unit) {
+    val skipCtx = LocalContext.current
+    Text(
+        text = label,
+        color = Color.White.copy(alpha = if (big) 0.97f else 0.85f),
+        fontSize = if (big) 30.sp else 13.sp,
+        fontWeight = if (big) FontWeight.Bold else FontWeight.Normal,
+        style = if (big) LocalTextStyle.current.copy(fontFamily = fontFamily, shadow = Shadow(color = accentColor.copy(alpha = 0.9f), blurRadius = 26f)) else LocalTextStyle.current.copy(fontFamily = fontFamily),
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .clickable {
+                Toast.makeText(skipCtx, if (label.contains("次の曲")) "次の曲へ" else if (label.contains("前奏")) "前奏をスキップ" else "間奏をスキップ", Toast.LENGTH_SHORT).show()
+                onClick()
+            }
+            .padding(horizontal = if (big) 28.dp else 12.dp, vertical = if (big) 18.dp else 10.dp)
+    )
+}
+
+@Composable
 fun LyricsPvLayer(
     lines: List<LyricLine>,
     positionMs: Long,
@@ -2902,16 +3237,28 @@ fun LyricsPvLayer(
     enFontFamily: FontFamily? = null,
     onAccentFlash: (Color?) -> Unit = {},
     pvTilt3d: Boolean = false,
+    dopagaki: Boolean = false,
+    tiltX: State<Float>? = null,
+    tiltY: State<Float>? = null,
+    onSeek: (Long) -> Unit = {},
+    onNextTrack: () -> Unit = {},
+    onLineChange: (Int) -> Unit = {},
+    // 追加設定: PVの文字サイズ倍率 / 素の文字色 / ルビ / 間奏アート
+    pvFontScale: Float = 1f,
+    pvBaseColor: Color = Color.White,
+    pvRuby: Boolean = true,
+    pvInterludeArt: Boolean = true
 ) {
     val pvPos = positionMs + lyricOffsetMs
     val pvIndex = lines.indexOfLast { it.timeMs <= pvPos }
     // PVは間奏では何も表示しない（音符マークも出さない）
     val pvCurLine = lines.getOrNull(pvIndex)
     val pvNextLine = lines.getOrNull(pvIndex + 1)
+    val pvInterludeThreshold = remember(lines) { lyricInterludeThresholdMs(lines) }
     val pvInterlude = when {
-        pvCurLine == null -> pvIndex < 0 && (lines.firstOrNull()?.let { (it.timeMs - pvPos) > 2500 } ?: false) // 前奏も間奏アートを出す
-        pvNextLine == null -> (pvPos - pvCurLine.timeMs) > 8000
-        else -> (pvNextLine.timeMs - pvCurLine.timeMs) > 15000 && (pvPos - pvCurLine.timeMs) > 5000 // 行間が長い間奏だけ。次の行が近づいたら前の行に戻る、をしない
+        pvCurLine == null -> pvIndex < 0 && (lines.firstOrNull()?.let { (it.timeMs - pvPos) > pvInterludeThreshold } ?: false) // 前奏も間奏アートを出す（相当長い時だけ）
+        pvNextLine == null -> (pvPos - pvCurLine.timeMs) > 15000
+        else -> (pvNextLine.timeMs - pvCurLine.timeMs) > pvInterludeThreshold && (pvPos - pvCurLine.timeMs) > 10000 // 行間が平均+10秒を超える間奏だけ。次の行が近づいたら前の行に戻る、をしない
     }
     val pvDisplayIndex = if (pvInterlude) -2 else pvIndex
     // 色名・連想色に当たった行では、その色（文字と同じ淡色）を親に知らせてアクセントを一瞬変える
@@ -2952,9 +3299,9 @@ fun LyricsPvLayer(
         val pvCamMap = remember { mutableStateMapOf<Int, Int>() }
         fun pvCamFlowFor(idx: Int, text: String): Int {
             pvCamMap[idx]?.let { return it }
-            val raw = Math.floorMod(Math.floorMod(idx * 41 + text.hashCode(), 997), 6)
+            val raw = Math.floorMod(Math.floorMod(idx * 41 + text.hashCode(), 997), 7)
             val prev = pvCamMap[idx - 1]
-            val flow = if (prev != null && raw == prev) (raw + 1) % 6 else raw
+            val flow = if (prev != null && raw == prev) (raw + 1) % 7 else raw
             pvCamMap[idx] = flow
             return flow
         }
@@ -2990,9 +3337,78 @@ fun LyricsPvLayer(
         LaunchedEffect(darkTarget) {
             darkAlpha.animateTo(darkTarget, animationSpec = tween(durationMillis = 700))
         }
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+        // サビ判定: 同じ歌詞行が2回以上出てくる行はサビとみなし、背景をほんのり明るくする
+        val chorusTexts = remember(lines) {
+            lines.map { it.text.trim() }.filter { it.isNotEmpty() }
+                .groupingBy { it }.eachCount().filterValues { it >= 2 }.keys
+        }
+        val chorusTarget = if (pvDisplayIndex >= 0 && chorusTexts.contains(lines.getOrNull(pvDisplayIndex)?.text?.trim())) 1f else 0f
+        val chorusGlow = remember { Animatable(0f) }
+        LaunchedEffect(chorusTarget) {
+            chorusGlow.animateTo(chorusTarget, animationSpec = tween(durationMillis = 900))
+        }
+        // ドパガキ改: 通常PVの上に、行が変わるたびのフラッシュと星の瞬きを重ねる
+        val dopaFlash = remember { Animatable(0f) }
+        LaunchedEffect(pvDisplayIndex) {
+            if (dopagaki && pvDisplayIndex >= 0) {
+                dopaFlash.snapTo(0.26f)
+                dopaFlash.animateTo(0f, animationSpec = tween(durationMillis = 320))
+            }
+        }
+        // ドパガキ: 行が変わるたび、キラキラが画面を左から右へ流れる
+        val dopaFlow = remember { Animatable(0f) }
+        LaunchedEffect(pvDisplayIndex) {
+            onLineChange(pvDisplayIndex)
+            if (dopagaki) {
+                dopaFlow.snapTo(0f)
+                dopaFlow.animateTo(1f, animationSpec = tween(durationMillis = 800, easing = LinearEasing))
+            }
+        }
+        val dopaTwinkleState = if (dopagaki) {
+            val tr = rememberInfiniteTransition(label = "dopaTwinkle")
+            tr.animateFloat(
+                initialValue = 0f, targetValue = 1f,
+                animationSpec = infiniteRepeatable(tween(2800, easing = LinearEasing), RepeatMode.Restart),
+                label = "dopaTwinklePh"
+            )
+        } else null
+        Box(modifier = Modifier.fillMaxSize().graphicsLayer {
+                        val tx = tiltX?.value ?: 0f
+                        val ty = tiltY?.value ?: 0f
+                        rotationX = tx * 0.38f
+                        rotationY = ty * 0.38f
+                        cameraDistance = 9f * density
+                        translationX = ty * 1.15f
+                        translationY = -tx * 1.15f
+                    }, contentAlignment = Alignment.TopCenter) {
             if (darkAlpha.value > 0.001f) {
                 Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = darkAlpha.value)))
+            }
+            if (dopagaki) {
+                // 画面全体に星の瞬きを散らす（位相は描画時にだけ読む）
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val tw = dopaTwinkleState?.value ?: 0f
+                    for (i in 0 until 22) {
+                        val sx = ((i * 389 + 71) % 100) / 100f * size.width
+                        val sy = ((i * 641 + 37) % 100) / 100f * size.height
+                        val al = 0.30f + 0.70f * (0.5f + 0.5f * sin(tw * 6.2832f * (1f + (i % 3) * 0.37f) + i * 2.39f))
+                        drawSparkle(sx, sy, 6f + (i % 3) * 3f, Color(0xFFFFF2B0), al * 0.85f)
+                    }
+                }
+                // 行が変わる瞬間のフラッシュ
+                if (dopaFlash.value > 0.01f) {
+                    Box(modifier = Modifier.fillMaxSize().background(Color.White.copy(alpha = dopaFlash.value)))
+                }
+            }
+            if (chorusGlow.value > 0.001f) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().padding(top = (pvTopDp - 70.dp).coerceAtLeast(0.dp)).height(320.dp)
+                        .background(
+                            brush = Brush.radialGradient(
+                                colors = listOf(accentColor.copy(alpha = 0.20f * chorusGlow.value), Color.Transparent)
+                            )
+                        )
+                )
             }
             pvExiting?.let { (exIdx, exText) ->
                 key("pvexit$exIdx") {
@@ -3010,7 +3426,7 @@ fun LyricsPvLayer(
                         partsEntry = partsEntry,
                         enFontFamily = enFontFamily,
                         camFlow = pvCurrent?.let { pvCamFlowFor(it.first, it.second) } ?: pvCamFlowFor(exIdx + 1, lines.getOrNull(exIdx + 1)?.text ?: ""),
-                        tilt3d = pvTilt3d,
+                        tilt3d = pvTilt3d, dopagaki = dopagaki, fontScale = pvFontScale, baseColor = pvBaseColor, rubyEnabled = pvRuby,
                         modifier = Modifier.padding(top = pvTopDp)
                     )
                 }
@@ -3032,7 +3448,7 @@ fun LyricsPvLayer(
                                 partsEntry = partsEntry,
                         enFontFamily = enFontFamily,
                                 camFlow = pvCamFlowFor(curIdx, curText),
-                                tilt3d = pvTilt3d,
+                                tilt3d = pvTilt3d, dopagaki = dopagaki, fontScale = pvFontScale, baseColor = pvBaseColor, rubyEnabled = pvRuby,
                                 effectKind = pvKindFor(curIdx, curText),
                                 lineDurationMs = lines.getOrNull(curIdx + 1)?.let { it.timeMs - lines[curIdx].timeMs } ?: Long.MAX_VALUE,
                                 startsInParen = pvStartsInParen(lines, curIdx),
@@ -3044,7 +3460,39 @@ fun LyricsPvLayer(
             }
         }
         if (pvDisplayIndex == -2) {
-            PvInterludeArt(accentColor = accentColor, modifier = Modifier.fillMaxWidth().padding(top = interludeTopDp).height(230.dp))
+            if (pvInterludeArt) PvInterludeArt(accentColor = accentColor, modifier = Modifier.fillMaxWidth().padding(top = interludeTopDp).height(230.dp))
+            // ドパガキモードの間奏中だけ、ギラギラボタンを出す（通常は次の行へスキップ、ラストの間奏は次の曲へ）
+            val pvSkipTarget = pvNextLine?.let { (it.timeMs - lyricOffsetMs - 300L).coerceAtLeast(0L) }
+            val pvSkipLabel = if (pvCurLine == null) "前奏をスキップ▷" else "間奏をスキップ▷"
+            if (dopagaki) {
+                // 行の入退場に合わせてキラキラが流れる（位相は描画時にだけ読む）
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val fv = dopaFlow.value
+                    if (fv > 0f && fv < 1f) {
+                        val fade = sin(fv * 3.14159f)
+                        for (i in 0 until 26) {
+                            val fx = ((i * 0.61803f) + fv * (0.5f + (i % 4) * 0.18f)) % 1f
+                            val fy = ((i * 389 + 53) % 100) / 100f
+                            val a = fade * (0.35f + 0.65f * ((i * 29) % 10) / 10f)
+                            drawSparkle(size.width * fx, size.height * fy, 5f + (i % 3) * 3.5f, Color(0xFFFFF2B0), a * 0.9f)
+                        }
+                    }
+                }
+            }
+            // 通常モードのスキップ表示は Main 側の最前面オーバーレイに移設した（円盤レイヤーにタップを奪われないため）
+            if (pvSkipTarget != null) {
+                if (dopagaki) {
+                    Box(Modifier.fillMaxSize().zIndex(999f), contentAlignment = Alignment.Center) {
+                        PvSkipInterludeText(pvSkipLabel, fontFamily, big = true, accentColor = accentColor) { onSeek(pvSkipTarget) }
+                    }
+                }
+            } else if (pvCurLine != null) {
+                if (dopagaki) {
+                    Box(Modifier.fillMaxSize().zIndex(999f), contentAlignment = Alignment.Center) {
+                        PvSkipInterludeText("次の曲へ▷", fontFamily, big = true, accentColor = accentColor) { onNextTrack() }
+                    }
+                }
+            }
         }
         // 対訳: PVの3行目として、現在の行の日本語訳を小さく出す
         if (translationEnabled && pvDisplayIndex >= 0) {
@@ -3102,9 +3550,12 @@ fun LyricsBrowseOverlay(
     onSaveEditedLyrics: ((String) -> Unit)? = null,
     onPublishLyrics: ((String, (String) -> Unit) -> Unit)? = null,
     onClose: () -> Unit,
-    enFontFamily: FontFamily? = null
+    enFontFamily: FontFamily? = null,
+    dopagaki: Boolean = false,
+    onToggleDopagaki: () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
+    val toastCtx = LocalContext.current
     val haptic = LocalHapticFeedback.current
     var follow by remember { mutableStateOf(true) }
     var showOffsetPanel by remember { mutableStateOf(false) }
@@ -3330,7 +3781,7 @@ fun LyricsBrowseOverlay(
                         },
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = "ここへ移動", tint = Color.White, modifier = Modifier.size(24.dp))
+                    LucideIcon(LucidePlay, size = 24.dp, color = Color.White)
                 }
             }
             Column(
@@ -3372,6 +3823,21 @@ fun LyricsBrowseOverlay(
                         )
                     )
                 }
+                if (idx == browsePlayingIdx) {
+                    // 再生中の行には進行バーを付ける（文字同期の行も、カラオケ色付けと併せて出す）
+                    val lineStartP = lines[idx].timeMs
+                    val lineEndP = lines.getOrNull(idx + 1)?.timeMs ?: (lineStartP + 10000L)
+                    val progP = ((positionMs + lyricOffsetMs - lineStartP).toFloat() / (lineEndP - lineStartP).coerceAtLeast(1L).toFloat()).coerceIn(0f, 1f)
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(top = 3.dp).height(3.dp)
+                            .background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(2.dp))
+                    ) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth(progP).height(3.dp)
+                                .background(accentColor, RoundedCornerShape(2.dp))
+                        )
+                    }
+                }
                 // 翻訳ONのときは、各行の下に小さく対訳を添える
                 if (translationEnabled) {
                     val tr = translations?.getOrNull(idx)
@@ -3400,7 +3866,7 @@ fun LyricsBrowseOverlay(
             .clickable { onClose() },
         contentAlignment = Alignment.Center
     ) {
-        Icon(Icons.Default.Close, contentDescription = "閉じる", tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(26.dp))
+        LucideIcon(LucideX, size = 26.dp, color = Color.White.copy(alpha = 0.8f))
     }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -3488,7 +3954,7 @@ fun LyricsBrowseOverlay(
             Spacer(modifier = Modifier.height(10.dp))
         }
         Row(
-            horizontalArrangement = Arrangement.spacedBy(24.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // 左: 歌詞の再取得
@@ -3500,7 +3966,7 @@ fun LyricsBrowseOverlay(
                     .clickable { onRefresh() },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Refresh, contentDescription = "歌詞を再取得", tint = Color.White, modifier = Modifier.size(24.dp))
+                LucideIcon(LucideRefreshCcw, size = 24.dp, color = Color.White)
             }
             // タグを指定して検索（間違った歌詞を掴んだとき用）
             Box(
@@ -3511,7 +3977,7 @@ fun LyricsBrowseOverlay(
                     .clickable { onOpenSearch() },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Search, contentDescription = "タグを指定して検索", tint = Color.White, modifier = Modifier.size(24.dp))
+                LucideIcon(LucideSearch, size = 24.dp, color = Color.White)
             }
             // 歌詞を手で編集（誤字修正など。キャッシュに保存される）
             if (onSaveEditedLyrics != null && lines.isNotEmpty()) {
@@ -3529,7 +3995,7 @@ fun LyricsBrowseOverlay(
                         },
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Default.Edit, contentDescription = "歌詞を編集", tint = Color.White, modifier = Modifier.size(24.dp))
+                    LucideIcon(LucidePencil, size = 24.dp, color = Color.White)
                 }
             }
             // 右: タイミング調整（オフセット）
@@ -3541,7 +4007,7 @@ fun LyricsBrowseOverlay(
                     .clickable { showOffsetPanel = !showOffsetPanel },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Timer, contentDescription = "タイミング調整", tint = Color.White, modifier = Modifier.size(24.dp))
+                LucideIcon(LucideTimer, size = 24.dp, color = Color.White)
             }
             // 翻訳ON/OFF（洋楽の対訳をPVの下に出す）
             Box(
@@ -3552,7 +4018,21 @@ fun LyricsBrowseOverlay(
                     .clickable { onToggleTranslation() },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.Translate, contentDescription = "翻訳", tint = Color.White, modifier = Modifier.size(24.dp))
+                LucideIcon(LucideLanguages, size = 24.dp, color = Color.White)
+            }
+            // ドパガキモードON/OFF
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(if (dopagaki) Color(0xFFFFB300) else Color(0xFF263238))
+                    .clickable {
+                        if (!dopagaki) Toast.makeText(toastCtx, "ドパガキモード始動", Toast.LENGTH_SHORT).show()
+                        onToggleDopagaki()
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                LucideIcon(LucideSparkles, size = 24.dp, color = Color.White)
             }
         }
     }
@@ -3592,7 +4072,19 @@ fun LyricsFullscreenOverlay(
     onClose: () -> Unit,
     partsEntry: Boolean = false,
     enFontFamily: FontFamily? = null,
-    pvTilt3d: Boolean = false
+    pvTilt3d: Boolean = false,
+    dopagaki: Boolean = false,
+    tiltX: State<Float>? = null,
+    tiltY: State<Float>? = null,
+    onSeek: (Long) -> Unit = {},
+    onNextTrack: () -> Unit = {},
+    // 追加設定: PVと共通（文字サイズ・色・ルビ・間奏アート・液体）
+    pvFontScale: Float = 1f,
+    pvBaseColor: Color = Color.White,
+    pvRuby: Boolean = true,
+    pvInterludeArt: Boolean = true,
+    liquidSpeed: Float = 1f,
+    liquidAlphaMul: Float = 1f
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize().zIndex(96f)) {
         val fsWidth = maxWidth.value
@@ -3610,7 +4102,12 @@ fun LyricsFullscreenOverlay(
         }
         // 横画面でも液体グラデーションを流す（設定ONのとき）
         if (liquidEnabled) {
-            LiquidGradientBackground(baseColor = accentColor, onBlack = false, layerAlpha = 1f, alphaBoost = 1.9f)
+            // ドパガキ中は、行が変わるごとに液体の色も変わる
+            val fsLiquidBase = if (dopagaki) {
+                val fsIdxForHue = fsLines.indexOfLast { it.timeMs <= positionMs + lyricOffsetMs }
+                Color.hsv(Math.floorMod(fsIdxForHue * 47, 360).toFloat(), 0.72f, 1f)
+            } else accentColor
+            LiquidGradientBackground(baseColor = fsLiquidBase, onBlack = false, layerAlpha = 1f, alphaBoost = 1.9f, speedFactor = liquidSpeed, alphaMul = liquidAlphaMul)
         }
         if (fsLines.isEmpty()) {
             // 歌詞が無い曲: 左にアートワーク、右に曲名などの情報だけを出す
@@ -3646,14 +4143,65 @@ fun LyricsFullscreenOverlay(
         val fsIndex = fsLines.indexOfLast { it.timeMs <= fsPos }
         val fsCurLine = fsLines.getOrNull(fsIndex)
         val fsNextLine = fsLines.getOrNull(fsIndex + 1)
+        val fsInterludeThreshold = remember(fsLines) { lyricInterludeThresholdMs(fsLines) }
         val fsInterlude = when {
-            fsCurLine == null -> fsIndex < 0 && (fsLines.firstOrNull()?.let { (it.timeMs - fsPos) > 2500 } ?: false) // 前奏も間奏アートを出す
-            fsNextLine == null -> (fsPos - fsCurLine.timeMs) > 8000
-            else -> (fsNextLine.timeMs - fsCurLine.timeMs) > 15000 && (fsPos - fsCurLine.timeMs) > 5000
+            fsCurLine == null -> fsIndex < 0 && (fsLines.firstOrNull()?.let { (it.timeMs - fsPos) > fsInterludeThreshold } ?: false) // 前奏も間奏アートを出す（相当長い時だけ）
+            fsNextLine == null -> (fsPos - fsCurLine.timeMs) > 15000
+            else -> (fsNextLine.timeMs - fsCurLine.timeMs) > fsInterludeThreshold && (fsPos - fsCurLine.timeMs) > 10000
         }
         if (displayMode == "video") {
             // PVだけを中央に
             val fsDisplayIndex = if (fsInterlude) -2 else fsIndex
+            // ドパガキ改: 行が変わるたびのフラッシュと星の瞬き（通常PVの上に重ねる）
+            val fsDopaFlash = remember { Animatable(0f) }
+            LaunchedEffect(fsDisplayIndex) {
+                if (dopagaki && fsDisplayIndex >= 0) {
+                    fsDopaFlash.snapTo(0.26f)
+                    fsDopaFlash.animateTo(0f, animationSpec = tween(durationMillis = 320))
+                }
+            }
+            val fsDopaTwinkleState = if (dopagaki) {
+                val tr = rememberInfiniteTransition(label = "fsDopaTwinkle")
+                tr.animateFloat(
+                    initialValue = 0f, targetValue = 1f,
+                    animationSpec = infiniteRepeatable(tween(2800, easing = LinearEasing), RepeatMode.Restart),
+                    label = "fsDopaTwinklePh"
+                )
+            } else null
+            val fsDopaFlow = remember { Animatable(0f) }
+            LaunchedEffect(fsDisplayIndex) {
+                if (dopagaki) {
+                    fsDopaFlow.snapTo(0f)
+                    fsDopaFlow.animateTo(1f, animationSpec = tween(durationMillis = 800, easing = LinearEasing))
+                }
+            }
+            if (dopagaki) {
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val tw = fsDopaTwinkleState?.value ?: 0f
+                    for (i in 0 until 22) {
+                        val sx = ((i * 389 + 71) % 100) / 100f * size.width
+                        val sy = ((i * 641 + 37) % 100) / 100f * size.height
+                        val al = 0.30f + 0.70f * (0.5f + 0.5f * sin(tw * 6.2832f * (1f + (i % 3) * 0.37f) + i * 2.39f))
+                        drawSparkle(sx, sy, 6f + (i % 3) * 3f, Color(0xFFFFF2B0), al * 0.85f)
+                    }
+                }
+                if (fsDopaFlash.value > 0.01f) {
+                    Box(modifier = Modifier.fillMaxSize().background(Color.White.copy(alpha = fsDopaFlash.value)))
+                }
+                // 行の入退場に合わせてキラキラが流れる（位相は描画時にだけ読む）
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val fv = fsDopaFlow.value
+                    if (fv > 0f && fv < 1f) {
+                        val fade = sin(fv * 3.14159f)
+                        for (i in 0 until 26) {
+                            val fx = ((i * 0.61803f) + fv * (0.5f + (i % 4) * 0.18f)) % 1f
+                            val fy = ((i * 389 + 53) % 100) / 100f
+                            val a = fade * (0.35f + 0.65f * ((i * 29) % 10) / 10f)
+                            drawSparkle(size.width * fx, size.height * fy, 5f + (i % 3) * 3.5f, Color(0xFFFFF2B0), a * 0.9f)
+                        }
+                    }
+                }
+            }
             if (fsIndex >= 0) {
                 var fsCurrent by remember { mutableStateOf<Pair<Int, String>?>(null) }
                 var fsExiting by remember { mutableStateOf<Pair<Int, String>?>(null) }
@@ -3662,9 +4210,9 @@ fun LyricsFullscreenOverlay(
                 val fsCamMap = remember { mutableStateMapOf<Int, Int>() }
                 fun fsCamFlowFor(idx: Int, text: String): Int {
                     fsCamMap[idx]?.let { return it }
-                    val raw = Math.floorMod(Math.floorMod(idx * 41 + text.hashCode(), 997), 6)
+                    val raw = Math.floorMod(Math.floorMod(idx * 41 + text.hashCode(), 997), 7)
                     val prev = fsCamMap[idx - 1]
-                    val flow = if (prev != null && raw == prev) (raw + 1) % 6 else raw
+                    val flow = if (prev != null && raw == prev) (raw + 1) % 7 else raw
                     fsCamMap[idx] = flow
                     return flow
                 }
@@ -3687,7 +4235,15 @@ fun LyricsFullscreenOverlay(
                 LaunchedEffect(fsDarkTarget) {
                     fsDarkAlpha.animateTo(fsDarkTarget, animationSpec = tween(durationMillis = 700))
                 }
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.fillMaxSize().graphicsLayer {
+                        val tx = tiltX?.value ?: 0f
+                        val ty = tiltY?.value ?: 0f
+                        rotationX = tx * 0.38f
+                        rotationY = ty * 0.38f
+                        cameraDistance = 9f * density
+                        translationX = ty * 1.15f
+                        translationY = -tx * 1.15f
+                    }, contentAlignment = Alignment.Center) {
                     if (fsDarkAlpha.value > 0.001f) {
                         Box(modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = fsDarkAlpha.value)))
                     }
@@ -3706,7 +4262,7 @@ fun LyricsFullscreenOverlay(
                                 partsEntry = partsEntry,
                                 enFontFamily = enFontFamily,
                                 camFlow = fsCurrent?.let { fsCamFlowFor(it.first, it.second) } ?: fsCamFlowFor(exIdx + 1, fsLines.getOrNull(exIdx + 1)?.text ?: ""),
-                                tilt3d = pvTilt3d,
+                                tilt3d = pvTilt3d, dopagaki = dopagaki, fontScale = pvFontScale, baseColor = pvBaseColor, rubyEnabled = pvRuby,
                                 exiting = true,
                                 effectKind = Math.floorMod(Math.floorMod(exIdx * 31 + exText.hashCode(), 997), 8),
                                 modifier = Modifier
@@ -3728,7 +4284,7 @@ fun LyricsFullscreenOverlay(
                                 partsEntry = partsEntry,
                                 enFontFamily = enFontFamily,
                                 camFlow = fsCamFlowFor(curIdx, curText),
-                                tilt3d = pvTilt3d,
+                                tilt3d = pvTilt3d, dopagaki = dopagaki, fontScale = pvFontScale, baseColor = pvBaseColor, rubyEnabled = pvRuby,
                                 exiting = false,
                                 words = fsLines[curIdx].words,
                                 lineStartMs = fsLines[curIdx].timeMs,
@@ -3739,7 +4295,30 @@ fun LyricsFullscreenOverlay(
                     }
                 }
                 if (fsDisplayIndex == -2) {
-                    PvInterludeArt(accentColor = accentColor, modifier = Modifier.fillMaxSize().padding(60.dp))
+                    if (pvInterludeArt) PvInterludeArt(accentColor = accentColor, modifier = Modifier.fillMaxSize().padding(60.dp))
+                    val fsSkipTarget = fsNextLine?.let { (it.timeMs - lyricOffsetMs - 300L).coerceAtLeast(0L) }
+                    val fsSkipLabel = if (fsCurLine == null) "前奏をスキップ▷" else "間奏をスキップ▷"
+                    if (fsSkipTarget != null) {
+                        if (dopagaki) {
+                            Box(Modifier.fillMaxSize().zIndex(999f), contentAlignment = Alignment.Center) {
+                                PvSkipInterludeText(fsSkipLabel, fontFamily, big = true, accentColor = accentColor) { onSeek(fsSkipTarget) }
+                            }
+                        } else {
+                            Box(Modifier.fillMaxSize().padding(end = 20.dp, bottom = 24.dp).zIndex(999f), contentAlignment = Alignment.BottomEnd) {
+                                PvSkipInterludeText(fsSkipLabel, fontFamily) { onSeek(fsSkipTarget) }
+                            }
+                        }
+                    } else if (fsCurLine != null) {
+                        if (dopagaki) {
+                            Box(Modifier.fillMaxSize().zIndex(999f), contentAlignment = Alignment.Center) {
+                                PvSkipInterludeText("次の曲へ▷", fontFamily, big = true, accentColor = accentColor) { onNextTrack() }
+                            }
+                        } else {
+                            Box(Modifier.fillMaxSize().padding(end = 20.dp, bottom = 24.dp).zIndex(999f), contentAlignment = Alignment.BottomEnd) {
+                                PvSkipInterludeText("次の曲へ▷", fontFamily) { onNextTrack() }
+                            }
+                        }
+                    }
                 }
                 fsCurrent?.let { (_, curText) ->
                     val ambKind = when {
@@ -3866,11 +4445,10 @@ fun LyricsFullscreenOverlay(
                 .clickable { onClose() },
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = Icons.Default.FullscreenExit,
-                contentDescription = "全画面を終了",
-                tint = Color.White.copy(alpha = 0.85f),
-                modifier = Modifier.size(26.dp)
+            LucideIcon(
+                icon = LucideMinimize,
+                size = 26.dp,
+                color = Color.White.copy(alpha = 0.85f)
             )
         }
     }

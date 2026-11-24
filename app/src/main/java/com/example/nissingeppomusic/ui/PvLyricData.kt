@@ -1,6 +1,7 @@
 package com.example.nissingeppomusic.ui
 
 import androidx.compose.ui.graphics.Color
+import com.example.nissingeppomusic.data.LyricLine
 
 // 歌詞PVのデータ定義（単語アイコン対応表・除外リスト・色名・カタカナ英訳・コーラス判定・入場方向）。
 // 対応表の中身は LyricEffectsData が持つ。配信データ（このリポジトリ直下の lyric_effects.json）が
@@ -136,6 +137,16 @@ val PILE_WORDS: List<String>
     get() = LyricEffectsData.pileWords
 val PARTS_WORDS: List<String>
     get() = LyricEffectsData.partsWords
+val BOUNCE_WORDS: List<String>
+    get() = LyricEffectsData.bounceWords
+val QUAKE_WORDS: List<String>
+    get() = LyricEffectsData.quakeWords
+val TUNE_SWAY_AMP: Float
+    get() = LyricEffectsData.tuningSwayAmp
+val TUNE_CAM_SLIDE: Float
+    get() = LyricEffectsData.tuningCamSlide
+val TUNE_DRIFT_AMP: Float
+    get() = LyricEffectsData.tuningDriftAmp
 val NEG_WORDS: List<String>
     get() = LyricEffectsData.negWords
 val GHOST_WORDS: List<String>
@@ -155,3 +166,4 @@ val PV_ENTRY_DIRS = listOf(
     0f to -1f, 0.72f to -0.72f, 1f to 0f, 0.72f to 0.72f,
     0f to 1f, -0.72f to 0.72f, -1f to 0f, -0.72f to -0.72f
 )
+

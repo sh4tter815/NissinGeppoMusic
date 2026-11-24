@@ -350,6 +350,8 @@ object LyricEffectsData {
     private val DEFAULT_MOSAIC_WORDS: List<String> = listOf("隠", "モザイク")
     private val DEFAULT_PILE_WORDS: List<String> = listOf("積み重な", "降り積も", "積も", "積み", "重な", "重ね", "堆積", "累積")
     private val DEFAULT_PARTS_WORDS: List<String> = listOf("バラバラ", "ばらばら", "壊れ", "割れ", "砕け", "崩れ", "破", "割", "壊", "砕")
+    private val DEFAULT_BOUNCE_WORDS: List<String> = listOf("跳ねる", "跳ね", "弾む", "弾み", "踊る", "踊り", "舞う", "舞い", "跳躍", "跳ぶ", "跳", "弾", "踊", "舞", "バウンス", "ジャンプ")
+    private val DEFAULT_QUAKE_WORDS: List<String> = listOf("身震い", "戦慄", "震える", "震え", "怯える", "怯え", "怖い", "恐れる", "恐れ", "震", "怖", "怯", "慄", "恐")
     private val DEFAULT_NEG_WORDS: List<String> = listOf("なかった", "じゃない", "なくて", "なくな", "無い", "ない", "間違い", "誤り")
     private val DEFAULT_GHOST_WORDS: List<String> = listOf("透明")
     private val DEFAULT_SPARKLE_WORDS: List<String> = listOf("光", "輝")
@@ -428,6 +430,12 @@ object LyricEffectsData {
     @Volatile var mosaicWords: List<String> = DEFAULT_MOSAIC_WORDS; private set
     @Volatile var pileWords: List<String> = DEFAULT_PILE_WORDS; private set
     @Volatile var partsWords: List<String> = DEFAULT_PARTS_WORDS; private set
+    @Volatile var bounceWords: List<String> = DEFAULT_BOUNCE_WORDS; private set
+    @Volatile var quakeWords: List<String> = DEFAULT_QUAKE_WORDS; private set
+    // 数値チューニング（配信JSONの tuning セクション。範囲外の値はクランプされ、失敗時は現行値を維持する）
+    @Volatile var tuningSwayAmp: Float = 1f; private set
+    @Volatile var tuningCamSlide: Float = 1f; private set
+    @Volatile var tuningDriftAmp: Float = 1f; private set
     @Volatile var negWords: List<String> = DEFAULT_NEG_WORDS; private set
     @Volatile var ghostWords: List<String> = DEFAULT_GHOST_WORDS; private set
     @Volatile var sparkleWords: List<String> = DEFAULT_SPARKLE_WORDS; private set
@@ -588,6 +596,12 @@ object LyricEffectsData {
             val newMosaic = root.optJSONArray("mosaicWords")?.let { parseWordList(it) ?: return false }
             val newPile = root.optJSONArray("pileWords")?.let { parseWordList(it) ?: return false }
             val newParts = root.optJSONArray("partsWords")?.let { parseWordList(it) ?: return false }
+            val newBounce = root.optJSONArray("bounceWords")?.let { parseWordList(it) ?: return false }
+            val newQuake = root.optJSONArray("quakeWords")?.let { parseWordList(it) ?: return false }
+            val tuneObj = root.optJSONObject("tuning")
+            val newSwayAmp = tuneObj?.optDouble("swayAmp", 1.0)?.toFloat()?.coerceIn(0f, 2f)
+            val newCamSlide = tuneObj?.optDouble("camSlide", 1.0)?.toFloat()?.coerceIn(0f, 2f)
+            val newDriftAmp = tuneObj?.optDouble("driftAmp", 1.0)?.toFloat()?.coerceIn(0f, 2.5f)
             val newNeg = root.optJSONArray("negWords")?.let { parseWordList(it) ?: return false }
             val newGhost = root.optJSONArray("ghostWords")?.let { parseWordList(it) ?: return false }
             val newSparkle = root.optJSONArray("sparkleWords")?.let { parseWordList(it) ?: return false }
@@ -620,6 +634,11 @@ object LyricEffectsData {
             if (newMosaic != null) mosaicWords = newMosaic
             if (newPile != null) pileWords = newPile
             if (newParts != null) partsWords = newParts
+            if (newBounce != null) bounceWords = newBounce
+            if (newQuake != null) quakeWords = newQuake
+            if (newSwayAmp != null) tuningSwayAmp = newSwayAmp
+            if (newCamSlide != null) tuningCamSlide = newCamSlide
+            if (newDriftAmp != null) tuningDriftAmp = newDriftAmp
             if (newNeg != null) negWords = newNeg
             if (newGhost != null) ghostWords = newGhost
             if (newSparkle != null) sparkleWords = newSparkle
@@ -662,7 +681,7 @@ object LyricEffectsData {
                     val conn = URL(DATA_URL).openConnection() as HttpURLConnection
                     conn.connectTimeout = 15000
                     conn.readTimeout = 15000
-                    conn.setRequestProperty("User-Agent", "NissinGeppoMusic")
+                    conn.setRequestProperty("User-Agent", "NissinGeppoLauncher")
                     conn.inputStream.bufferedReader().use { it.readText() }
                 } catch (e: Exception) {
                     lastError = e
