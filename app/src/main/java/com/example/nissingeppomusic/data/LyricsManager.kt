@@ -325,7 +325,7 @@ object LyricsManager {
             connection.requestMethod = "GET"
             connection.connectTimeout = 8_000
             connection.readTimeout = 8_000
-            connection.setRequestProperty("User-Agent", "NissinGeppoMusic (personal music player)")
+            connection.setRequestProperty("User-Agent", "NissinGeppoMusic (personal launcher)")
             if (connection.responseCode != HttpURLConnection.HTTP_OK) {
                 null
             } else {
@@ -345,7 +345,7 @@ object LyricsManager {
             connection.requestMethod = "GET"
             connection.connectTimeout = 8_000
             connection.readTimeout = 8_000
-            connection.setRequestProperty("User-Agent", "NissinGeppoMusic (personal music player)")
+            connection.setRequestProperty("User-Agent", "NissinGeppoMusic (personal launcher)")
             if (connection.responseCode != HttpURLConnection.HTTP_OK) {
                 null
             } else {
@@ -1243,7 +1243,7 @@ object LyricsManager {
     /** 手編集した歌詞をキャッシュへ保存する（対訳キャッシュは行対応がずれるので消す） */
     fun saveEditedLyrics(context: Context, title: String, artist: String, album: String, lrcText: String) {
         saveLyricsOverride(context, title, artist, album, lrcText)
-        try { File(cacheFile(context, title, artist, album).absolutePath + ".ja3").delete() } catch (e: Exception) { }
+        try { File(cacheFile(context, title, artist, album).absolutePath + ".ja4").delete() } catch (e: Exception) { }
     }
 
     /** インスト曲（歌詞なし）指定を保存するマーカー */
@@ -1270,11 +1270,20 @@ object LyricsManager {
     fun hasLyricsOverride(context: Context, title: String, artist: String, album: String): Boolean =
         cacheFile(context, title, artist, album).exists() || isInstrumentalOverride(context, title, artist, album)
 
+    /** 歌詞を外して「歌詞なし」にする。以後、この曲では自動取得も走らない */
+    fun removeLyricsToNone(context: Context, title: String, artist: String, album: String) {
+        try { cacheFile(context, title, artist, album).delete() } catch (e: Exception) { }
+        try { File(cacheFile(context, title, artist, album).absolutePath + ".ja4").delete() } catch (e: Exception) { }
+        try { File(cacheFile(context, title, artist, album).absolutePath + ".nokrc").delete() } catch (e: Exception) { }
+        try { File(cacheFile(context, title, artist, album).absolutePath + ".krc").delete() } catch (e: Exception) { }
+        saveInstrumentalOverride(context, title, artist, album)
+    }
+
     /** 歌詞の指定をすべて解除して、自動取得に戻す */
     fun clearLyricsOverride(context: Context, title: String, artist: String, album: String) {
         try { cacheFile(context, title, artist, album).delete() } catch (e: Exception) { }
         try { instrumentalFile(context, title, artist, album).delete() } catch (e: Exception) { }
-        try { File(cacheFile(context, title, artist, album).absolutePath + ".ja3").delete() } catch (e: Exception) { }
+        try { File(cacheFile(context, title, artist, album).absolutePath + ".ja4").delete() } catch (e: Exception) { }
         try { File(cacheFile(context, title, artist, album).absolutePath + ".nokrc").delete() } catch (e: Exception) { }
     }
 
@@ -1285,14 +1294,79 @@ object LyricsManager {
         return LyricEffectsData.creditKeywords.any { t.contains(it) }
     }
 
+    /** 文のまとまり（次の行が小文字で始まる間は同じ文）の行indexグループを返す */
+    private fun translationGroups(lines: List<LyricLine>): List<List<Int>> {
+        val translatable = lines.map { l ->
+            l.text.isNotBlank() && !l.text.any { it in '\u3040'..'\u30FF' } && !isCreditLine(l.text)
+        }
+        fun endsSentence(t: String): Boolean {
+            val s = t.trim().trimEnd('"', '”', '’', '\'', ')', '）')
+            return s.isNotEmpty() && (s.last() == '.' || s.last() == '!' || s.last() == '?' || s.last() == '…')
+        }
+        val groups = mutableListOf<List<Int>>()
+        var curGroup = mutableListOf<Int>()
+        for (i in lines.indices) {
+            if (!translatable[i]) {
+                if (curGroup.isNotEmpty()) { groups.add(curGroup); curGroup = mutableListOf() }
+                continue
+            }
+            if (curGroup.isNotEmpty()) {
+                val nextLower = lines[i].text.trim().firstOrNull()?.isLowerCase() == true
+                if (endsSentence(lines[curGroup.last()].text) || !nextLower) {
+                    groups.add(curGroup); curGroup = mutableListOf()
+                }
+            }
+            curGroup.add(i)
+        }
+        if (curGroup.isNotEmpty()) groups.add(curGroup)
+        return groups
+    }
+
+    /**
+     * 対訳を返す。訳は文のまとまり単位で作り、既定では先頭の行にだけ付ける。
+     * fillChunkLines=true の時は、まとまりの全行に同じ訳を付ける（PV表示用）。
+     */
     suspend fun translateToJapanese(
+        context: Context,
+        title: String,
+        artist: String,
+        album: String,
+        lines: List<LyricLine>,
+        fillChunkLines: Boolean = false,
+        placeAtGroupEnd: Boolean = false
+    ): List<String> {
+        val head = translateToJapaneseHead(context, title, artist, album, lines)
+        if (!fillChunkLines) {
+            if (!placeAtGroupEnd) return head
+            // まとまりの訳は末尾の行へ移す（全体歌詞で、文が終わる行の下に訳を出すため）
+            val moved = head.toMutableList()
+            for (g in translationGroups(lines)) {
+                if (g.size > 1) {
+                    val t = head.getOrNull(g.first()) ?: ""
+                    if (t.isNotEmpty()) {
+                        moved[g.first()] = ""
+                        moved[g.last()] = t
+                    }
+                }
+            }
+            return moved
+        }
+        val filled = head.toMutableList()
+        for (g in translationGroups(lines)) {
+            val t = head.getOrNull(g.first()) ?: ""
+            if (t.isNotEmpty()) for (i in g) filled[i] = t
+        }
+        return filled
+    }
+
+    private suspend fun translateToJapaneseHead(
         context: Context,
         title: String,
         artist: String,
         album: String,
         lines: List<LyricLine>
     ): List<String> = withContext(Dispatchers.IO) {
-        val cache = File(cacheFile(context, title, artist, album).absolutePath + ".ja3")
+        val cache = File(cacheFile(context, title, artist, album).absolutePath + ".ja4")
         if (cache.exists()) {
             try {
                 val cached = cache.readText(Charsets.UTF_8).split("\n")
@@ -1302,12 +1376,11 @@ object LyricsManager {
             }
         }
         val result = MutableList(lines.size) { "" }
-        val targets = lines.mapIndexedNotNull { i, l ->
-            // かなを含む行は日本語として翻訳しない。漢字だけの行は中国語の
-            // 可能性があるので対象にする（日本語なら訳が原文と一致して消える）
-            if (l.text.isBlank() || l.text.any { it in '\u3040'..'\u30FF' } || isCreditLine(l.text)) null else i to l.text
-        }
-        if (targets.isEmpty()) return@withContext result
+        // 文が次の行へ続く間は、ひとまとまりで翻訳する（まとまりの訳は先頭の行にだけ付ける）
+        val groups = translationGroups(lines)
+        if (groups.isEmpty()) return@withContext result
+        // 翻訳単位 = まとまり（先頭行のindex to スペースでつないだ原文）
+        val targets = groups.map { g -> g.first() to g.joinToString(" ") { lines[it].text.trim() } }
         var idx = 0
         while (idx < targets.size) {
             val chunk = mutableListOf<Pair<Int, String>>()
@@ -1327,7 +1400,7 @@ object LyricsManager {
                     result[lineIdx] = if (tr == src.trim()) "" else tr
                 }
             } else {
-                // 行数がずれた場合は1行ずつ翻訳し直す
+                // 数がずれた場合は1単位ずつ翻訳し直す
                 for ((lineIdx, text) in chunk) {
                     val one = translateTextGoogle(text)
                     if (one != null) {
