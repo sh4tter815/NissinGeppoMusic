@@ -1041,6 +1041,7 @@ fun MainLauncherScreen() {
                             .fillMaxWidth()
                             .heightIn(min = 190.dp)
                     ) {
+                        if (focusedTrackPreview != null || musicPlayerManager.currentTitle.isNotBlank()) {
                         Text(
                             text = displayTitle,
                             color = Color.White,
@@ -1074,6 +1075,7 @@ fun MainLauncherScreen() {
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.padding(end = 76.dp)
                         )
+                        }
                         if (showLyrics && lyricsDisplayMode == "line") { // 小さい歌詞行は「現在の行」モード専用
                             Spacer(modifier = Modifier.height(10.dp))
                             val lines = lyricsLines
@@ -1605,8 +1607,8 @@ fun MainLauncherScreen() {
         }
 
 
-        // --- 時計（ホームのみ。レイアウト編集モードで移動可能） ---
-        if (currentLauncherPage == 1 && !pvFullscreen && !isLyricsBrowsing) {
+        // --- 時計（ホームのみ。楽曲未選択のときだけ表示し、選択したら曲情報に譲る。レイアウト編集モードで移動可能） ---
+        if (currentLauncherPage == 1 && !pvFullscreen && !isLyricsBrowsing && (musicPlayerManager.currentTitle.isBlank() || layoutEditMode)) {
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
