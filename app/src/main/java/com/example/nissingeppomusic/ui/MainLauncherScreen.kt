@@ -414,7 +414,8 @@ fun MainLauncherScreen() {
         }
     }
     LaunchedEffect(currentLauncherPage) {
-        if (currentLauncherPage == 1 && repo.prefManager.consumeLayoutEditRequest()) {
+        if (currentLauncherPage == 1 && repo.prefManager.isLayoutEditRequested()) {
+            repo.prefManager.clearLayoutEditRequest()
             layoutEditMode = true
         }
     }
