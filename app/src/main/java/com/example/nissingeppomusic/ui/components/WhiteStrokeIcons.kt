@@ -105,6 +105,7 @@ fun WhiteCloseIcon(size: Dp = 16.dp, color: Color = Color.Gray) {
 }
 
 // ===== 音楽アプリ専用（アルバム/アーティスト表示用に残す） =====
+@Composable
 fun WhiteMusicNoteIcon(size: Dp = 22.dp, color: Color = Color.White) {
     Icon(
         imageVector = Icons.Default.MusicNote,
@@ -114,6 +115,7 @@ fun WhiteMusicNoteIcon(size: Dp = 22.dp, color: Color = Color.White) {
     )
 }
 
+@Composable
 fun WhitePersonIcon(size: Dp = 22.dp, color: Color = Color.White) {
     Icon(
         imageVector = Icons.Default.Person,
@@ -123,6 +125,7 @@ fun WhitePersonIcon(size: Dp = 22.dp, color: Color = Color.White) {
     )
 }
 
+@Composable
 fun WhiteAlbumIcon(size: Dp = 22.dp, color: Color = Color.White) {
     Icon(
         imageVector = Icons.Default.Album,
