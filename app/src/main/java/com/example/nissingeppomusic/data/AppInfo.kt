@@ -17,6 +17,7 @@ data class AppInfo(
     val initialJapanese: String = "＃", // 「あ」「か」「さ」など
     val initialEnglish: String = "＃",   // "A", "B", "C" など
     val customYomi: String = "",
+    val discGroup: String = "＃", // 円盤の索引グループ
     val searchAliases: List<String> = emptyList(), // 検索可能な別名（複数保存可能）
     val isFavorite: Boolean = false,
     val isHidden: Boolean = false
