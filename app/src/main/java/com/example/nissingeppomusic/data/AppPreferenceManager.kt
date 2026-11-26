@@ -456,4 +456,73 @@ class AppPreferenceManager(private val context: Context) {
         }
     }
 
+    // ===== ランチャー版 MusicVinylWidget 移植に伴う追加（prefキーはランチャーと同一） =====
+    fun isArtworkOutlineEnabled(): Boolean = prefs.getBoolean("artwork_outline", true)
+    fun setArtworkOutlineEnabled(v: Boolean) = prefs.edit().putBoolean("artwork_outline", v).apply()
+    fun isCurvedTitleEnabled(): Boolean = prefs.getBoolean("curved_title", true)
+    fun setCurvedTitleEnabled(v: Boolean) = prefs.edit().putBoolean("curved_title", v).apply()
+    fun isCaseCircleClipEnabled(): Boolean = prefs.getBoolean("case_circle_clip", false)
+    fun setCaseCircleClipEnabled(v: Boolean) = prefs.edit().putBoolean("case_circle_clip", v).apply()
+    fun getDiscStyle(): String = prefs.getString("disc_style", "digital") ?: "digital"
+    fun setDiscStyle(v: String) = prefs.edit().putString("disc_style", v).apply()
+    fun getWidgetTapAction(): String = prefs.getString("widget_tap_action", "toggle") ?: "toggle"
+    fun setWidgetTapAction(v: String) = prefs.edit().putString("widget_tap_action", v).apply()
+    fun getWidgetDoubleTapAction(): String = prefs.getString("widget_double_tap_action", "app") ?: "app"
+    fun setWidgetDoubleTapAction(v: String) = prefs.edit().putString("widget_double_tap_action", v).apply()
+    fun getWidgetTripleTapAction(): String = prefs.getString("widget_triple_tap_action", "theme") ?: "theme"
+    fun setWidgetTripleTapAction(v: String) = prefs.edit().putString("widget_triple_tap_action", v).apply()
+    fun getWidgetLongPressAction(): String = prefs.getString("widget_long_press_action", "grab") ?: "grab"
+    fun setWidgetLongPressAction(v: String) = prefs.edit().putString("widget_long_press_action", v).apply()
+    fun getWidgetDoubleTapHoldAction(): String = prefs.getString("widget_double_tap_hold_action", "rack") ?: "rack"
+    fun setWidgetDoubleTapHoldAction(v: String) = prefs.edit().putString("widget_double_tap_hold_action", v).apply()
+    fun getTonearmScale(): Float = prefs.getFloat("tonearm_scale", 1f)
+    fun setTonearmScale(v: Float) = prefs.edit().putFloat("tonearm_scale", v).apply()
+    fun getTonearmStyle(): String = prefs.getString("tonearm_style", "auto") ?: "auto"
+    fun setTonearmStyle(v: String) = prefs.edit().putString("tonearm_style", v).apply()
+    fun getCassetteStyle(): String = prefs.getString("cassette_style", "clear") ?: "clear"
+    fun setCassetteStyle(v: String) = prefs.edit().putString("cassette_style", v).apply()
+    fun getPowerSaveMode(): String = prefs.getString("power_save_mode", "auto") ?: "auto"
+    fun setPowerSaveMode(v: String) = prefs.edit().putString("power_save_mode", v).apply()
+    fun isPowerSaveChargingExempt(): Boolean = prefs.getBoolean("power_save_charging_exempt", true)
+    fun setPowerSaveChargingExempt(v: Boolean) = prefs.edit().putBoolean("power_save_charging_exempt", v).apply()
+    fun isCharging(context: Context): Boolean {
+        val intent = context.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED))
+        val status = intent?.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1) ?: -1
+        return status == android.os.BatteryManager.BATTERY_STATUS_CHARGING || status == android.os.BatteryManager.BATTERY_STATUS_FULL
+    }
+    fun getPowerSaveBatteryThreshold(): Int = (prefs.getFloat("power_save_battery_threshold", 0f) * 100).toInt()
+    fun setPowerSaveBatteryThreshold(v: Float) = prefs.edit().putFloat("power_save_battery_threshold", v).apply()
+    fun batteryLevel(context: Context): Int {
+        val intent = context.registerReceiver(null, android.content.IntentFilter(android.content.Intent.ACTION_BATTERY_CHANGED)) ?: return 100
+        val level = intent.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1)
+        val scale = intent.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, -1)
+        return if (level >= 0 && scale > 0) level * 100 / scale else 100
+    }
+    fun isPowerSaveNightEnabled(): Boolean = prefs.getBoolean("power_save_night", false)
+    fun setPowerSaveNightEnabled(v: Boolean) = prefs.edit().putBoolean("power_save_night", v).apply()
+    fun getPowerSaveNightStart(): Float = prefs.getFloat("power_save_night_start", 23f)
+    fun setPowerSaveNightStart(v: Float) = prefs.edit().putFloat("power_save_night_start", v).apply()
+    fun getPowerSaveNightEnd(): Float = prefs.getFloat("power_save_night_end", 7f)
+    fun setPowerSaveNightEnd(v: Float) = prefs.edit().putFloat("power_save_night_end", v).apply()
+    fun isNightTimeNow(): Boolean {
+        val start = getPowerSaveNightStart().toInt()
+        val end = getPowerSaveNightEnd().toInt()
+        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+        return if (start <= end) hour in start until end else hour >= start || hour < end
+    }
+    fun isPowerSaveActive(context: Context): Boolean {
+        if (isPowerSaveChargingExempt() && isCharging(context)) return false
+        if (isPowerSaveNightEnabled() && isNightTimeNow()) return true
+        val threshold = getPowerSaveBatteryThreshold()
+        if (threshold > 0 && batteryLevel(context) <= threshold) return true
+        return when (getPowerSaveMode()) {
+            "on" -> true
+            "auto" -> {
+                val pm = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+                pm?.isPowerSaveMode == true
+            }
+            else -> false
+        }
+    }
+
 }

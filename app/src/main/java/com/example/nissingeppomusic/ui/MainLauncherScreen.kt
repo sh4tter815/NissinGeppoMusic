@@ -1219,39 +1219,16 @@ fun MainLauncherScreen() {
                             }
                     ) {
                         MusicVinylWidget(
-                            artworkTilt3d = disc3d,
                             modifier = Modifier.fillMaxSize(),
-                            playerManager = musicPlayerManager,
-                            allApps = allApps,
                             discCenterXDp = animatedDisc1CenterX,
                             discCenterYDp = disc1CenterY,
                             discRadiusDp = disc1RadiusDp,
                             accentColor = accentColor,
-                            accentGlow = accentGlow,
-                            topZoneReserved = showLyrics && lyricsLines != null,
-                            onPlayTrack = { song ->
-                                // レコードラックの一覧（全曲）をキューにして選んだ曲から再生
-                                val startIndex = allApps.indexOfFirst { it.packageName == song.packageName }
-                                if (allApps.size > 1 && startIndex >= 0) {
-                                    musicPlayerManager.playQueue(
-                                        allApps.map {
-                                            MusicPlayerManager.QueueItem(it.packageName, it.label, it.artist, it.album, it.albumArt, it.filePath)
-                                        },
-                                        startIndex
-                                    )
-                                } else {
-                                    musicPlayerManager.playSong(
-                                        uriString = song.packageName,
-                                        title = song.label,
-                                        artist = song.artist,
-                                        album = song.album,
-                                        albumArt = song.albumArt,
-                                        filePath = song.filePath
-                                    )
-                                }
-                            },
-                            onFocusTrackChanged = { focusedTrackPreview = it },
-                            onRackVisibilityChanged = { isRackShown = it }
+                            rainbowGlow = dopagakiMode,
+                            artworkTilt3d = disc3d,
+                            spinFrozen = isLyricsBrowsing || pvFullscreen,
+                            onRackVisibilityChanged = { isRackShown = it },
+                            onThemeSettingsRequest = { changePageWithTransition(0) }
                         )
                     }
 
