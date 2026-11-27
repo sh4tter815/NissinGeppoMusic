@@ -4,6 +4,11 @@ package com.example.nissingeppomusic.ui.components
 // Lucide is licensed under the ISC License. Copyright (c) 2022-present, Lucide Contributors.
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -99,4 +104,35 @@ fun WhiteCheckIcon(size: Dp = 16.dp, color: Color = Color(0xFF4CAF50)) {
 @Composable
 fun WhiteCloseIcon(size: Dp = 16.dp, color: Color = Color.Gray) {
     LucideIcon(LucideX, size, color)
+}
+
+// ===== 音楽アプリ専用（アルバム/アーティスト表示用に残す） =====
+@Composable
+fun WhiteMusicNoteIcon(size: Dp = 22.dp, color: Color = Color.White) {
+    Icon(
+        imageVector = Icons.Default.MusicNote,
+        contentDescription = null,
+        tint = color,
+        modifier = Modifier.size(size)
+    )
+}
+
+@Composable
+fun WhitePersonIcon(size: Dp = 22.dp, color: Color = Color.White) {
+    Icon(
+        imageVector = Icons.Default.Person,
+        contentDescription = null,
+        tint = color,
+        modifier = Modifier.size(size)
+    )
+}
+
+@Composable
+fun WhiteAlbumIcon(size: Dp = 22.dp, color: Color = Color.White) {
+    Icon(
+        imageVector = Icons.Default.Album,
+        contentDescription = null,
+        tint = color,
+        modifier = Modifier.size(size)
+    )
 }
