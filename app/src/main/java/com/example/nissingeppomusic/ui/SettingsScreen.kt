@@ -75,6 +75,7 @@ import com.example.nissingeppomusic.ui.components.DiscSide
 import com.example.nissingeppomusic.ui.components.DiscCarouselState
 import com.example.nissingeppomusic.ui.components.DiscTouchHalf
 import com.example.nissingeppomusic.ui.components.DiscWheel
+import com.example.nissingeppomusic.ui.components.pressScale
 import com.example.nissingeppomusic.ui.components.rememberDiscCarouselState
 import com.example.nissingeppomusic.ui.components.parseFontFamily
 import kotlinx.coroutines.launch
@@ -379,7 +380,7 @@ fun IllustratedChoiceCard(
         color = if (selected) accentColor.copy(alpha = 0.25f) else Color(0xFF1F293D),
         shape = RoundedCornerShape(16.dp),
         border = if (selected) BorderStroke(1.5.dp, accentColor) else null,
-        modifier = modifier.height(84.dp).clickable { onClick() }
+        modifier = modifier.height(84.dp).pressScale().clickable { onClick() }
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -502,6 +503,7 @@ fun FontPickerCard(
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier
                     .fillMaxWidth()
+                    .pressScale()
                     .clickable { onToggle() }
             ) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -528,6 +530,7 @@ fun FontPickerCard(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
+                            .pressScale()
                             .clickable { onSelected(key) }
                             .padding(vertical = 2.dp)
                     ) {
@@ -1591,6 +1594,7 @@ key("disc-choices-${currentItem.id}") {
                         color = Color.White,
                         fontSize = 14.sp,
                         modifier = Modifier
+                            .pressScale()
                             .clickable {
                                 searchQuery = ""
                                 focusId = null

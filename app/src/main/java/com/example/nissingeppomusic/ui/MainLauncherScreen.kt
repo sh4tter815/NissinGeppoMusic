@@ -647,6 +647,7 @@ fun MainLauncherScreen() {
 
     var searchQuery by remember { mutableStateOf("") }
         var librarySortMode by remember { mutableStateOf(repo.prefManager.getLibrarySortMode()) }
+        var librarySortDescending by remember { mutableStateOf(repo.prefManager.getLibrarySortDescending()) }
         var selectedAlbumFilter by remember { mutableStateOf<String?>(null) }
         var selectedArtistFilter by remember { mutableStateOf<String?>(null) }
     var isSearchActive by remember { mutableStateOf(false) }
@@ -833,7 +834,7 @@ fun MainLauncherScreen() {
 
     val animatedDisc1CenterX by animateFloatAsState(
         targetValue = when {
-            isTransitioning || isHoldingRight -> -disc1RadiusDp
+            isTransitioning -> -disc1RadiusDp
             isReadyToOpenHiddenList -> activeDisc1CenterX + 110f // 右の円等が開く際のオフセット
             else -> activeDisc1CenterX
         },
@@ -1412,7 +1413,7 @@ fun MainLauncherScreen() {
                         }
                     )
 
-                                        val displayedApps = remember(searchQuery, allApps, isHideMode, librarySortMode, selectedAlbumFilter, selectedArtistFilter, yomiVersion, playCounts, lastPlayedMap) {
+                                        val displayedAppsBase = remember(searchQuery, allApps, isHideMode, librarySortMode, selectedAlbumFilter, selectedArtistFilter, yomiVersion, playCounts, lastPlayedMap) {
                         when {
                             isHideMode -> allApps.filter { it.isHidden }
                             selectedAlbumFilter != null -> {
@@ -1525,6 +1526,9 @@ fun MainLauncherScreen() {
                                 snapDiscTo(trackDiscState, targetAngle)
                             }
                         }
+                    }
+                    val displayedApps = remember(displayedAppsBase, librarySortDescending) {
+                        if (librarySortDescending) displayedAppsBase.reversed() else displayedAppsBase
                     }
                     LaunchedEffect(librarySortMode, selectedAlbumFilter, selectedArtistFilter) {
                         trackDiscState.rawRotation = 0f
@@ -1859,29 +1863,8 @@ fun MainLauncherScreen() {
         if (repo.prefManager.getPageSwitchStyle() == "dial") {
             // ダイヤルは6ストップ: 0=設定, 1=ホーム(再生中), 2=曲名, 3=アーティスト, 4=アルバム, 5=プレイリスト(フォルダ)
             PeekPageDial(
-                currentStop = when (currentLauncherPage) {
-                    2 -> 2 + listOf("title", "artist", "album").indexOf(librarySortMode).coerceAtLeast(0)
-                    3 -> 5
-                    else -> currentLauncherPage
-                },
-                onStopSelected = { stop ->
-                    when (stop) {
-                        0, 1 -> changePageWithTransition(stop)
-                        2, 3, 4 -> {
-                            val mode = listOf("title", "artist", "album")[stop - 2]
-                            if (librarySortMode != mode) {
-                                librarySortMode = mode
-                                selectedAlbumFilter = null
-                                selectedArtistFilter = null
-                                repo.prefManager.setLibrarySortMode(mode)
-                                AppRepository.invalidateCache()
-                                refreshApps()
-                            }
-                            changePageWithTransition(2)
-                        }
-                        5 -> changePageWithTransition(3)
-                    }
-                },
+                currentStop = currentLauncherPage,
+                onStopSelected = { stop -> changePageWithTransition(stop) },
                 accentColor = accentColor,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -2329,7 +2312,7 @@ fun MainLauncherScreen() {
             }
         }
 
-        // --- 一覧ページ: 並び替え基準の切り替え（曲名 / アーティスト / アルバム） ---
+        // --- 一覧ページ: 並び替えバー（ランチャーと同じ形式: 左=基準の巡回、右=昇順/降順） ---
         if (currentLauncherPage == 2 && !isHideMode) {
             Box(
                 modifier = Modifier
@@ -2338,35 +2321,72 @@ fun MainLauncherScreen() {
                     .zIndex(150f),
                 contentAlignment = Alignment.TopCenter
             ) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    listOf("title" to "曲名", "artist" to "アーティスト", "album" to "アルバム").forEach { (mode, label) ->
-                        val isSelected = librarySortMode == mode
-                        Box(
-                            modifier = Modifier
-                                .background(
-                                    if (isSelected) accentColor else Color(0x99101728),
-                                    RoundedCornerShape(999.dp)
-                                )
-                                .clickable {
-                                    if (librarySortMode != mode) {
-                                        librarySortMode = mode
-                                        selectedAlbumFilter = null
-                                        selectedArtistFilter = null
-                                        repo.prefManager.setLibrarySortMode(mode)
-                                        AppRepository.invalidateCache()
-                                        refreshApps()
-                                    }
+                Row(
+                    modifier = Modifier
+                        .width(320.dp)
+                        .height(48.dp)
+                        .background(Color(0x99101728), RoundedCornerShape(16.dp))
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // 左半分: 並び順の巡回（曲名→アーティスト→アルバム→再生数→最近再生）
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .pressScale(0.96f)
+                            .clickable {
+                                val modes = listOf("title", "artist", "album", "usage", "recent")
+                                val next = modes[(modes.indexOf(librarySortMode) + 1) % modes.size]
+                                if (next != librarySortMode) {
+                                    librarySortMode = next
+                                    selectedAlbumFilter = null
+                                    selectedArtistFilter = null
+                                    repo.prefManager.setLibrarySortMode(next)
+                                    AppRepository.invalidateCache()
+                                    refreshApps()
                                 }
-                                .padding(horizontal = 14.dp, vertical = 7.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = label,
-                                color = Color.White,
-                                fontSize = 13.sp,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                            )
-                        }
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = when (librarySortMode) {
+                                "artist" -> "アーティスト"
+                                "album" -> "アルバム"
+                                "usage" -> "再生数順"
+                                "recent" -> "最近再生順"
+                                else -> "曲名"
+                            },
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    // 中央区切り線
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .height(20.dp)
+                            .background(Color.White.copy(alpha = 0.2f))
+                    )
+                    // 右半分: 昇順/降順の切替
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .pressScale(0.96f)
+                            .clickable {
+                                librarySortDescending = !librarySortDescending
+                                repo.prefManager.setLibrarySortDescending(librarySortDescending)
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (librarySortDescending) "降順" else "昇順",
+                            color = accentColor,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
@@ -2377,7 +2397,7 @@ fun MainLauncherScreen() {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = topPaddingDp + 148.dp)
+                    .padding(top = topPaddingDp + 164.dp)
                     .zIndex(150f),
                 contentAlignment = Alignment.TopCenter
             ) {
@@ -2409,7 +2429,7 @@ fun MainLauncherScreen() {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = topPaddingDp + 148.dp)
+                    .padding(top = topPaddingDp + 164.dp)
                     .zIndex(150f),
                 contentAlignment = Alignment.TopCenter
             ) {
