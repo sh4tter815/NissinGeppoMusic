@@ -118,6 +118,15 @@ fun MusicVinylWidget(
     var queueArtCache by remember { mutableStateOf<Map<String, Bitmap>>(emptyMap()) }
     var queueArtFailTimes by remember { mutableStateOf<Map<String, Long>>(emptyMap()) }
     LaunchedEffect(sessionQueue) {
+        // キャッシュが際限なく育つと、コピーと再描画がだんだん重くなる。
+        // 現在のキューに無いアートワークは捨てて、保持数にも上限を設ける
+        val queueUris = sessionQueue.mapNotNull { it.description?.iconUri?.toString() }.toSet()
+        if (queueArtCache.keys.any { it !in queueUris }) {
+            queueArtCache = queueArtCache.filterKeys { it in queueUris }
+        }
+        if (queueArtFailTimes.keys.any { it !in queueUris }) {
+            queueArtFailTimes = queueArtFailTimes.filterKeys { it in queueUris }
+        }
         val failNow = System.currentTimeMillis()
         val missing = sessionQueue.mapNotNull { it.description?.iconUri?.toString() }.distinct()
             .filter { it !in queueArtCache }
@@ -135,7 +144,12 @@ fun MusicVinylWidget(
                 }.getOrNull()
             }
             if (bmp != null) {
-                queueArtCache = queueArtCache + (uriStr to bmp)
+                var nextArt = queueArtCache + (uriStr to bmp)
+                if (nextArt.size > 48) {
+                    val keepKeys = nextArt.keys.takeLast(48).toSet()
+                    nextArt = nextArt.filterKeys { it in keepKeys }
+                }
+                queueArtCache = nextArt
             } else {
                 queueArtFailTimes = queueArtFailTimes + (uriStr to System.currentTimeMillis())
             }
