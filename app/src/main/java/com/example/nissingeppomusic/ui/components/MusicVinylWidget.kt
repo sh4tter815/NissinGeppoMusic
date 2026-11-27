@@ -146,8 +146,8 @@ fun MusicVinylWidget(
             if (bmp != null) {
                 var nextArt = queueArtCache + (uriStr to bmp)
                 if (nextArt.size > 48) {
-                    val keepKeys = nextArt.keys.takeLast(48).toSet()
-                    nextArt = nextArt.filterKeys { it in keepKeys }
+                    val dropKeys = nextArt.keys.take(nextArt.size - 48).toSet()
+                    nextArt = nextArt.filterKeys { it !in dropKeys }
                 }
                 queueArtCache = nextArt
             } else {
