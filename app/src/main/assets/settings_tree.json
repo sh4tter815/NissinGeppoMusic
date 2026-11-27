@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "items": {
     "reverse": {
       "label": "スクロール方向の反転",
@@ -762,6 +762,16 @@
           "v": "album",
           "label": "アルバム順",
           "short": "アルバム順"
+        },
+        {
+          "v": "usage",
+          "label": "再生数順",
+          "short": "再生数順"
+        },
+        {
+          "v": "recent",
+          "label": "最近再生順",
+          "short": "最近再生順"
         }
       ]
     },
@@ -1374,6 +1384,9 @@
               "item": "lyricsEnabled"
             },
             {
+              "item": "displayMode"
+            },
+            {
               "id": "ly_anim",
               "label": "アニメーション",
               "glyph": "clapperboard",
@@ -1422,9 +1435,6 @@
                   "item": "pvTopOffset"
                 }
               ]
-            },
-            {
-              "item": "displayMode"
             }
           ]
         },

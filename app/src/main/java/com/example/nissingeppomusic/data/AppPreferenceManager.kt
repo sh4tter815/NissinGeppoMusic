@@ -294,6 +294,48 @@ class AppPreferenceManager(private val context: Context) {
     fun setAppIconHidden(v: Boolean) = prefs.edit().putBoolean("app_icon_hidden", v).apply()
     fun getSettingsNavPath(): List<String> = prefs.getString("settings_nav_path", null)?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
     fun saveSettingsNavPath(path: List<String>) = prefs.edit().putString("settings_nav_path", path.joinToString(",")).apply()
+
+    // 再生履歴（再生数と最終再生日時を独自に記録する）
+    fun recordPlay(packageName: String) {
+        try {
+            val jsonStr = prefs.getString("play_history_json", null)
+            val obj = if (jsonStr != null) JSONObject(jsonStr) else JSONObject()
+            val entry = obj.optJSONObject(packageName) ?: JSONObject()
+            entry.put("c", entry.optInt("c", 0) + 1)
+            entry.put("t", System.currentTimeMillis())
+            obj.put(packageName, entry)
+            prefs.edit().putString("play_history_json", obj.toString()).apply()
+        } catch (e: Exception) {
+        }
+    }
+    fun getPlayCounts(): Map<String, Int> {
+        val map = HashMap<String, Int>()
+        try {
+            val jsonStr = prefs.getString("play_history_json", null) ?: return map
+            val obj = JSONObject(jsonStr)
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                map[k] = obj.optJSONObject(k)?.optInt("c", 0) ?: 0
+            }
+        } catch (e: Exception) {
+        }
+        return map
+    }
+    fun getLastPlayedMap(): Map<String, Long> {
+        val map = HashMap<String, Long>()
+        try {
+            val jsonStr = prefs.getString("play_history_json", null) ?: return map
+            val obj = JSONObject(jsonStr)
+            val keys = obj.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                map[k] = obj.optJSONObject(k)?.optLong("t", 0L) ?: 0L
+            }
+        } catch (e: Exception) {
+        }
+        return map
+    }
     fun setReverseScroll(reverse: Boolean) = prefs.edit().putBoolean("reverse_scroll", reverse).apply()
 
     // フォント選択 ("default" = デフォルト, "receipt" = レシートフォント, "custom" = カスタムファイル)
