@@ -79,9 +79,9 @@ fun PeekPageDial(
         label = "DialExpandScale"
     )
 
-    // ストップは6つ: 0=設定, 1=ホーム(再生中), 2=曲名, 3=アーティスト, 4=アルバム, 5=プレイリスト(フォルダ)
-    val totalPages = 6
-    val stopLabels = listOf("設定", "再生中", "曲名", "アーティスト名", "アルバム名", "プレイリスト")
+    // ストップは4つ: 0=設定, 1=ホーム(再生中), 2=曲一覧, 3=プレイリスト(フォルダ)
+    val totalPages = 4
+    val stopLabels = listOf("設定", "再生中", "曲一覧", "プレイリスト")
     val stepAngle = 24f
     val discRadiusDp = 165f
     val baseCenterAngle = -90f // 真上
@@ -248,9 +248,7 @@ fun PeekPageDial(
                                     0 -> WhiteGearIcon(size = (22f * expandScale).dp, color = iconColor)
                                     1 -> WhiteHomeIcon(size = (22f * expandScale).dp, color = iconColor)
                                     2 -> WhiteMusicNoteIcon(size = (22f * expandScale).dp, color = iconColor)
-                                    3 -> WhitePersonIcon(size = (22f * expandScale).dp, color = iconColor)
-                                    4 -> WhiteAlbumIcon(size = (22f * expandScale).dp, color = iconColor)
-                                    5 -> WhiteFolderIcon(size = (22f * expandScale).dp, color = iconColor)
+                                    3 -> WhiteFolderIcon(size = (22f * expandScale).dp, color = iconColor)
                                 }
                             }
                         }
@@ -258,9 +256,7 @@ fun PeekPageDial(
                             0 -> WhiteGearIcon(size = (22f * expandScale).dp, color = iconColor)
                             1 -> WhiteHomeIcon(size = (22f * expandScale).dp, color = iconColor)
                             2 -> WhiteMusicNoteIcon(size = (22f * expandScale).dp, color = iconColor)
-                            3 -> WhitePersonIcon(size = (22f * expandScale).dp, color = iconColor)
-                            4 -> WhiteAlbumIcon(size = (22f * expandScale).dp, color = iconColor)
-                            5 -> WhiteFolderIcon(size = (22f * expandScale).dp, color = iconColor)
+                            3 -> WhiteFolderIcon(size = (22f * expandScale).dp, color = iconColor)
                         }
                     }
                 }
