@@ -33,13 +33,20 @@ fun AppOptionDialog(
     onSetYomi: (AppInfo, String) -> Unit,
     onAddAlias: (AppInfo, String) -> Unit,
     onRemoveAlias: (AppInfo, String) -> Unit,
-    onToggleHide: (AppInfo) -> Unit
+    onToggleHide: (AppInfo) -> Unit,
+    playlists: List<Pair<String, String>> = emptyList(),
+    containingPlaylistIds: Set<String> = emptySet(),
+    onTogglePlaylist: (AppInfo, String) -> Unit = { _, _ -> },
+    onCreatePlaylist: (AppInfo, String) -> Unit = { _, _ -> }
 ) {
     val context = LocalContext.current
     var showYomiInputDialog by remember { mutableStateOf(false) }
     var showAliasDialog by remember { mutableStateOf(false) }
     var yomiInputText by remember { mutableStateOf(app.customYomi) }
     var aliasInputText by remember { mutableStateOf("") }
+    var showPlaylistDialog by remember { mutableStateOf(false) }
+    var showNewPlaylistDialog by remember { mutableStateOf(false) }
+    var newPlaylistNameInput by remember { mutableStateOf("") }
 
     val fontFamily = LocalLauncherFontFamily.current
     val fontWeight = LocalLauncherFontWeight.current
@@ -188,6 +195,132 @@ fun AppOptionDialog(
             containerColor = Color(0xFF141C2E),
             titleContentColor = Color.White
         )
+    } else if (showPlaylistDialog) {
+        AlertDialog(
+            onDismissRequest = { showPlaylistDialog = false },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showPlaylistDialog = false; onDismiss() }) {
+                    Text("完了", color = Color.Gray, fontFamily = fontFamily, fontWeight = fontWeight)
+                }
+            },
+            title = { Text("プレイリスト", fontSize = 18.sp, fontFamily = fontFamily, fontWeight = fontWeight) },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = "「${app.label}」の追加先を選んでください。タップで追加/解除できます。",
+                        color = Color.LightGray,
+                        fontSize = 13.sp,
+                        fontFamily = fontFamily,
+                        fontWeight = fontWeight
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 260.dp)
+                    ) {
+                        item {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showPlaylistDialog = false; showNewPlaylistDialog = true }
+                                    .padding(vertical = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "＋ 新規プレイリストを作成",
+                                    color = Color(0xFF88C0FF),
+                                    fontSize = 15.sp,
+                                    fontFamily = fontFamily,
+                                    fontWeight = fontWeight
+                                )
+                            }
+                        }
+                        items(playlists) { (fid, fname) ->
+                            val inside = fid in containingPlaylistIds
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onTogglePlaylist(app, fid) }
+                                    .padding(vertical = 10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = fname,
+                                    color = Color.White,
+                                    fontSize = 15.sp,
+                                    fontFamily = fontFamily,
+                                    fontWeight = fontWeight
+                                )
+                                Text(
+                                    text = if (inside) "追加中" else "追加",
+                                    color = if (inside) Color(0xFF88C0FF) else Color.Gray,
+                                    fontSize = 13.sp,
+                                    fontFamily = fontFamily,
+                                    fontWeight = fontWeight
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            containerColor = Color(0xFF141C2E),
+            titleContentColor = Color.White
+        )
+    } else if (showNewPlaylistDialog) {
+        AlertDialog(
+            onDismissRequest = { showNewPlaylistDialog = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (newPlaylistNameInput.isNotBlank()) {
+                            onCreatePlaylist(app, newPlaylistNameInput)
+                            newPlaylistNameInput = ""
+                        }
+                        showNewPlaylistDialog = false
+                        onDismiss()
+                    }
+                ) {
+                    Text("作成", color = Color(0xFF88C0FF), fontFamily = fontFamily, fontWeight = fontWeight)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNewPlaylistDialog = false; showPlaylistDialog = true }) {
+                    Text("キャンセル", color = Color.Gray, fontFamily = fontFamily, fontWeight = fontWeight)
+                }
+            },
+            title = { Text("新規プレイリストを作成", fontSize = 18.sp, fontFamily = fontFamily, fontWeight = fontWeight) },
+            text = {
+                Column {
+                    Text(
+                        text = "「${app.label}」を入れる新しいプレイリストを作ります。",
+                        color = Color.LightGray,
+                        fontSize = 14.sp,
+                        fontFamily = fontFamily,
+                        fontWeight = fontWeight
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = newPlaylistNameInput,
+                        onValueChange = { newPlaylistNameInput = it },
+                        singleLine = true,
+                        placeholder = { Text("プレイリスト名", color = Color.Gray, fontFamily = fontFamily, fontWeight = fontWeight) },
+                        textStyle = textStyle,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color.White,
+                            unfocusedBorderColor = Color.Gray
+                        )
+                    )
+                }
+            },
+            containerColor = Color(0xFF141C2E),
+            titleContentColor = Color.White
+        )
     } else {
         AlertDialog(
             onDismissRequest = onDismiss,
@@ -233,6 +366,16 @@ fun AppOptionDialog(
                     ) {
                         onToggleFavorite(app)
                         onDismiss()
+                    }
+
+                    DialogOptionItem(
+                        kind = "playlist",
+                        text = "プレイリストに追加",
+                        subtitle = if (containingPlaylistIds.isEmpty()) "プレイリストへ追加/解除します" else "${containingPlaylistIds.size}件のプレイリストに追加中",
+                        fontFamily = fontFamily,
+                        fontWeight = fontWeight
+                    ) {
+                        showPlaylistDialog = true
                     }
 
                     DialogOptionItem(
@@ -363,6 +506,15 @@ private fun OptionKindIcon(kind: String, danger: Boolean) {
                 drawLine(accent, Offset(w * 0.68f, h * 0.36f), Offset(w * 0.76f, h * 0.24f), strokeWidth = sw * 1.5f, cap = StrokeCap.Round)
                 drawLine(accent, Offset(w * 0.76f, h * 0.24f), Offset(w * 0.38f, h * 0.82f), strokeWidth = sw, cap = StrokeCap.Round)
                 drawLine(accent, Offset(w * 0.16f, h * 0.88f), Offset(w * 0.84f, h * 0.88f), strokeWidth = sw, cap = StrokeCap.Round)
+            }
+            "playlist" -> {
+                // リスト: 左に点、右に線3本
+                drawCircle(color = accent, radius = w * 0.045f, center = Offset(w * 0.20f, h * 0.30f))
+                drawCircle(color = accent, radius = w * 0.045f, center = Offset(w * 0.20f, h * 0.52f))
+                drawCircle(color = accent, radius = w * 0.045f, center = Offset(w * 0.20f, h * 0.74f))
+                drawLine(accent, Offset(w * 0.34f, h * 0.30f), Offset(w * 0.86f, h * 0.30f), strokeWidth = sw * 1.3f, cap = StrokeCap.Round)
+                drawLine(accent, Offset(w * 0.34f, h * 0.52f), Offset(w * 0.86f, h * 0.52f), strokeWidth = sw * 1.3f, cap = StrokeCap.Round)
+                drawLine(accent, Offset(w * 0.34f, h * 0.74f), Offset(w * 0.86f, h * 0.74f), strokeWidth = sw * 1.3f, cap = StrokeCap.Round)
             }
             "alias" -> {
                 drawCircle(color = accent, radius = w * 0.24f, center = Offset(w * 0.42f, h * 0.42f), style = Stroke(width = sw))
