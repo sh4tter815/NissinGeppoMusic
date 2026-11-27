@@ -1510,6 +1510,9 @@ fun MainLauncherScreen() {
                         }
                     }
 
+                    val displayedApps = remember(displayedAppsBase, librarySortDescending) {
+                        if (librarySortDescending) displayedAppsBase.reversed() else displayedAppsBase
+                    }
                     val trackDiscItems = remember(displayedApps, usageIndexActive, recentIndexActive, usageTierOf, recentLabelOf) { buildDiscItems(displayedApps, true, groupOf = indexGroupOf) }
                     LaunchedEffect(selectedIndexChar) {
                         if (!selectedIndexChar.isNullOrEmpty() && trackDiscItems.isNotEmpty()) {
@@ -1526,9 +1529,6 @@ fun MainLauncherScreen() {
                                 snapDiscTo(trackDiscState, targetAngle)
                             }
                         }
-                    }
-                    val displayedApps = remember(displayedAppsBase, librarySortDescending) {
-                        if (librarySortDescending) displayedAppsBase.reversed() else displayedAppsBase
                     }
                     LaunchedEffect(librarySortMode, selectedAlbumFilter, selectedArtistFilter) {
                         trackDiscState.rawRotation = 0f
