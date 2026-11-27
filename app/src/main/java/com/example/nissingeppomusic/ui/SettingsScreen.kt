@@ -604,6 +604,16 @@ fun SettingsScreen(
     var pendingWallpaperPage by remember { mutableIntStateOf(-1) }
     var artworkVisible by remember { mutableStateOf(repo.prefManager.isArtworkEnabled()) }
     var rackReverse by remember { mutableStateOf(repo.prefManager.isRackReverseScroll()) }
+    var artworkOutline by remember { mutableStateOf(repo.prefManager.isArtworkOutlineEnabled()) }
+    var curvedTitle by remember { mutableStateOf(repo.prefManager.isCurvedTitleEnabled()) }
+    var caseCircleClip by remember { mutableStateOf(repo.prefManager.isCaseCircleClipEnabled()) }
+    var discStyle by remember { mutableStateOf(repo.prefManager.getDiscStyle()) }
+    var tonearmStyle by remember { mutableStateOf(repo.prefManager.getTonearmStyle()) }
+    var widgetTapAction by remember { mutableStateOf(repo.prefManager.getWidgetTapAction()) }
+    var widgetDoubleTapAction by remember { mutableStateOf(repo.prefManager.getWidgetDoubleTapAction()) }
+    var widgetTripleTapAction by remember { mutableStateOf(repo.prefManager.getWidgetTripleTapAction()) }
+    var widgetLongPressAction by remember { mutableStateOf(repo.prefManager.getWidgetLongPressAction()) }
+    var widgetDoubleTapHoldAction by remember { mutableStateOf(repo.prefManager.getWidgetDoubleTapHoldAction()) }
     var backgroundPath by remember { mutableStateOf(repo.prefManager.getCustomBackgroundPath()) }
     var wallpaperAlpha by remember { mutableFloatStateOf(repo.prefManager.getHomeWallpaperAlpha()) }
     var excludedFolders by remember { mutableStateOf(repo.prefManager.getExcludedFolders().sorted()) }
@@ -947,7 +957,10 @@ fun SettingsScreen(
         "dateWareki" to Pair({ dateWareki }, { v: Boolean -> dateWareki = v; repo.prefManager.setDateWareki(v); onChanged() }),
         "keepScreenOn" to Pair({ keepScreenOn }, { v: Boolean -> keepScreenOn = v; repo.prefManager.setKeepScreenOn(v); onChanged() }),
         "artworkEnabled" to Pair({ artworkVisible }, { v: Boolean -> artworkVisible = v; repo.prefManager.setArtworkEnabled(v); onChanged() }),
-        "rackReverse" to Pair({ rackReverse }, { v: Boolean -> rackReverse = v; repo.prefManager.setRackReverseScroll(v); onChanged() })
+        "rackReverse" to Pair({ rackReverse }, { v: Boolean -> rackReverse = v; repo.prefManager.setRackReverseScroll(v); onChanged() }),
+        "artworkOutline" to Pair({ artworkOutline }, { v: Boolean -> artworkOutline = v; repo.prefManager.setArtworkOutlineEnabled(v); onChanged() }),
+        "curvedTitle" to Pair({ curvedTitle }, { v: Boolean -> curvedTitle = v; repo.prefManager.setCurvedTitleEnabled(v); onChanged() }),
+        "caseCircleClip" to Pair({ caseCircleClip }, { v: Boolean -> caseCircleClip = v; repo.prefManager.setCaseCircleClipEnabled(v); onChanged() })
     )
 
     val stringBinds: Map<String, Pair<() -> String, (String) -> Unit>> = mapOf(
@@ -963,6 +976,13 @@ fun SettingsScreen(
         "startupPage" to Pair({ startupPage }, { v: String -> startupPage = v; repo.prefManager.setStartupPage(v); onChanged() }),
         "dialVisibility" to Pair({ dialVisibility }, { v: String -> dialVisibility = v; repo.prefManager.setDialVisibility(v); onChanged() }),
         "librarySort" to Pair({ librarySort }, { v: String -> librarySort = v; repo.prefManager.setLibrarySortMode(v); onChanged(); onAppsUpdated() }),
+        "discStyle" to Pair({ discStyle }, { v: String -> discStyle = v; repo.prefManager.setDiscStyle(v); onChanged() }),
+        "tonearmStyle" to Pair({ tonearmStyle }, { v: String -> tonearmStyle = v; repo.prefManager.setTonearmStyle(v); onChanged() }),
+        "widgetTapAction" to Pair({ widgetTapAction }, { v: String -> widgetTapAction = v; repo.prefManager.setWidgetTapAction(v); onChanged() }),
+        "widgetDoubleTapAction" to Pair({ widgetDoubleTapAction }, { v: String -> widgetDoubleTapAction = v; repo.prefManager.setWidgetDoubleTapAction(v); onChanged() }),
+        "widgetTripleTapAction" to Pair({ widgetTripleTapAction }, { v: String -> widgetTripleTapAction = v; repo.prefManager.setWidgetTripleTapAction(v); onChanged() }),
+        "widgetLongPressAction" to Pair({ widgetLongPressAction }, { v: String -> widgetLongPressAction = v; repo.prefManager.setWidgetLongPressAction(v); onChanged() }),
+        "widgetDoubleTapHoldAction" to Pair({ widgetDoubleTapHoldAction }, { v: String -> widgetDoubleTapHoldAction = v; repo.prefManager.setWidgetDoubleTapHoldAction(v); onChanged() })
     )
 
     val floatBinds: Map<String, Pair<() -> Float, (Float) -> Unit>> = mapOf(
