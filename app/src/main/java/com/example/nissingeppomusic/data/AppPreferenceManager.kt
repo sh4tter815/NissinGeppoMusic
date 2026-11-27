@@ -290,6 +290,8 @@ class AppPreferenceManager(private val context: Context) {
     fun isReverseScroll(): Boolean = prefs.getBoolean("reverse_scroll", false)
     fun isDiscOutlineEnabled(): Boolean = prefs.getBoolean("disc_outline", true)
     fun setDiscOutlineEnabled(v: Boolean) = prefs.edit().putBoolean("disc_outline", v).apply()
+    fun isAppIconHidden(): Boolean = prefs.getBoolean("app_icon_hidden", false)
+    fun setAppIconHidden(v: Boolean) = prefs.edit().putBoolean("app_icon_hidden", v).apply()
     fun setReverseScroll(reverse: Boolean) = prefs.edit().putBoolean("reverse_scroll", reverse).apply()
 
     // フォント選択 ("default" = デフォルト, "receipt" = レシートフォント, "custom" = カスタムファイル)
