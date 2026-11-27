@@ -33,25 +33,9 @@ fun FolderAppSelectDialog(
     val fontFamily = LocalLauncherFontFamily.current
     val fontWeight = LocalLauncherFontWeight.current
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    onSave(currentSelected.toList())
-                    onDismiss()
-                }
-            ) {
-                Text("保存", color = Color(0xFF88C0FF), fontSize = 16.sp, fontFamily = fontFamily, fontWeight = fontWeight)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("キャンセル", color = Color.Gray, fontSize = 16.sp, fontFamily = fontFamily, fontWeight = fontWeight)
-            }
-        },
-        title = { Text("「$folderName」のアプリ編集", fontSize = 18.sp, fontFamily = fontFamily, fontWeight = fontWeight) },
-        text = {
+    BlurDialog(onDismissRequest = onDismiss) {
+        BlurDialogTitle("「$folderName」のアプリ編集", fontFamily = fontFamily, fontWeight = fontWeight)
+        Spacer(modifier = Modifier.height(10.dp))
             Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = "フォルダに追加するアプリを選択してください。",
@@ -131,8 +115,16 @@ fun FolderAppSelectDialog(
                     }
                 }
             }
-        },
-        containerColor = Color(0xFF141C2E),
-        titleContentColor = Color.White
-    )
+        BlurDialogButtonRow(
+            confirmText = "保存",
+            onConfirm = {
+                onSave(currentSelected.toList())
+                onDismiss()
+            },
+            dismissText = "キャンセル",
+            onDismiss = onDismiss,
+            fontFamily = fontFamily,
+            fontWeight = fontWeight
+        )
+    }
 }

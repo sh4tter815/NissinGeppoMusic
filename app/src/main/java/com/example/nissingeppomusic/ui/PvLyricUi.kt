@@ -2931,16 +2931,24 @@ fun LyricTagSearchDialog(
     // この曲に付いている歌詞の指定（手動で適用した歌詞／歌詞なし）の状態。解除ボタンの表示に使う
     var hasOverride by remember { mutableStateOf(LyricsManager.hasLyricsOverride(context, currentTitle, currentArtist, currentAlbum)) }
     var instApplied by remember { mutableStateOf(LyricsManager.isInstrumentalOverride(context, currentTitle, currentArtist, currentAlbum)) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("タグを指定して検索") },
-        text = {
-            Column {
+        BlurDialog(onDismissRequest = onDismiss) {
+        Text("タグを指定して検索", color = Color.White)
+        Spacer(modifier = Modifier.height(10.dp))
+        Column {
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it },
                     label = { Text("曲名") },
                     singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color.White,
+                        unfocusedBorderColor = Color.Gray,
+                        focusedLabelColor = Color.White,
+                        unfocusedLabelColor = Color.LightGray,
+                        cursorColor = Color.White
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(8.dp))
@@ -2949,6 +2957,15 @@ fun LyricTagSearchDialog(
                     onValueChange = { artist = it },
                     label = { Text("アーティスト名") },
                     singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = Color.White,
+                        unfocusedBorderColor = Color.Gray,
+                        focusedLabelColor = Color.White,
+                        unfocusedLabelColor = Color.LightGray,
+                        cursorColor = Color.White
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(12.dp))
@@ -2985,7 +3002,7 @@ fun LyricTagSearchDialog(
                 }
                 if (searched && !searching && candidates.isEmpty()) {
                     Spacer(Modifier.height(8.dp))
-                    Text("候補が見つかりませんでした")
+                    Text("候補が見つかりませんでした", color = Color.White)
                 }
                 if (candidates.isNotEmpty()) {
                     Spacer(Modifier.height(8.dp))
@@ -3031,6 +3048,7 @@ fun LyricTagSearchDialog(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(
                                         text = if (applyingIndex == idx) "取得中…" else cand.title.ifBlank { "(タイトルなし)" },
+                                        color = Color.White,
                                         fontWeight = FontWeight.Bold,
                                         maxLines = 1,
                                         overflow = TextOverflow.Ellipsis,
@@ -3105,12 +3123,10 @@ fun LyricTagSearchDialog(
                     }
                 }
             }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("閉じる") }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onDismiss) { Text("閉じる", color = Color.White.copy(alpha = 0.65f)) }
         }
-    )
+    }
 }
 
 // ============================================================
@@ -3146,7 +3162,7 @@ fun PvDopagakiBackground(modifier: Modifier = Modifier, rotate90: Boolean = fals
                             mp = player
                             try {
                                 player.setSurface(Surface(st))
-                                player.setDataSource(ctx, Uri.parse("android.resource://" + ctx.packageName + "/" + ctx.resources.getIdentifier("dopagaki_bg", "raw", ctx.packageName)))
+                                player.setDataSource(ctx, Uri.parse("android.resource://" + ctx.packageName + "/" + R.raw.dopagaki_bg))
                                 player.isLooping = true
                                 player.setVolume(0f, 0f)
                                 player.setOnPreparedListener { it.start() }
@@ -3550,9 +3566,17 @@ fun LyricsBrowseOverlay(
     onSaveEditedLyrics: ((String) -> Unit)? = null,
     onPublishLyrics: ((String, (String) -> Unit) -> Unit)? = null,
     onClose: () -> Unit,
+    artwork: Bitmap? = null,
+    trackTitle: String = "",
+    trackArtist: String = "",
     enFontFamily: FontFamily? = null,
+    uiFontFamily: FontFamily? = null,
     dopagaki: Boolean = false,
-    onToggleDopagaki: () -> Unit = {}
+    onToggleDopagaki: () -> Unit = {},
+    pvEnabled: Boolean = true,
+    onTogglePv: () -> Unit = {},
+    homeLyricsEnabled: Boolean = true,
+    onToggleHomeLyrics: () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     val toastCtx = LocalContext.current
@@ -3565,15 +3589,13 @@ fun LyricsBrowseOverlay(
     var publishPhase by remember { mutableStateOf(0) }
     var publishMessage by remember { mutableStateOf("") }
     if (showLyricEditor) {
-        AlertDialog(
-            onDismissRequest = { showLyricEditor = false },
-            containerColor = Color(0xFF141C2E),
-            title = { Text("歌詞を編集", color = Color.White, fontSize = 18.sp) },
-            text = {
-                Column {
+                BlurDialog(onDismissRequest = { showLyricEditor = false }) {
+            Text("歌詞を編集", color = Color.White, fontSize = 18.sp)
+            Spacer(modifier = Modifier.height(10.dp))
+            Column {
                     Text(
                         "1行ごとに [分:秒.ミリ秒]歌詞 の形です。誤字の修正のほか、時刻も直せます。保存するとキャッシュに残るので、次回からも直した歌詞が出ます（文字同期は外れます）。",
-                        color = Color.Gray,
+                        color = Color.White.copy(alpha = 0.65f),
                         fontSize = 11.5.sp
                     )
                     Spacer(Modifier.height(10.dp))
@@ -3616,8 +3638,8 @@ fun LyricsBrowseOverlay(
                         }
                     }
                 }
-            },
-            confirmButton = {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { showLyricEditor = false }) { Text("キャンセル", color = Color.Gray) }
                 TextButton(onClick = {
                     val ok = editText.lines().any { Regex("^\\[\\d{1,2}:\\d{2}").containsMatchIn(it) }
                     if (!ok) {
@@ -3627,11 +3649,8 @@ fun LyricsBrowseOverlay(
                         showLyricEditor = false
                     }
                 }) { Text("保存", color = Color(0xFF88C0FF)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { showLyricEditor = false }) { Text("キャンセル", color = Color.Gray) }
             }
-        )
+        }
     }
     // 自由スクロール: 位置は「行」単位の小数で持ち、指に追従させて離すと慣性で流れる
     val scrollAnim = remember { Animatable(startIndex.toFloat()) }
@@ -3775,6 +3794,7 @@ fun LyricsBrowseOverlay(
                         .size(42.dp)
                         .clip(CircleShape)
                         .background(accentColor)
+                        .pressScale()
                         .clickable {
                             onSeek((lines[idx].timeMs - lyricOffsetMs).coerceAtLeast(0L))
                             onClose()
@@ -3827,7 +3847,9 @@ fun LyricsBrowseOverlay(
                     // 再生中の行には進行バーを付ける（文字同期の行も、カラオケ色付けと併せて出す）
                     val lineStartP = lines[idx].timeMs
                     val lineEndP = lines.getOrNull(idx + 1)?.timeMs ?: (lineStartP + 10000L)
-                    val progP = ((positionMs + lyricOffsetMs - lineStartP).toFloat() / (lineEndP - lineStartP).coerceAtLeast(1L).toFloat()).coerceIn(0f, 1f)
+                    val progTarget = ((positionMs + lyricOffsetMs - lineStartP).toFloat() / (lineEndP - lineStartP).coerceAtLeast(1L).toFloat()).coerceIn(0f, 1f)
+                    // 位置情報は約0.3秒ごとの更新なので、そのまま描くとカクつく。線形アニメーションでつないで滑らかにする
+                    val progP by animateFloatAsState(targetValue = progTarget, animationSpec = tween(durationMillis = 340, easing = LinearEasing), label = "browseProgress")
                     Box(
                         modifier = Modifier.fillMaxWidth().padding(top = 3.dp).height(3.dp)
                             .background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(2.dp))
@@ -3856,6 +3878,57 @@ fun LyricsBrowseOverlay(
             }
         }
     }
+    // 曲情報ヘッダー（アートワーク＋曲名＋アーティスト名）: フェードマスクの外（ルートBox直下）に置く
+    if (trackTitle.isNotBlank()) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .zIndex(96f)
+                .padding(start = 20.dp, top = topPaddingDp + 42.dp)
+        ) {
+            val artImg = remember(artwork) { artwork?.asImageBitmap() }
+            if (artImg != null) {
+                Image(
+                    bitmap = artImg,
+                    contentDescription = null,
+                    modifier = Modifier.size(56.dp).clip(RoundedCornerShape(10.dp))
+                )
+                Spacer(Modifier.width(12.dp))
+            } else {
+                Box(
+                    modifier = Modifier.size(56.dp).clip(RoundedCornerShape(10.dp)).background(Color.White.copy(alpha = 0.10f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    DiscGlyph("music", Color.White.copy(alpha = 0.5f))
+                }
+                Spacer(Modifier.width(12.dp))
+            }
+            Column {
+                Text(
+                    text = trackTitle,
+                    color = Color.White,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.Bold,
+                    fontFamily = uiFontFamily ?: fontFamily,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.widthIn(max = 220.dp)
+                )
+                if (trackArtist.isNotBlank()) {
+                    Text(
+                        text = trackArtist,
+                        color = Color.White.copy(alpha = 0.65f),
+                        fontSize = 13.sp,
+                        fontFamily = uiFontFamily ?: fontFamily,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = 220.dp)
+                    )
+                }
+            }
+        }
+    }
     // 下部ボタン: 移動（フォーカス行へジャンプ）／タイミング調整／閉じる
     Box(
         modifier = Modifier
@@ -3863,6 +3936,7 @@ fun LyricsBrowseOverlay(
             .padding(top = topPaddingDp + 48.dp, end = 22.dp)
             .size(44.dp)
             .zIndex(95f)
+            .pressScale()
             .clickable { onClose() },
         contentAlignment = Alignment.Center
     ) {
@@ -3880,6 +3954,7 @@ fun LyricsBrowseOverlay(
                 modifier = Modifier
                     .clip(RoundedCornerShape(12.dp))
                     .background(Color(0xFF263238))
+                    .pressScale()
                     .clickable { follow = true }
                     .padding(horizontal = 18.dp, vertical = 10.dp)
             ) {
@@ -3910,6 +3985,7 @@ fun LyricsBrowseOverlay(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(Color(0xFF263238))
+                                .pressScale()
                                 .clickable {
                                     val newOffset = (lyricOffsetMs + delta).coerceIn(-30000L, 30000L)
                                     onOffsetChange(newOffset)
@@ -3925,6 +4001,7 @@ fun LyricsBrowseOverlay(
                     modifier = Modifier
                         .clip(RoundedCornerShape(10.dp))
                         .background(Color(0xFF263238))
+                        .pressScale()
                         .clickable { onOffsetChange(0L) }
                         .padding(horizontal = 10.dp, vertical = 8.dp)
                 ) {
@@ -3940,6 +4017,7 @@ fun LyricsBrowseOverlay(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(Color(0xFF263238))
+                                .pressScale()
                                 .clickable {
                                     val newOffset = (lyricOffsetMs + delta).coerceIn(-30000L, 30000L)
                                     onOffsetChange(newOffset)
@@ -3963,6 +4041,7 @@ fun LyricsBrowseOverlay(
                     .size(48.dp)
                     .clip(CircleShape)
                     .background(Color(0xFF263238))
+                    .pressScale()
                     .clickable { onRefresh() },
                 contentAlignment = Alignment.Center
             ) {
@@ -3974,6 +4053,7 @@ fun LyricsBrowseOverlay(
                     .size(48.dp)
                     .clip(CircleShape)
                     .background(Color(0xFF263238))
+                    .pressScale()
                     .clickable { onOpenSearch() },
                 contentAlignment = Alignment.Center
             ) {
@@ -3986,6 +4066,7 @@ fun LyricsBrowseOverlay(
                         .size(48.dp)
                         .clip(CircleShape)
                         .background(Color(0xFF263238))
+                        .pressScale()
                         .clickable {
                             editText = buildLrcText(lines)
                             editError = false
@@ -4004,6 +4085,7 @@ fun LyricsBrowseOverlay(
                     .size(48.dp)
                     .clip(CircleShape)
                     .background(if (showOffsetPanel || lyricOffsetMs != 0L) accentColor else Color(0xFF263238))
+                    .pressScale()
                     .clickable { showOffsetPanel = !showOffsetPanel },
                 contentAlignment = Alignment.Center
             ) {
@@ -4015,6 +4097,7 @@ fun LyricsBrowseOverlay(
                     .size(48.dp)
                     .clip(CircleShape)
                     .background(if (translationEnabled) accentColor else Color(0xFF263238))
+                    .pressScale()
                     .clickable { onToggleTranslation() },
                 contentAlignment = Alignment.Center
             ) {
@@ -4026,6 +4109,7 @@ fun LyricsBrowseOverlay(
                     .size(48.dp)
                     .clip(CircleShape)
                     .background(if (dopagaki) Color(0xFFFFB300) else Color(0xFF263238))
+                    .pressScale()
                     .clickable {
                         if (!dopagaki) Toast.makeText(toastCtx, "ドパガキモード始動", Toast.LENGTH_SHORT).show()
                         onToggleDopagaki()
@@ -4033,6 +4117,30 @@ fun LyricsBrowseOverlay(
                 contentAlignment = Alignment.Center
             ) {
                 LucideIcon(LucideSparkles, size = 24.dp, color = Color.White)
+            }
+            // PV表示ON/OFF
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(if (pvEnabled) accentColor else Color(0xFF263238))
+                    .pressScale()
+                    .clickable { onTogglePv() },
+                contentAlignment = Alignment.Center
+            ) {
+                LucideIcon(LucideClapperboard, size = 24.dp, color = Color.White)
+            }
+            // ホーム画面の歌詞ON/OFF
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(if (homeLyricsEnabled) accentColor else Color(0xFF263238))
+                    .pressScale()
+                    .clickable { onToggleHomeLyrics() },
+                contentAlignment = Alignment.Center
+            ) {
+                LucideIcon(LucideCaptions, size = 24.dp, color = Color.White)
             }
         }
     }

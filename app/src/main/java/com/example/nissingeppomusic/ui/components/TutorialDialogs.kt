@@ -21,18 +21,10 @@ fun TutorialDialog(
     var dontShowAgain by remember { mutableStateOf(false) }
     val fontFamily = LocalLauncherFontFamily.current
 
-    AlertDialog(
-        onDismissRequest = { onDismiss(dontShowAgain) },
-        confirmButton = {
-            TextButton(
-                onClick = { onDismiss(dontShowAgain) }
-            ) {
-                Text("了解", color = Color(0xFF88C0FF), fontSize = 16.sp, fontWeight = FontWeight.Bold, fontFamily = fontFamily)
-            }
-        },
-        title = { Text(title, fontSize = 18.sp, color = Color.White, fontFamily = fontFamily) },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
+    BlurDialog(onDismissRequest = { onDismiss(dontShowAgain) }) {
+        BlurDialogTitle(title, fontFamily = fontFamily)
+        Spacer(modifier = Modifier.height(10.dp))
+        Column(modifier = Modifier.fillMaxWidth()) {
                 Text(
                     text = message,
                     color = Color.LightGray,
@@ -59,10 +51,11 @@ fun TutorialDialog(
                     Text("次回から表示しない", color = Color.White, fontSize = 14.sp, fontFamily = fontFamily)
                 }
             }
-        },
-        containerColor = Color(0xFF101728),
-        titleContentColor = Color.White,
-        shape = RoundedCornerShape(20.dp)
-    )
+        BlurDialogButtonRow(
+            confirmText = "了解",
+            onConfirm = { onDismiss(dontShowAgain) },
+            fontFamily = fontFamily
+        )
+    }
 }
 

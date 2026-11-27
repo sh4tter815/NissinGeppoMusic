@@ -18,16 +18,10 @@ fun HideGuideDialog(
     val fontFamily = LocalLauncherFontFamily.current
     val fontWeight = LocalLauncherFontWeight.current
 
-    AlertDialog(
-        onDismissRequest = { onDismiss(dontShowAgain) },
-        confirmButton = {
-            TextButton(onClick = { onDismiss(dontShowAgain) }) {
-                Text("OK", color = Color(0xFF88C0FF), fontSize = 16.sp, fontFamily = fontFamily, fontWeight = fontWeight)
-            }
-        },
-        title = { Text("アプリを非表示にしました", fontSize = 18.sp, fontFamily = fontFamily, fontWeight = fontWeight) },
-        text = {
-            Column {
+    BlurDialog(onDismissRequest = { onDismiss(dontShowAgain) }) {
+        BlurDialogTitle("アプリを非表示にしました", fontFamily = fontFamily, fontWeight = fontWeight)
+        Spacer(modifier = Modifier.height(10.dp))
+        Column {
                 Text(
                     text = "非表示にしたアプリは、アプリ一覧画面で２本指でピンチアウト（拡大）操作をすると確認できます。",
                     color = Color.LightGray,
@@ -61,9 +55,12 @@ fun HideGuideDialog(
                     )
                 }
             }
-        },
-        containerColor = Color(0xFF141C2E),
-        titleContentColor = Color.White
-    )
+        BlurDialogButtonRow(
+            confirmText = "OK",
+            onConfirm = { onDismiss(dontShowAgain) },
+            fontFamily = fontFamily,
+            fontWeight = fontWeight
+        )
+    }
 }
 
