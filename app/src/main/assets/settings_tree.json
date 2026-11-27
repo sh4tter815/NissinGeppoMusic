@@ -1,5 +1,5 @@
 {
- "version": 1,
+ "version": 2,
  "items": {
   "reverse": {
    "label": "スクロール方向の反転",
@@ -771,6 +771,278 @@
    "glyph": "box",
    "type": "action",
    "action": "excludedFolders"
+  },
+  "artworkOutline": {
+   "label": "円の輪郭",
+   "desc": "左円の外周の白い輪郭線です",
+   "glyph": "disc",
+   "type": "toggle",
+   "bind": "artworkOutline"
+  },
+  "curvedTitle": {
+   "label": "カーブ曲名",
+   "desc": "円の周りにカーブして表示される曲名です",
+   "glyph": "text",
+   "type": "toggle",
+   "bind": "curvedTitle"
+  },
+  "caseCircleClip": {
+   "label": "ケースを円形に切り抜く",
+   "desc": "オンにするとカセットやMDなどのケースも円形に切り抜いて表示します",
+   "glyph": "disc",
+   "type": "toggle",
+   "bind": "caseCircleClip"
+  },
+  "tonearmStyle": {
+   "label": "針",
+   "desc": "レコード針の見た目です。「ディスクに連動」ではディスクのテーマに合わせて姿が変わります（クリア→アクリル、蓄光→蓄光、CD・MD→レーザー、カセット→再生ヘッド）",
+   "glyph": "wand-sparkles",
+   "type": "choices",
+   "bind": "tonearmStyle",
+   "choices": [
+    {
+     "v": "none",
+     "label": "なし"
+    },
+    {
+     "v": "auto",
+     "label": "ディスクに連動"
+    },
+    {
+     "v": "classic",
+     "label": "クラシック"
+    },
+    {
+     "v": "brass",
+     "label": "真鍮"
+    },
+    {
+     "v": "acrylic",
+     "label": "アクリル"
+    },
+    {
+     "v": "glow",
+     "label": "蓄光"
+    },
+    {
+     "v": "mecha",
+     "label": "メカ"
+    },
+    {
+     "v": "minimal",
+     "label": "ミニマル"
+    },
+    {
+     "v": "laser",
+     "label": "レーザーピックアップ"
+    },
+    {
+     "v": "head",
+     "label": "再生ヘッド"
+    }
+   ]
+  },
+  "widgetTap": {
+   "label": "左円盤のタップ",
+   "desc": "ホーム左のレコード盤をタップしたときの動作です",
+   "glyph": "cursor",
+   "type": "choices",
+   "bind": "widgetTapAction",
+   "choices": [
+    {
+     "v": "app",
+     "label": "再生中のアプリを開く"
+    },
+    {
+     "v": "toggle",
+     "label": "再生／停止"
+    }
+   ]
+  },
+  "widgetDoubleTap": {
+   "label": "左円盤のダブルタップ",
+   "desc": "ホーム左のレコード盤をダブルタップしたときの動作です",
+   "glyph": "cursor",
+   "type": "choices",
+   "bind": "widgetDoubleTapAction",
+   "choices": [
+    {
+     "v": "app",
+     "label": "再生中のアプリを開く"
+    },
+    {
+     "v": "toggle",
+     "label": "再生／停止"
+    },
+    {
+     "v": "next",
+     "label": "次の曲"
+    },
+    {
+     "v": "prev",
+     "label": "前の曲"
+    },
+    {
+     "v": "none",
+     "label": "なし"
+    }
+   ]
+  },
+  "widgetTripleTap": {
+   "label": "左円盤のトリプルタップ",
+   "desc": "ホーム左のレコード盤を3回タップしたときの動作です",
+   "glyph": "cursor",
+   "type": "choices",
+   "bind": "widgetTripleTapAction",
+   "choices": [
+    {
+     "v": "theme",
+     "label": "テーマ設定を開く"
+    },
+    {
+     "v": "app",
+     "label": "再生中のアプリを開く"
+    },
+    {
+     "v": "toggle",
+     "label": "再生／停止"
+    },
+    {
+     "v": "next",
+     "label": "次の曲"
+    },
+    {
+     "v": "prev",
+     "label": "前の曲"
+    },
+    {
+     "v": "none",
+     "label": "なし"
+    }
+   ]
+  },
+  "widgetLongPress": {
+   "label": "左円盤の長押し",
+   "desc": "ホーム左のレコード盤を長押ししたときの動作です",
+   "glyph": "cursor",
+   "type": "choices",
+   "bind": "widgetLongPressAction",
+   "choices": [
+    {
+     "v": "rack",
+     "label": "ラックを開く"
+    },
+    {
+     "v": "grab",
+     "label": "掴んで3D回転"
+    },
+    {
+     "v": "app",
+     "label": "再生中のアプリを開く"
+    },
+    {
+     "v": "toggle",
+     "label": "再生／停止"
+    }
+   ]
+  },
+  "widgetDoubleTapHold": {
+   "label": "左円盤のダブルタップ長押し",
+   "desc": "タップの直後にもう一度押して長押ししたときの動作です",
+   "glyph": "cursor",
+   "type": "choices",
+   "bind": "widgetDoubleTapHoldAction",
+   "choices": [
+    {
+     "v": "rack",
+     "label": "ラックを開く"
+    },
+    {
+     "v": "grab",
+     "label": "掴んで3D回転"
+    },
+    {
+     "v": "app",
+     "label": "再生中のアプリを開く"
+    },
+    {
+     "v": "toggle",
+     "label": "再生／停止"
+    },
+    {
+     "v": "next",
+     "label": "次の曲"
+    },
+    {
+     "v": "prev",
+     "label": "前の曲"
+    },
+    {
+     "v": "none",
+     "label": "なし"
+    }
+   ]
+  },
+  "discStyle": {
+   "label": "ディスク",
+   "desc": "左円盤の見た目です",
+   "glyph": "disc",
+   "type": "choices",
+   "bind": "discStyle",
+   "choices": [
+    {
+     "v": "digital",
+     "label": "デジタル"
+    },
+    {
+     "v": "vinyl",
+     "label": "レコード"
+    },
+    {
+     "v": "clear",
+     "label": "クリアレコード"
+    },
+    {
+     "v": "cd",
+     "label": "CD"
+    },
+    {
+     "v": "glow",
+     "label": "蓄光レコード"
+    },
+    {
+     "v": "md",
+     "label": "MD"
+    },
+    {
+     "v": "cassette_color",
+     "label": "カセット（色付き）"
+    },
+    {
+     "v": "cassette_clear",
+     "label": "カセット（クリア）"
+    },
+    {
+     "v": "cassette_black",
+     "label": "カセット（ブラック）"
+    },
+    {
+     "v": "reel",
+     "label": "オープンリール"
+    },
+    {
+     "v": "floppy",
+     "label": "フロッピー"
+    },
+    {
+     "v": "dat",
+     "label": "DATカセット"
+    },
+    {
+     "v": "eighttrack",
+     "label": "8トラック"
+    }
+   ]
   }
  },
  "tree": [
@@ -950,7 +1222,51 @@
        "item": "artworkVisible"
       },
       {
+       "item": "artworkOutline"
+      },
+      {
+       "item": "curvedTitle"
+      },
+      {
+       "item": "caseCircleClip"
+      },
+      {
        "item": "rackReverse"
+      },
+      {
+       "id": "music_theme",
+       "label": "テーマ",
+       "glyph": "disc",
+       "children": [
+        {
+         "item": "discStyle"
+        },
+        {
+         "item": "tonearmStyle"
+        }
+       ]
+      },
+      {
+       "id": "music_actions",
+       "label": "操作",
+       "glyph": "cursor",
+       "children": [
+        {
+         "item": "widgetTap"
+        },
+        {
+         "item": "widgetDoubleTap"
+        },
+        {
+         "item": "widgetTripleTap"
+        },
+        {
+         "item": "widgetLongPress"
+        },
+        {
+         "item": "widgetDoubleTapHold"
+        }
+       ]
       }
      ]
     },
