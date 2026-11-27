@@ -25,7 +25,9 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.platform.LocalContext
 import com.example.nissingeppomusic.data.AppInfo
+import com.example.nissingeppomusic.data.AppPreferenceManager
 import kotlin.math.abs
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.background
@@ -219,6 +221,8 @@ fun DiscWheel(
     isLoopable: Boolean = false,
     discCenterXDp: Float? = null,
     discCenterYDp: Float? = null,
+    centerOffsetXDp: Float = 0f,
+    centerOffsetYDp: Float = 0f,
     dotMarkers: Boolean = false,
     restLabelText: String? = null
 ) {
@@ -231,8 +235,8 @@ fun DiscWheel(
     )
     // 中身だけを設定用に入れ替えて、円盤のエンジン自体はアプリ円盤と共通の DiscCarousel を使う
     BoxWithConstraints(modifier = modifier) {
-        val centerX = discCenterXDp ?: if (side == DiscSide.LEFT) -80f else maxWidth.value + 80f
-        val centerY = discCenterYDp ?: (maxHeight.value / 2f)
+        val centerX = (discCenterXDp ?: if (side == DiscSide.LEFT) -80f else maxWidth.value + 80f) + centerOffsetXDp
+        val centerY = (discCenterYDp ?: (maxHeight.value / 2f)) + centerOffsetYDp
         val carouselState = state
         val restP by animateFloatAsState(
             targetValue = if (verticalRestLabel && side == DiscSide.LEFT && !(holdActive == true || carouselState.isScrolling)) 1f else 0f,
@@ -304,6 +308,7 @@ fun DiscWheel(
                     .offset(x = (iconX - iconSize / 2f).dp, y = (iconY - iconSize / 2f).dp)
                     .size(iconSize.dp)
                     .clickable {
+                        carouselState.pulseTap(index)
                         when {
                                 isSelected || entry.immediate -> onEntryClick(index)
                                 tapToApply -> { carouselState.animateToIndex(index); onEntryClick(index) }
@@ -312,7 +317,7 @@ fun DiscWheel(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                Box(modifier = Modifier.graphicsLayer { val sc = (if (isSelected) 1.12f else 1f) * (iconSizeDp / 36f) * 1.0f; scaleX = sc; scaleY = sc }) {
+                Box(modifier = Modifier.graphicsLayer { val sc = (if (isSelected) 1.12f else 1f) * (iconSizeDp / 36f) * 1.0f * (if (index == carouselState.tapPulseIndex) carouselState.tapPulseAnim.value else 1f); scaleX = sc; scaleY = sc }) {
                     entry.icon()
                 }
             }
@@ -329,6 +334,7 @@ fun DiscWheel(
             ) {
                 Row(
                     modifier = Modifier.clickable {
+                        carouselState.pulseTap(index)
                         when {
                                 isSelected || entry.immediate -> onEntryClick(index)
                                 tapToApply -> { carouselState.animateToIndex(index); onEntryClick(index) }
@@ -374,6 +380,8 @@ fun DiscWheel(
         if (verticalRestLabel && side == DiscSide.LEFT && restP > 0.01f) {
             val focusEntry = entries.getOrNull(focusIdx)
             if (focusEntry != null) {
+                val labelText = restLabelText ?: focusEntry.label
+                val singleChar = labelText.length == 1
                 Box(
                     modifier = Modifier
                         .offset(x = (centerX + 165f - 60f - 100f).dp, y = (centerY - 22f).dp)
@@ -381,15 +389,15 @@ fun DiscWheel(
                         .height(44.dp)
                         .graphicsLayer {
                             alpha = restP
-                            rotationZ = -90f * restP
+                            rotationZ = if (singleChar) 0f else -90f * restP
                             translationX = (1f - restP) * 40.dp.toPx()
                         },
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        restLabelText ?: focusEntry.label,
+                        labelText,
                         color = accentColor,
-                        fontSize = textSizeSp.sp,
+                        fontSize = if (singleChar) (textSizeSp * 2.2f).sp else textSizeSp.sp,
                         letterSpacing = letterSpacingSp.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -445,6 +453,8 @@ fun DiscValueWheel(
     format: (Float) -> String,
     accentColor: Color,
     modifier: Modifier = Modifier,
+    centerOffsetXDp: Float = 0f,
+    centerOffsetYDp: Float = 0f,
     onSave: (Float) -> Unit
 ) {
     val stepSize = (range.endInclusive - range.start) / (steps + 1)
@@ -475,8 +485,8 @@ fun DiscValueWheel(
         val wDp = maxWidth.value
         val hDp = maxHeight.value
         val rDp = 165f
-        val centerX = wDp + 80f
-        val centerY = hDp / 2f
+        val centerX = wDp + 80f + centerOffsetXDp
+        val centerY = hDp / 2f + centerOffsetYDp
         val displayIndex = indexAnim.value
         val currentIndex = Math.round(displayIndex).coerceIn(0, maxIndex)
         val totalSpanDegrees = 300f
@@ -1075,6 +1085,58 @@ fun DiscGlyph(kind: String, accentColor: Color) {
                 drawPath(lucidePath("M3 11h18v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z", sc), color = ink, style = ls)
                 drawPath(lucidePath("m6.18 5.276 3.1 3.899", sc), color = ink, style = ls)
             }
+            "star" -> {
+                // Lucide "star"
+                val ls = Stroke(width = w * (2f / 24f), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                val sc = w / 24f
+                drawPath(lucidePath("M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z", sc), color = ink, style = ls)
+            }
+            "tag" -> {
+                // Lucide "tag"
+                val ls = Stroke(width = w * (2f / 24f), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                val sc = w / 24f
+                drawPath(lucidePath("M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z", sc), color = ink, style = ls)
+                drawCircle(color = ink, radius = 1.1f * sc, center = Offset(7.5f * sc, 7.5f * sc))
+            }
+            "eye-off" -> {
+                // Lucide "eye-off"
+                val ls = Stroke(width = w * (2f / 24f), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                val sc = w / 24f
+                drawPath(lucidePath("M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49", sc), color = ink, style = ls)
+                drawPath(lucidePath("M14.084 14.158a3 3 0 0 1-4.242-4.242", sc), color = ink, style = ls)
+                drawPath(lucidePath("M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143", sc), color = ink, style = ls)
+                drawPath(lucidePath("m2 2 20 20", sc), color = ink, style = ls)
+            }
+            "info" -> {
+                // Lucide "info"
+                val ls = Stroke(width = w * (2f / 24f), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                val sc = w / 24f
+                drawCircle(color = ink, radius = 10f * sc, center = Offset(w / 2f, h / 2f), style = ls)
+                drawPath(lucidePath("M12 16v-4", sc), color = ink, style = ls)
+                drawPath(lucidePath("M12 8h.01", sc), color = ink, style = ls)
+            }
+            "x" -> {
+                // Lucide "x"
+                val ls = Stroke(width = w * (2f / 24f), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                val sc = w / 24f
+                drawPath(lucidePath("M18 6 6 18", sc), color = ink, style = ls)
+                drawPath(lucidePath("m6 6 12 12", sc), color = ink, style = ls)
+            }
+            "plus" -> {
+                // Lucide "plus"
+                val ls = Stroke(width = w * (2f / 24f), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                val sc = w / 24f
+                drawPath(lucidePath("M5 12h14", sc), color = ink, style = ls)
+                drawPath(lucidePath("M12 5v14", sc), color = ink, style = ls)
+            }
+            "external-link" -> {
+                // Lucide "external-link"
+                val ls = Stroke(width = w * (2f / 24f), cap = StrokeCap.Round, join = StrokeJoin.Round)
+                val sc = w / 24f
+                drawPath(lucidePath("M15 3h6v6", sc), color = ink, style = ls)
+                drawPath(lucidePath("M10 14 21 3", sc), color = ink, style = ls)
+                drawPath(lucidePath("M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6", sc), color = ink, style = ls)
+            }
             else -> {
                 drawCircle(color = accentColor, radius = w * 0.16f, center = Offset(w * 0.50f, h * 0.50f))
             }
@@ -1086,20 +1148,20 @@ fun DiscGlyph(kind: String, accentColor: Color) {
 // ===== アプリ円盤・フォルダ円盤・索引円盤（DiscCarousel のラッパー。旧 RotatableAppDisc / RotatableFolderWheel / RotatableIndexWheel の見た目と操作感を共通部品で再現） =====
 
 /** RotatableAppDisc と同じ DiscItem 列を作る（showIndices の時は頭文字の IndexEntry を差し込む） */
-fun buildDiscItems(apps: List<AppInfo>, showIndices: Boolean): List<DiscItem> {
+fun buildDiscItems(apps: List<AppInfo>, showIndices: Boolean, badges: Map<String, Int> = emptyMap(), groupOf: (AppInfo) -> String = { it.discGroup }): List<DiscItem> {
     val items = mutableListOf<DiscItem>()
     if (showIndices) {
         var lastInitial: String? = null
         for (app in apps) {
-            val initial = app.discGroup.ifBlank { "＃" }
+            val initial = groupOf(app).ifBlank { "＃" }
             if (initial != lastInitial) {
                 items.add(DiscItem.IndexEntry(initial))
                 lastInitial = initial
             }
-            items.add(DiscItem.AppEntry(app))
+            items.add(DiscItem.AppEntry(app, badges[app.packageName] ?: 0))
         }
     } else {
-        for (app in apps) items.add(DiscItem.AppEntry(app))
+        for (app in apps) items.add(DiscItem.AppEntry(app, badges[app.packageName] ?: 0))
     }
     return items
 }
@@ -1116,6 +1178,7 @@ fun DiscAppItem(
     labelAlpha: Float,
     textSizeSp: Float,
     iconSizeDp: Float,
+    iconCornerPercent: Int = 30,
     letterSpacingSp: Float,
     accentColor: Color,
     selectedPackages: Set<String>?,
@@ -1157,7 +1220,8 @@ fun DiscAppItem(
             val iconXDp = discCenterXDp + innerIconRadiusDp * cos(rad)
             val iconYDp = discCenterYDp + innerIconRadiusDp * sin(rad)
             val iconBitmap = app.iconBitmap
-            if (iconBitmap != null) {
+            val hideIcons = AppPreferenceManager(LocalContext.current).isAppIconHidden()
+            if (iconBitmap != null && !hideIcons) {
                 Box(
                     modifier = Modifier
                         .offset(x = (iconXDp - ((iconSizeDp + 14f) / 2f)).dp, y = (iconYDp - ((iconSizeDp + 14f) / 2f)).dp)
@@ -1176,6 +1240,7 @@ fun DiscAppItem(
                             contentDescription = null,
                             modifier = Modifier
                                 .size((iconSizeDp * 1.125f).coerceAtLeast(12f).dp)
+                                .clip(RoundedCornerShape(iconCornerPercent))
                                 .offset(y = 2.5.dp),
                             colorFilter = ColorFilter.tint(Color.Black.copy(alpha = 0.38f), BlendMode.SrcIn)
                         )
@@ -1183,8 +1248,27 @@ fun DiscAppItem(
                     Image(
                         bitmap = iconBitmap,
                         contentDescription = null,
-                        modifier = Modifier.size((iconSizeDp * 1.125f).coerceAtLeast(12f).dp)
+                        modifier = Modifier.size((iconSizeDp * 1.125f).coerceAtLeast(12f).dp).clip(RoundedCornerShape(iconCornerPercent))
                     )
+                    // 通知バッジ（アイコン右上）
+                    if (item.badge > 0) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .width(if (item.badge > 9) 17.dp else 12.5.dp)
+                                .height(12.5.dp)
+                                .background(effAccent, RoundedCornerShape(6.25.dp)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (item.badge > 99) "99+" else item.badge.toString(),
+                                color = Color.White,
+                                fontSize = 7.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1
+                            )
+                        }
+                    }
                 }
             }
             val isChecked = selectedPackages?.contains(app.packageName) == true
@@ -1197,7 +1281,7 @@ fun DiscAppItem(
             val textWeight = if (isChecked || isFocused) FontWeight.Bold else FontWeight.Medium
             if (showLabels) Box(
                 modifier = Modifier
-                    .offset(x = (appXDp - 240f).dp, y = (appYDp - 22f).dp)
+                    .offset(x = ((if (hideIcons) iconXDp else appXDp) - 240f).dp, y = ((if (hideIcons) iconYDp else appYDp) - 22f).dp)
                     .width(240.dp)
                     .height(44.dp),
                 contentAlignment = Alignment.CenterEnd
@@ -1240,6 +1324,7 @@ sealed class FolderDiscEntry {
     data class Folder(val folderId: String, val name: String) : FolderDiscEntry()
     data class App(val app: AppInfo) : FolderDiscEntry()
     object NewFolder : FolderDiscEntry()
+    object Back : FolderDiscEntry()
 }
 
 /** フォルダページ右円の1項目。DiscAppItem と同じ配置・見た目で、フォルダと新規作成も描ける */
@@ -1254,6 +1339,7 @@ fun DiscFolderItem(
     labelAlpha: Float,
     textSizeSp: Float,
     iconSizeDp: Float,
+    iconCornerPercent: Int = 30,
     letterSpacingSp: Float,
     accentColor: Color,
     isFocused: Boolean,
@@ -1261,7 +1347,10 @@ fun DiscFolderItem(
     onFolderClick: (String) -> Unit,
     onAppClick: (AppInfo) -> Unit,
     onAppLongClick: (AppInfo) -> Unit,
-    onNewFolderClick: () -> Unit
+    onNewFolderClick: () -> Unit,
+    isFavorite: Boolean = false,
+    onFolderLongClick: (String) -> Unit = {},
+    onBackClick: () -> Unit = {}
 ) {
     val outerAppRadiusDp = discRadiusDp + 8f
     val innerIconRadiusDp = discRadiusDp - 18f
@@ -1273,11 +1362,13 @@ fun DiscFolderItem(
         is FolderDiscEntry.Folder -> entry.name
         is FolderDiscEntry.App -> entry.app.label
         FolderDiscEntry.NewFolder -> "新規作成"
+        FolderDiscEntry.Back -> "戻る"
     }
     val click: () -> Unit = when (entry) {
         is FolderDiscEntry.Folder -> ({ onFolderClick(entry.folderId) })
         is FolderDiscEntry.App -> ({ onAppClick(entry.app) })
         FolderDiscEntry.NewFolder -> ({ onNewFolderClick() })
+        FolderDiscEntry.Back -> ({ onBackClick() })
     }
     val glyphSize = (iconSizeDp * 1.0f).dp
     Box(
@@ -1288,22 +1379,32 @@ fun DiscFolderItem(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
                 onClick = click,
-                onLongClick = { if (entry is FolderDiscEntry.App) onAppLongClick(entry.app) }
+                onLongClick = {
+                    when (entry) {
+                        is FolderDiscEntry.App -> onAppLongClick(entry.app)
+                        is FolderDiscEntry.Folder -> onFolderLongClick(entry.folderId)
+                        FolderDiscEntry.NewFolder -> {}
+                        FolderDiscEntry.Back -> {}
+                    }
+                }
             ),
         contentAlignment = Alignment.Center
     ) {
         when (entry) {
             is FolderDiscEntry.Folder -> WhiteFolderIcon(size = glyphSize, color = Color.White)
             FolderDiscEntry.NewFolder -> WhitePlusIcon(size = glyphSize, color = Color.White)
+            FolderDiscEntry.Back -> DiscGlyph("back", accentColor)
             is FolderDiscEntry.App -> {
                 val iconBitmap = entry.app.iconBitmap
-                if (iconBitmap != null) {
+                val hideIconsF = AppPreferenceManager(LocalContext.current).isAppIconHidden()
+                if (iconBitmap != null && !hideIconsF) {
                     if (iconTilt3d) {
                         Image(
                             bitmap = iconBitmap,
                             contentDescription = null,
                             modifier = Modifier
                                 .size((iconSizeDp * 1.125f).coerceAtLeast(12f).dp)
+                                .clip(RoundedCornerShape(iconCornerPercent))
                                 .offset(y = 2.5.dp),
                             colorFilter = ColorFilter.tint(Color.Black.copy(alpha = 0.38f), BlendMode.SrcIn)
                         )
@@ -1311,7 +1412,7 @@ fun DiscFolderItem(
                     Image(
                         bitmap = iconBitmap,
                         contentDescription = null,
-                        modifier = Modifier.size((iconSizeDp * 1.125f).coerceAtLeast(12f).dp)
+                        modifier = Modifier.size((iconSizeDp * 1.125f).coerceAtLeast(12f).dp).clip(RoundedCornerShape(iconCornerPercent))
                     )
                 }
             }
@@ -1319,7 +1420,7 @@ fun DiscFolderItem(
     }
     Box(
         modifier = Modifier
-            .offset(x = (appXDp - 240f).dp, y = (appYDp - 22f).dp)
+            .offset(x = ((if (entry is FolderDiscEntry.App && AppPreferenceManager(LocalContext.current).isAppIconHidden()) iconXDp else appXDp) - 240f).dp, y = ((if (entry is FolderDiscEntry.App && AppPreferenceManager(LocalContext.current).isAppIconHidden()) iconYDp else appYDp) - 22f).dp)
             .width(240.dp)
             .height(44.dp),
         contentAlignment = Alignment.CenterEnd
@@ -1333,10 +1434,26 @@ fun DiscFolderItem(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = click,
-                    onLongClick = { if (entry is FolderDiscEntry.App) onAppLongClick(entry.app) }
+                    onLongClick = {
+                    when (entry) {
+                        is FolderDiscEntry.App -> onAppLongClick(entry.app)
+                        is FolderDiscEntry.Folder -> onFolderLongClick(entry.folderId)
+                        FolderDiscEntry.NewFolder -> {}
+                        FolderDiscEntry.Back -> {}
+                    }
+                }
                 )
                 .padding(horizontal = 4.dp, vertical = 2.dp)
         ) {
+            if (isFavorite) {
+                Text(
+                    text = "★ ",
+                    color = accentColor.copy(alpha = labelAlpha),
+                    fontSize = textSizeSp.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = letterSpacingSp.sp
+                )
+            }
             Text(
                 text = label,
                 modifier = Modifier.widthIn(max = 140.dp),
