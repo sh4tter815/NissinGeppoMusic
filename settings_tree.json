@@ -1,1412 +1,1532 @@
 {
- "version": 2,
- "items": {
-  "reverse": {
-   "label": "スクロール方向の反転",
-   "desc": "有効にすると、ダイヤルをドラッグした際の回転方向が逆になります",
-   "glyph": "arrow-up-down",
-   "type": "toggle",
-   "bind": "reverseScroll"
-  },
-  "sleep": {
-   "label": "スリープタイマー",
-   "desc": "設定した時間が過ぎたら、再生中の音楽を自動で一時停止します",
-   "glyph": "timer",
-   "type": "special"
-  },
-  "pageSwitch": {
-   "label": "ページ切替方法",
-   "desc": "オフにすると下部のダイヤルで切り替えます",
-   "glyph": "arrow-left-right",
-   "type": "choices",
-   "bind": "pageSwitchStyle",
-   "choices": [
-    {
-     "v": "buttons",
-     "label": "ボタン"
-    },
-    {
-     "v": "dial",
-     "label": "ダイヤル"
-    }
-   ]
-  },
-  "discLayout": {
-   "label": "ホームの円盤サイズ",
-   "desc": "「アートワーク大きめ」では再生アートワークの円が大きくなります。「自動」は再生中だけ大きめになります",
-   "glyph": "move-diagonal",
-   "type": "choices",
-   "bind": "homeDiscLayout",
-   "choices": [
-    {
-     "v": "classic",
-     "label": "従来（均等）",
-     "illo": "disc_classic"
-    },
-    {
-     "v": "artwork",
-     "label": "アートワーク大きめ",
-     "illo": "disc_artwork"
-    },
-    {
-     "v": "auto",
-     "label": "自動",
-     "illo": "disc_auto"
-    }
-   ]
-  },
-  "disc3d": {
-   "label": "3Dモード",
-   "desc": "円・時計・ダイヤル・歌詞PVなどを少し奥に倒して、立体的に見せます",
-   "glyph": "box",
-   "type": "toggle",
-   "bind": "disc3d"
-  },
-  "disc3dTilt": {
-   "label": "端末の傾きで角度を変える",
-   "desc": "スマホを傾けると、3Dの角度もついてきます（3D表示がオンのときだけ）",
-   "glyph": "rotate-3d",
-   "type": "toggle",
-   "bind": "disc3dTilt"
-  },
-  "dateMode": {
-   "label": "日付の表示方法",
-   "desc": "「常時縦」は日付を時刻の右に横倒しで、「常時横」は時計の下に表示します。「切り替え」は歌詞が出ている間だけ横倒しになります",
-   "glyph": "calendar",
-   "type": "choices",
-   "bind": "dateDisplayMode",
-   "choices": [
-    {
-     "v": "sideways",
-     "label": "常時縦",
-     "illo": "date_sideways"
-    },
-    {
-     "v": "under",
-     "label": "常時横",
-     "illo": "date_under"
-    },
-    {
-     "v": "auto",
-     "label": "切り替え",
-     "illo": "date_auto"
-    }
-   ]
-  },
-  "liquid": {
-   "label": "液体グラデーション効果",
-   "desc": "壁紙がないときや再生中のアートワーク背景の上で、グラデーションがゆっくり動きます",
-   "glyph": "droplets",
-   "type": "toggle",
-   "bind": "liquidBackground"
-  },
-  "wallpaperPick": {
-   "label": "壁紙画像を選択",
-   "desc": "ホーム画面の背景にする画像を選びます",
-   "glyph": "cursor",
-   "type": "action",
-   "action": "wallpaperPick"
-  },
-  "wallpaperClear": {
-   "label": "壁紙を解除",
-   "desc": "カスタム壁紙をやめて標準の背景に戻します",
-   "glyph": "trash",
-   "type": "action",
-   "action": "wallpaperClear",
-   "visibleIf": "wallpaperSet"
-  },
-  "brightness": {
-   "label": "背景の明るさ",
-   "desc": "壁紙の上に重ねる暗さの調整です",
-   "glyph": "sun",
-   "type": "slider",
-   "bind": "wallpaperAlpha",
-   "min": 0.05,
-   "max": 0.9,
-   "steps": 17,
-   "format": "percentInv"
-  },
-  "matchArtwork": {
-   "label": "アートワークに合わせる",
-   "desc": "再生中の曲のアートワークから、アクセントと背景の色を自動で決めます",
-   "glyph": "pipette",
-   "type": "toggle",
-   "bind": "matchArtwork"
-  },
-  "accentColor": {
-   "label": "アクセントカラー",
-   "desc": "UIの差し色です（アートワーク連動がオンのときは自動の色が優先されます）",
-   "glyph": "palette",
-   "type": "choices",
-   "bind": "accentHex",
-   "choices": [
-    {
-     "v": "#E53935",
-     "label": "赤",
-     "colorHex": "#E53935"
-    },
-    {
-     "v": "#88C0FF",
-     "label": "青",
-     "colorHex": "#88C0FF"
-    },
-    {
-     "v": "#4CAF50",
-     "label": "緑",
-     "colorHex": "#4CAF50"
-    },
-    {
-     "v": "#AB47BC",
-     "label": "紫",
-     "colorHex": "#AB47BC"
-    },
-    {
-     "v": "#FF9800",
-     "label": "オレンジ",
-     "colorHex": "#FF9800"
-    },
-    {
-     "v": "#00E5FF",
-     "label": "シアン",
-     "colorHex": "#00E5FF"
-    },
-    {
-     "v": "#FF4081",
-     "label": "ピンク",
-     "colorHex": "#FF4081"
-    }
-   ]
-  },
-  "uiFont": {
-   "label": "UIフォント",
-   "desc": "ランチャー全体の文字のフォントです",
-   "glyph": "type",
-   "type": "choices",
-   "bind": "fontChoice",
-   "choices": [
-    {
-     "v": "default",
-     "label": "システムフォント",
-     "short": "システム"
-    },
-    {
-     "v": "receipt",
-     "label": "レシートフォント",
-     "short": "レシート"
-    },
-    {
-     "v": "denkichip",
-     "label": "でんきチップ"
-    },
-    {
-     "v": "tsukuhou",
-     "label": "築豊明朝"
-    },
-    {
-     "v": "kaibunsho",
-     "label": "怪聞書フォント",
-     "short": "怪聞書"
-    },
-    {
-     "v": "zenkaku",
-     "label": "Zen Kaku Gothic New",
-     "short": "Zen Kaku"
-    },
-    {
-     "v": "custom",
-     "label": "＋カスタムフォント",
-     "short": "カスタム",
-     "effect": "pickFont"
-    }
-   ]
-  },
-  "iconSize": {
-   "label": "アイコンサイズ",
-   "desc": "アプリ円盤のアイコンの大きさです",
-   "glyph": "scaling",
-   "type": "slider",
-   "bind": "iconSize",
-   "min": 16,
-   "max": 32,
-   "steps": 15,
-   "format": "dp"
-  },
-  "textSize": {
-   "label": "UIの文字サイズ",
-   "desc": "アプリ円盤のアプリ名の大きさです",
-   "glyph": "a-large-small",
-   "type": "slider",
-   "bind": "textSize",
-   "min": 12,
-   "max": 22,
-   "steps": 9,
-   "format": "sp"
-  },
-  "letterSpacing": {
-   "label": "UIの文字間隔",
-   "desc": "アプリ名の文字どうしの間隔です",
-   "glyph": "move-horizontal",
-   "type": "slider",
-   "bind": "letterSpacing",
-   "min": 0.5,
-   "max": 3.0,
-   "steps": 25,
-   "format": "sp1"
-  },
-  "stepAngle": {
-   "label": "項目同士の間隔",
-   "desc": "アプリ円盤で1アプリぶんの回転角度です",
-   "glyph": "chevrons-up-down",
-   "type": "slider",
-   "bind": "stepAngle",
-   "min": 10,
-   "max": 20,
-   "steps": 20,
-   "format": "deg"
-  },
-  "displayMode": {
-   "label": "歌詞の表示モード",
-   "desc": "複数行は時計の下に前・今・次の3行を表示します。リリックビデオはSpotifyなど他のアプリの再生でも使えます",
-   "glyph": "video",
-   "type": "choices",
-   "bind": "lyricsDisplayMode",
-   "choices": [
-    {
-     "v": "line",
-     "label": "現在の行",
-     "preview": "line"
-    },
-    {
-     "v": "video",
-     "label": "リリックビデオ",
-     "preview": "video"
-    },
-    {
-     "v": "multi",
-     "label": "複数行",
-     "preview": "multi"
-    }
-   ]
-  },
-  "jpFont": {
-   "label": "歌詞の日本語フォント",
-   "desc": "全モード共通の歌詞フォントです。「カスタム」はフォント設定で選んだファイルを使います",
-   "glyph": "languages",
-   "type": "choices",
-   "bind": "lyricsPvFont",
-   "choices": [
-    {
-     "v": "default",
-     "label": "システムフォント",
-     "short": "システム"
-    },
-    {
-     "v": "receipt",
-     "label": "レシートフォント",
-     "short": "レシート"
-    },
-    {
-     "v": "denkichip",
-     "label": "でんきチップ"
-    },
-    {
-     "v": "tsukuhou",
-     "label": "築豊明朝"
-    },
-    {
-     "v": "kaibunsho",
-     "label": "怪聞書フォント",
-     "short": "怪聞書"
-    },
-    {
-     "v": "zenkaku",
-     "label": "Zen Kaku Gothic New",
-     "short": "Zen Kaku"
-    },
-    {
-     "v": "custom",
-     "label": "＋カスタムフォント",
-     "short": "カスタム",
-     "effect": "pickFontIfNone"
-    }
-   ]
-  },
-  "enFont": {
-   "label": "歌詞の英語フォント",
-   "desc": "歌詞の中の英字・数字だけに使うフォントです",
-   "glyph": "case-upper",
-   "type": "choices",
-   "bind": "lyricsEnFont",
-   "choices": [
-    {
-     "v": "same",
-     "label": "日本語フォントと同じ",
-     "short": "日本語と同じ"
-    },
-    {
-     "v": "freelicense",
-     "label": "Free License"
-    },
-    {
-     "v": "montserratbi",
-     "label": "Montserrat Bold Italic",
-     "short": "Montserrat"
-    },
-    {
-     "v": "default",
-     "label": "システムフォント",
-     "short": "システム"
-    },
-    {
-     "v": "receipt",
-     "label": "レシートフォント",
-     "short": "レシート"
-    },
-    {
-     "v": "denkichip",
-     "label": "でんきチップ"
-    },
-    {
-     "v": "tsukuhou",
-     "label": "築豊明朝"
-    },
-    {
-     "v": "kaibunsho",
-     "label": "怪聞書フォント",
-     "short": "怪聞書"
-    },
-    {
-     "v": "zenkaku",
-     "label": "Zen Kaku Gothic New",
-     "short": "Zen Kaku"
-    },
-    {
-     "v": "custom",
-     "label": "＋カスタムフォント",
-     "short": "カスタム",
-     "effect": "pickEnFont"
-    }
-   ]
-  },
-  "bold": {
-   "label": "歌詞を太字にする",
-   "desc": "デフォルトは細字。築豊明朝は細字が映えます",
-   "glyph": "bold",
-   "type": "toggle",
-   "bind": "lyricsBold"
-  },
-  "parts": {
-   "label": "分解エフェクト",
-   "desc": "リリックビデオで、文字がスライス状のパーツになって集まります",
-   "glyph": "puzzle",
-   "type": "toggle",
-   "bind": "pvPartsEntry"
-  },
-  "dopagaki": {
-   "label": "ドパガキモード",
-   "desc": "リリックビデオにエフェクトを大量に重ねて派手にします",
-   "glyph": "sparkles",
-   "type": "toggle",
-   "bind": "dopagaki"
-  },
-  "dopaBlack": {
-   "label": "ドパガキ中は極太フォント",
-   "desc": "ドパガキモードのとき、歌詞を Zen Kaku Gothic New の極太（Black）で表示します",
-   "glyph": "brush",
-   "type": "toggle",
-   "bind": "dopaBlackFont"
-  },
-  "fxUpdate": {
-   "label": "歌詞エフェクト更新",
-   "desc": "単語アイコンや色の対応表を最新にします",
-   "glyph": "wand-sparkles",
-   "type": "action",
-   "action": "fxUpdate"
-  },
-  "passcodeAuth": {
-   "label": "非表示をパスコードロック",
-   "desc": "有効にすると、非表示リストを開く際にパスコード認証を行います",
-   "glyph": "fingerprint",
-   "type": "toggle",
-   "bind": "usePasscodeForHidden"
-  },
-  "passcodeChange": {
-   "label": "パスコードを変更",
-   "desc": "非表示リスト解除用のパスコード (PIN) を変更します",
-   "glyph": "key-round",
-   "type": "action",
-   "action": "passcodeChange"
-  },
-  "guideReshow": {
-   "label": "チュートリアルを再表示",
-   "desc": "ガイドや使い方をもう一度表示するようにします",
-   "glyph": "circle-help",
-   "type": "action",
-   "action": "guideReshow"
-  },
-  "checkUpdate": {
-   "label": "アップデートを確認",
-   "desc": "GitHubの最新ビルドを確認します",
-   "glyph": "download",
-   "type": "action",
-   "action": "checkUpdate"
-  },
-  "treeUpdate": {
-   "label": "設定データ更新",
-   "desc": "設定の定義データを最新に更新する",
-   "glyph": "database",
-   "type": "action",
-   "action": "treeUpdate"
-  },
-  "lyricsEnabled": {
-   "label": "歌詞を表示",
-   "desc": "オフにするとPV・時計の下・ステータスバーの歌詞が全部消えます",
-   "glyph": "music",
-   "type": "toggle",
-   "bind": "lyricsEnabled"
-  },
-  "translation": {
-   "label": "翻訳を表示",
-   "desc": "英詞の対訳を歌詞の下に表示します",
-   "glyph": "languages",
-   "type": "toggle",
-   "bind": "lyricTranslation"
-  },
-  "pvRuby": {
-   "label": "ルビ表示",
-   "desc": "漢字の読み仮名（括弧書き）をルビとして表示します",
-   "glyph": "case-upper",
-   "type": "toggle",
-   "bind": "pvRuby"
-  },
-  "pvTextColor": {
-   "label": "PVの文字色",
-   "desc": "登録ワードの色が付いていない文字の色です",
-   "glyph": "palette",
-   "type": "choices",
-   "bind": "pvTextColor",
-   "choices": [
-    {
-     "v": "white",
-     "label": "白"
-    },
-    {
-     "v": "accent",
-     "label": "アクセント色"
-    },
-    {
-     "v": "black",
-     "label": "黒"
-    }
-   ]
-  },
-  "pvFontScale": {
-   "label": "PVの文字サイズ",
-   "desc": "文字PVの文字の大きさの倍率です",
-   "glyph": "a-large-small",
-   "type": "slider",
-   "bind": "pvFontScale",
-   "min": 0.7,
-   "max": 1.4,
-   "steps": 14,
-   "format": "x"
-  },
-  "pvTopOffset": {
-   "label": "PVの縦位置",
-   "desc": "文字PVの表示位置を上下にずらします",
-   "glyph": "arrow-up-down",
-   "type": "slider",
-   "bind": "pvTopOffset",
-   "min": -40,
-   "max": 80,
-   "steps": 24,
-   "format": "dp"
-  },
-  "pvInterludeArt": {
-   "label": "間奏アート",
-   "desc": "間奏中の波と粒子の演出です",
-   "glyph": "sparkles",
-   "type": "toggle",
-   "bind": "pvInterludeArt"
-  },
-  "inertia": {
-   "label": "慣性の強さ",
-   "desc": "円盤を弾いたときの惰性の強さです",
-   "glyph": "swap",
-   "type": "slider",
-   "bind": "discInertia",
-   "min": 0.5,
-   "max": 1.5,
-   "steps": 10,
-   "format": "x"
-  },
-  "haptics": {
-   "label": "振動フィードバック",
-   "desc": "円盤が項目に吸着するときなどの振動です",
-   "glyph": "cursor",
-   "type": "toggle",
-   "bind": "haptics"
-  },
-  "pageTransitionSpeed": {
-   "label": "ページ切替の速さ",
-   "desc": "ページ切り替えアニメーションの速さの倍率です",
-   "glyph": "arrow-left-right",
-   "type": "slider",
-   "bind": "pageTransitionSpeed",
-   "min": 0.5,
-   "max": 1.5,
-   "steps": 10,
-   "format": "x"
-  },
-  "dialVisibility": {
-   "label": "下ダイヤルの表示",
-   "desc": "「自動」はラック表示中などに隠れます",
-   "glyph": "panel-top",
-   "type": "choices",
-   "bind": "dialVisibility",
-   "choices": [
-    {
-     "v": "auto",
-     "label": "自動"
-    },
-    {
-     "v": "always",
-     "label": "常時表示"
-    },
-    {
-     "v": "hidden",
-     "label": "非表示"
-    }
-   ]
-  },
-  "clockSeconds": {
-   "label": "秒表示",
-   "desc": "時計に秒を表示します",
-   "glyph": "timer",
-   "type": "toggle",
-   "bind": "clockSeconds"
-  },
-  "clock12h": {
-   "label": "12時間表示",
-   "desc": "時刻を午前/午後の12時間制で表示します",
-   "glyph": "clock",
-   "type": "toggle",
-   "bind": "clock12h"
-  },
-  "clockBattery": {
-   "label": "バッテリー残量を表示",
-   "desc": "時計の近くに電池残量（%）を表示します",
-   "glyph": "sparkle",
-   "type": "toggle",
-   "bind": "clockBattery"
-  },
-  "dateWareki": {
-   "label": "和暦で表示",
-   "desc": "日付を令和などの和暦で表示します",
-   "glyph": "calendar",
-   "type": "toggle",
-   "bind": "dateWareki"
-  },
-  "liquidSpeed": {
-   "label": "液体の速さ",
-   "desc": "液体グラデーションのうねりの速さの倍率です",
-   "glyph": "droplets",
-   "type": "slider",
-   "bind": "liquidSpeed",
-   "min": 0.3,
-   "max": 2.0,
-   "steps": 17,
-   "format": "x"
-  },
-  "liquidAlpha": {
-   "label": "液体の濃さ",
-   "desc": "液体グラデーションの色の濃さの倍率です",
-   "glyph": "droplet",
-   "type": "slider",
-   "bind": "liquidAlpha",
-   "min": 0.3,
-   "max": 1.0,
-   "steps": 14,
-   "format": "pct"
-  },
-  "wallpaperBlur": {
-   "label": "壁紙のぼかし",
-   "desc": "壁紙画像にぼかしをかけます",
-   "glyph": "eye",
-   "type": "slider",
-   "bind": "wallpaperBlur",
-   "min": 0,
-   "max": 24,
-   "steps": 12,
-   "format": "dp"
-  },
-  "wallpaperPickHome": {
-   "label": "ホームの壁紙",
-   "desc": "未設定のときは共通の壁紙になります",
-   "glyph": "wallpaper",
-   "type": "action",
-   "action": "wallpaperPickPage"
-  },
-  "wallpaperPickApps": {
-   "label": "アプリ一覧の壁紙",
-   "desc": "未設定のときは共通の壁紙になります",
-   "glyph": "wallpaper",
-   "type": "action",
-   "action": "wallpaperPickPage"
-  },
-  "wallpaperPickFolder": {
-   "label": "フォルダの壁紙",
-   "desc": "未設定のときは共通の壁紙になります",
-   "glyph": "wallpaper",
-   "type": "action",
-   "action": "wallpaperPickPage"
-  },
-  "wallpaperPickSettings": {
-   "label": "設定の壁紙",
-   "desc": "未設定のときは共通の壁紙になります",
-   "glyph": "wallpaper",
-   "type": "action",
-   "action": "wallpaperPickPage"
-  },
-  "wallpaperClearPages": {
-   "label": "ページ別の壁紙をすべて解除",
-   "desc": "全ページが共通の壁紙に戻ります",
-   "glyph": "trash",
-   "type": "action",
-   "action": "wallpaperClearPages"
-  },
-  "startupPage": {
-   "label": "起動時に開くページ",
-   "desc": "アプリを開いたときに最初に表示するページです",
-   "glyph": "layout-grid",
-   "type": "choices",
-   "bind": "startupPage",
-   "choices": [
-    {
-     "v": "home",
-     "label": "ホーム"
-    },
-    {
-     "v": "last",
-     "label": "前回のページ"
-    }
-   ]
-  },
-  "keepScreenOn": {
-   "label": "再生中は画面を点けたまま",
-   "desc": "音楽の再生中は画面が自動で消えなくなります",
-   "glyph": "eye",
-   "type": "toggle",
-   "bind": "keepScreenOn"
-  },
-  "artworkVisible": {
-   "label": "アートワークを表示",
-   "desc": "左円とラックのアートワーク画像そのものです",
-   "glyph": "image",
-   "type": "toggle",
-   "bind": "artworkEnabled"
-  },
-  "rackReverse": {
-   "label": "ラック表示のスクロール方向",
-   "desc": "オンでラックの送り方向が逆になります（円盤の反転とは別の設定です）",
-   "glyph": "arrow-up-down",
-   "type": "toggle",
-   "bind": "rackReverse"
-  },
-  "settingsExport": {
-   "label": "設定を書き出す",
-   "desc": "読み仮名・お気に入りを含む全設定をJSONファイルに保存します",
-   "glyph": "download",
-   "type": "action",
-   "action": "settingsExport"
-  },
-  "settingsImport": {
-   "label": "設定を読み込む",
-   "desc": "書き出したJSONから設定を復元します（今の設定は置き換わります）",
-   "glyph": "database",
-   "type": "action",
-   "action": "settingsImport"
-  },
-  "layoutEdit": {
-   "label": "レイアウトを編集",
-   "desc": "ホームの時計とPVの位置をドラッグで動かします（時計の長押しでも開けます）",
-   "glyph": "move-diagonal",
-   "type": "action",
-   "action": "layoutEdit"
-  },
-  "updateLibrary": {
-   "label": "曲データを更新",
-   "desc": "追加・削除された曲を反映します",
-   "glyph": "update",
-   "type": "action",
-   "action": "updateLibrary"
-  },
-  "librarySort": {
-   "label": "曲の並び順",
-   "desc": "曲一覧の並べ方です",
-   "glyph": "arrow-up-down",
-   "type": "choices",
-   "bind": "librarySort",
-   "choices": [
-    {
-     "v": "title",
-     "label": "曲名順",
-     "short": "曲名順"
-    },
-    {
-     "v": "artist",
-     "label": "アーティスト順",
-     "short": "アーティスト順"
-    },
-    {
-     "v": "album",
-     "label": "アルバム順",
-     "short": "アルバム順"
-    }
-   ]
-  },
-  "excludedFolders": {
-   "label": "除外フォルダ",
-   "desc": "ライブラリに読み込まないフォルダを選びます",
-   "glyph": "box",
-   "type": "action",
-   "action": "excludedFolders"
-  },
-  "artworkOutline": {
-   "label": "円の輪郭",
-   "desc": "左円の外周の白い輪郭線です",
-   "glyph": "disc",
-   "type": "toggle",
-   "bind": "artworkOutline"
-  },
-  "curvedTitle": {
-   "label": "カーブ曲名",
-   "desc": "円の周りにカーブして表示される曲名です",
-   "glyph": "text",
-   "type": "toggle",
-   "bind": "curvedTitle"
-  },
-  "caseCircleClip": {
-   "label": "ケースを円形に切り抜く",
-   "desc": "オンにするとカセットやMDなどのケースも円形に切り抜いて表示します",
-   "glyph": "disc",
-   "type": "toggle",
-   "bind": "caseCircleClip"
-  },
-  "tonearmStyle": {
-   "label": "針",
-   "desc": "レコード針の見た目です。「ディスクに連動」ではディスクのテーマに合わせて姿が変わります（クリア→アクリル、蓄光→蓄光、CD・MD→レーザー、カセット→再生ヘッド）",
-   "glyph": "wand-sparkles",
-   "type": "choices",
-   "bind": "tonearmStyle",
-   "choices": [
-    {
-     "v": "none",
-     "label": "なし"
-    },
-    {
-     "v": "auto",
-     "label": "ディスクに連動"
-    },
-    {
-     "v": "classic",
-     "label": "クラシック"
-    },
-    {
-     "v": "brass",
-     "label": "真鍮"
-    },
-    {
-     "v": "acrylic",
-     "label": "アクリル"
-    },
-    {
-     "v": "glow",
-     "label": "蓄光"
-    },
-    {
-     "v": "mecha",
-     "label": "メカ"
-    },
-    {
-     "v": "minimal",
-     "label": "ミニマル"
-    },
-    {
-     "v": "laser",
-     "label": "レーザーピックアップ"
-    },
-    {
-     "v": "head",
-     "label": "再生ヘッド"
-    }
-   ]
-  },
-  "widgetTap": {
-   "label": "左円盤のタップ",
-   "desc": "ホーム左のレコード盤をタップしたときの動作です",
-   "glyph": "cursor",
-   "type": "choices",
-   "bind": "widgetTapAction",
-   "choices": [
-    {
-     "v": "app",
-     "label": "再生中のアプリを開く"
-    },
-    {
-     "v": "toggle",
-     "label": "再生／停止"
-    }
-   ]
-  },
-  "widgetDoubleTap": {
-   "label": "左円盤のダブルタップ",
-   "desc": "ホーム左のレコード盤をダブルタップしたときの動作です",
-   "glyph": "cursor",
-   "type": "choices",
-   "bind": "widgetDoubleTapAction",
-   "choices": [
-    {
-     "v": "app",
-     "label": "再生中のアプリを開く"
-    },
-    {
-     "v": "toggle",
-     "label": "再生／停止"
-    },
-    {
-     "v": "next",
-     "label": "次の曲"
-    },
-    {
-     "v": "prev",
-     "label": "前の曲"
-    },
-    {
-     "v": "none",
-     "label": "なし"
-    }
-   ]
-  },
-  "widgetTripleTap": {
-   "label": "左円盤のトリプルタップ",
-   "desc": "ホーム左のレコード盤を3回タップしたときの動作です",
-   "glyph": "cursor",
-   "type": "choices",
-   "bind": "widgetTripleTapAction",
-   "choices": [
-    {
-     "v": "theme",
-     "label": "テーマ設定を開く"
-    },
-    {
-     "v": "app",
-     "label": "再生中のアプリを開く"
-    },
-    {
-     "v": "toggle",
-     "label": "再生／停止"
-    },
-    {
-     "v": "next",
-     "label": "次の曲"
-    },
-    {
-     "v": "prev",
-     "label": "前の曲"
-    },
-    {
-     "v": "none",
-     "label": "なし"
-    }
-   ]
-  },
-  "widgetLongPress": {
-   "label": "左円盤の長押し",
-   "desc": "ホーム左のレコード盤を長押ししたときの動作です",
-   "glyph": "cursor",
-   "type": "choices",
-   "bind": "widgetLongPressAction",
-   "choices": [
-    {
-     "v": "rack",
-     "label": "ラックを開く"
-    },
-    {
-     "v": "grab",
-     "label": "掴んで3D回転"
-    },
-    {
-     "v": "app",
-     "label": "再生中のアプリを開く"
-    },
-    {
-     "v": "toggle",
-     "label": "再生／停止"
-    }
-   ]
-  },
-  "widgetDoubleTapHold": {
-   "label": "左円盤のダブルタップ長押し",
-   "desc": "タップの直後にもう一度押して長押ししたときの動作です",
-   "glyph": "cursor",
-   "type": "choices",
-   "bind": "widgetDoubleTapHoldAction",
-   "choices": [
-    {
-     "v": "rack",
-     "label": "ラックを開く"
-    },
-    {
-     "v": "grab",
-     "label": "掴んで3D回転"
-    },
-    {
-     "v": "app",
-     "label": "再生中のアプリを開く"
-    },
-    {
-     "v": "toggle",
-     "label": "再生／停止"
-    },
-    {
-     "v": "next",
-     "label": "次の曲"
-    },
-    {
-     "v": "prev",
-     "label": "前の曲"
-    },
-    {
-     "v": "none",
-     "label": "なし"
-    }
-   ]
-  },
-  "discStyle": {
-   "label": "ディスク",
-   "desc": "左円盤の見た目です",
-   "glyph": "disc",
-   "type": "choices",
-   "bind": "discStyle",
-   "choices": [
-    {
-     "v": "digital",
-     "label": "デジタル"
-    },
-    {
-     "v": "vinyl",
-     "label": "レコード"
-    },
-    {
-     "v": "clear",
-     "label": "クリアレコード"
-    },
-    {
-     "v": "cd",
-     "label": "CD"
-    },
-    {
-     "v": "glow",
-     "label": "蓄光レコード"
-    },
-    {
-     "v": "md",
-     "label": "MD"
-    },
-    {
-     "v": "cassette_color",
-     "label": "カセット（色付き）"
-    },
-    {
-     "v": "cassette_clear",
-     "label": "カセット（クリア）"
-    },
-    {
-     "v": "cassette_black",
-     "label": "カセット（ブラック）"
-    },
-    {
-     "v": "reel",
-     "label": "オープンリール"
-    },
-    {
-     "v": "floppy",
-     "label": "フロッピー"
-    },
-    {
-     "v": "dat",
-     "label": "DATカセット"
-    },
-    {
-     "v": "eighttrack",
-     "label": "8トラック"
-    }
-   ]
-  }
- },
- "tree": [
-  {
-   "id": "background",
-   "label": "背景",
-   "cat": true,
-   "children": [
-    {
-     "id": "bg_image",
-     "label": "壁紙",
-     "glyph": "wallpaper",
-     "children": [
-      {
-       "item": "wallpaperPick"
-      },
-      {
-       "item": "wallpaperClear"
-      },
-      {
-       "item": "wallpaperBlur"
-      },
-      {
-       "id": "bg_pages",
-       "label": "ページごとの壁紙",
-       "glyph": "layout-grid",
-       "children": [
+  "version": 3,
+  "items": {
+    "reverse": {
+      "label": "スクロール方向の反転",
+      "desc": "有効にすると、ダイヤルをドラッグした際の回転方向が逆になります",
+      "glyph": "arrow-up-down",
+      "type": "toggle",
+      "bind": "reverseScroll"
+    },
+    "sleep": {
+      "label": "スリープタイマー",
+      "desc": "設定した時間が過ぎたら、再生中の音楽を自動で一時停止します",
+      "glyph": "timer",
+      "type": "special"
+    },
+    "pageSwitch": {
+      "label": "ページ切替方法",
+      "desc": "オフにすると下部のダイヤルで切り替えます",
+      "glyph": "arrow-left-right",
+      "type": "choices",
+      "bind": "pageSwitchStyle",
+      "choices": [
         {
-         "item": "wallpaperPickHome"
+          "v": "buttons",
+          "label": "ボタン"
         },
         {
-         "item": "wallpaperPickApps"
-        },
-        {
-         "item": "wallpaperPickFolder"
-        },
-        {
-         "item": "wallpaperPickSettings"
-        },
-        {
-         "item": "wallpaperClearPages"
+          "v": "dial",
+          "label": "ダイヤル"
         }
-       ]
-      }
-     ]
+      ]
     },
-    {
-     "item": "brightness"
-    },
-    {
-     "id": "bg_liquid",
-     "label": "液体グラデーション効果",
-     "glyph": "droplets",
-     "children": [
-      {
-       "item": "liquid"
-      },
-      {
-       "item": "liquidAlpha"
-      },
-      {
-       "item": "liquidSpeed"
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "ui",
-   "label": "UI",
-   "cat": true,
-   "children": [
-    {
-     "id": "ui_color",
-     "label": "カラー",
-     "glyph": "palette",
-     "children": [
-      {
-       "item": "accentColor"
-      },
-      {
-       "item": "matchArtwork"
-      }
-     ]
-    },
-    {
-     "id": "ui_disc",
-     "label": "円盤",
-     "glyph": "disc",
-     "children": [
-      {
-       "item": "reverse"
-      },
-      {
-       "item": "discLayout"
-      },
-      {
-       "item": "iconSize"
-      },
-      {
-       "item": "stepAngle"
-      },
-      {
-       "item": "disc3d"
-      },
-      {
-       "item": "disc3dTilt"
-      },
-      {
-       "item": "pageSwitch"
-      },
-      {
-       "item": "inertia"
-      },
-      {
-       "item": "haptics"
-      },
-      {
-       "item": "pageTransitionSpeed"
-      },
-      {
-       "item": "dialVisibility"
-      }
-     ]
-    },
-    {
-     "id": "ui_text",
-     "label": "文字",
-     "glyph": "case-sensitive",
-     "children": [
-      {
-       "item": "uiFont"
-      },
-      {
-       "item": "textSize"
-      },
-      {
-       "item": "letterSpacing"
-      }
-     ]
-    },
-    {
-     "id": "ui_clock",
-     "label": "時計",
-     "glyph": "clock",
-     "children": [
-      {
-       "item": "dateMode"
-      },
-      {
-       "item": "clockSeconds"
-      },
-      {
-       "item": "clock12h"
-      },
-      {
-       "item": "clockBattery"
-      },
-      {
-       "item": "dateWareki"
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "lyrics",
-   "label": "音楽",
-   "cat": true,
-   "children": [
-    {
-     "id": "music_art",
-     "label": "アートワーク",
-     "glyph": "image",
-     "children": [
-      {
-       "item": "artworkVisible"
-      },
-      {
-       "item": "artworkOutline"
-      },
-      {
-       "item": "curvedTitle"
-      },
-      {
-       "item": "caseCircleClip"
-      },
-      {
-       "item": "rackReverse"
-      },
-      {
-       "id": "music_theme",
-       "label": "テーマ",
-       "glyph": "disc",
-       "children": [
+    "discLayout": {
+      "label": "ホームの円盤サイズ",
+      "desc": "「アートワーク大きめ」では再生アートワークの円が大きくなります。「自動」は再生中だけ大きめになります",
+      "glyph": "move-diagonal",
+      "type": "choices",
+      "bind": "homeDiscLayout",
+      "choices": [
         {
-         "item": "discStyle"
+          "v": "classic",
+          "label": "従来（均等）",
+          "illo": "disc_classic"
         },
         {
-         "item": "tonearmStyle"
+          "v": "artwork",
+          "label": "アートワーク大きめ",
+          "illo": "disc_artwork"
+        },
+        {
+          "v": "auto",
+          "label": "自動",
+          "illo": "disc_auto"
         }
-       ]
-      },
-      {
-       "id": "music_actions",
-       "label": "操作",
-       "glyph": "cursor",
-       "children": [
+      ]
+    },
+    "disc3d": {
+      "label": "3Dモード",
+      "desc": "円・時計・ダイヤル・歌詞PVなどを少し奥に倒して、立体的に見せます",
+      "glyph": "box",
+      "type": "toggle",
+      "bind": "disc3d"
+    },
+    "disc3dTilt": {
+      "label": "端末の傾きで角度を変える",
+      "desc": "スマホを傾けると、3Dの角度もついてきます（3D表示がオンのときだけ）",
+      "glyph": "rotate-3d",
+      "type": "toggle",
+      "bind": "disc3dTilt"
+    },
+    "dateMode": {
+      "label": "日付の表示方法",
+      "desc": "「常時縦」は日付を時刻の右に横倒しで、「常時横」は時計の下に表示します。「切り替え」は歌詞が出ている間だけ横倒しになります",
+      "glyph": "calendar",
+      "type": "choices",
+      "bind": "dateDisplayMode",
+      "choices": [
         {
-         "item": "widgetTap"
+          "v": "sideways",
+          "label": "常時縦",
+          "illo": "date_sideways"
         },
         {
-         "item": "widgetDoubleTap"
+          "v": "under",
+          "label": "常時横",
+          "illo": "date_under"
         },
         {
-         "item": "widgetTripleTap"
-        },
-        {
-         "item": "widgetLongPress"
-        },
-        {
-         "item": "widgetDoubleTapHold"
+          "v": "auto",
+          "label": "切り替え",
+          "illo": "date_auto"
         }
-       ]
-      }
-     ]
+      ]
     },
-    {
-     "id": "lyrics_sub",
-     "label": "歌詞",
-     "glyph": "music",
-     "children": [
-      {
-       "item": "lyricsEnabled"
-      },
-      {
-       "id": "ly_anim",
-       "label": "アニメーション",
-       "glyph": "clapperboard",
-       "children": [
+    "liquid": {
+      "label": "液体グラデーション効果",
+      "desc": "壁紙がないときや再生中のアートワーク背景の上で、グラデーションがゆっくり動きます",
+      "glyph": "droplets",
+      "type": "toggle",
+      "bind": "liquidBackground"
+    },
+    "wallpaperPick": {
+      "label": "壁紙画像を選択",
+      "desc": "ホーム画面の背景にする画像を選びます",
+      "glyph": "cursor",
+      "type": "action",
+      "action": "wallpaperPick"
+    },
+    "wallpaperClear": {
+      "label": "壁紙を解除",
+      "desc": "カスタム壁紙をやめて標準の背景に戻します",
+      "glyph": "trash",
+      "type": "action",
+      "action": "wallpaperClear",
+      "visibleIf": "wallpaperSet"
+    },
+    "brightness": {
+      "label": "背景の明るさ",
+      "desc": "壁紙の上に重ねる暗さの調整です",
+      "glyph": "sun",
+      "type": "slider",
+      "bind": "wallpaperAlpha",
+      "min": 0.05,
+      "max": 0.9,
+      "steps": 17,
+      "format": "percentInv"
+    },
+    "matchArtwork": {
+      "label": "アートワークに合わせる",
+      "desc": "再生中の曲のアートワークから、アクセントと背景の色を自動で決めます",
+      "glyph": "pipette",
+      "type": "toggle",
+      "bind": "matchArtwork"
+    },
+    "accentColor": {
+      "label": "アクセントカラー",
+      "desc": "UIの差し色です（アートワーク連動がオンのときは自動の色が優先されます）",
+      "glyph": "palette",
+      "type": "choices",
+      "bind": "accentHex",
+      "choices": [
         {
-         "item": "parts"
+          "v": "#E53935",
+          "label": "赤",
+          "colorHex": "#E53935"
         },
         {
-         "item": "dopagaki"
+          "v": "#88C0FF",
+          "label": "青",
+          "colorHex": "#88C0FF"
         },
         {
-         "item": "pvInterludeArt"
+          "v": "#4CAF50",
+          "label": "緑",
+          "colorHex": "#4CAF50"
+        },
+        {
+          "v": "#AB47BC",
+          "label": "紫",
+          "colorHex": "#AB47BC"
+        },
+        {
+          "v": "#FF9800",
+          "label": "オレンジ",
+          "colorHex": "#FF9800"
+        },
+        {
+          "v": "#00E5FF",
+          "label": "シアン",
+          "colorHex": "#00E5FF"
+        },
+        {
+          "v": "#FF4081",
+          "label": "ピンク",
+          "colorHex": "#FF4081"
         }
-       ]
-      },
-      {
-       "id": "ly_text",
-       "label": "文字",
-       "glyph": "case-sensitive",
-       "children": [
+      ]
+    },
+    "uiFont": {
+      "label": "UIフォント",
+      "desc": "ランチャー全体の文字のフォントです",
+      "glyph": "type",
+      "type": "choices",
+      "bind": "fontChoice",
+      "choices": [
         {
-         "item": "jpFont"
+          "v": "default",
+          "label": "システムフォント",
+          "short": "システム"
         },
         {
-         "item": "enFont"
+          "v": "receipt",
+          "label": "レシートフォント",
+          "short": "レシート"
         },
         {
-         "item": "bold"
+          "v": "denkichip",
+          "label": "でんきチップ"
         },
         {
-         "item": "dopaBlack"
+          "v": "tsukuhou",
+          "label": "築豊明朝"
         },
         {
-         "item": "translation"
+          "v": "kaibunsho",
+          "label": "怪聞書フォント",
+          "short": "怪聞書"
         },
         {
-         "item": "pvRuby"
+          "v": "zenkaku",
+          "label": "Zen Kaku Gothic New",
+          "short": "Zen Kaku"
         },
         {
-         "item": "pvTextColor"
-        },
-        {
-         "item": "pvFontScale"
-        },
-        {
-         "item": "pvTopOffset"
+          "v": "custom",
+          "label": "＋カスタムフォント",
+          "short": "カスタム",
+          "effect": "pickFont"
         }
-       ]
-      },
-      {
-       "item": "displayMode"
-      }
-     ]
+      ]
     },
-    {
-     "item": "keepScreenOn"
+    "iconSize": {
+      "label": "アイコンサイズ",
+      "desc": "アプリ円盤のアイコンの大きさです",
+      "glyph": "scaling",
+      "type": "slider",
+      "bind": "iconSize",
+      "min": 16,
+      "max": 32,
+      "steps": 15,
+      "format": "dp"
+    },
+    "textSize": {
+      "label": "UIの文字サイズ",
+      "desc": "アプリ円盤のアプリ名の大きさです",
+      "glyph": "a-large-small",
+      "type": "slider",
+      "bind": "textSize",
+      "min": 12,
+      "max": 22,
+      "steps": 9,
+      "format": "sp"
+    },
+    "letterSpacing": {
+      "label": "UIの文字間隔",
+      "desc": "アプリ名の文字どうしの間隔です",
+      "glyph": "move-horizontal",
+      "type": "slider",
+      "bind": "letterSpacing",
+      "min": 0.5,
+      "max": 3.0,
+      "steps": 25,
+      "format": "sp1"
+    },
+    "stepAngle": {
+      "label": "項目同士の間隔",
+      "desc": "アプリ円盤で1アプリぶんの回転角度です",
+      "glyph": "chevrons-up-down",
+      "type": "slider",
+      "bind": "stepAngle",
+      "min": 10,
+      "max": 20,
+      "steps": 20,
+      "format": "deg"
+    },
+    "displayMode": {
+      "label": "歌詞の表示モード",
+      "desc": "複数行は時計の下に前・今・次の3行を表示します。リリックビデオはSpotifyなど他のアプリの再生でも使えます",
+      "glyph": "video",
+      "type": "choices",
+      "bind": "lyricsDisplayMode",
+      "choices": [
+        {
+          "v": "line",
+          "label": "現在の行",
+          "preview": "line"
+        },
+        {
+          "v": "video",
+          "label": "リリックビデオ",
+          "preview": "video"
+        },
+        {
+          "v": "multi",
+          "label": "複数行",
+          "preview": "multi"
+        }
+      ]
+    },
+    "jpFont": {
+      "label": "歌詞の日本語フォント",
+      "desc": "全モード共通の歌詞フォントです。「カスタム」はフォント設定で選んだファイルを使います",
+      "glyph": "languages",
+      "type": "choices",
+      "bind": "lyricsPvFont",
+      "choices": [
+        {
+          "v": "default",
+          "label": "システムフォント",
+          "short": "システム"
+        },
+        {
+          "v": "receipt",
+          "label": "レシートフォント",
+          "short": "レシート"
+        },
+        {
+          "v": "denkichip",
+          "label": "でんきチップ"
+        },
+        {
+          "v": "tsukuhou",
+          "label": "築豊明朝"
+        },
+        {
+          "v": "kaibunsho",
+          "label": "怪聞書フォント",
+          "short": "怪聞書"
+        },
+        {
+          "v": "zenkaku",
+          "label": "Zen Kaku Gothic New",
+          "short": "Zen Kaku"
+        },
+        {
+          "v": "custom",
+          "label": "＋カスタムフォント",
+          "short": "カスタム",
+          "effect": "pickFontIfNone"
+        }
+      ]
+    },
+    "enFont": {
+      "label": "歌詞の英語フォント",
+      "desc": "歌詞の中の英字・数字だけに使うフォントです",
+      "glyph": "case-upper",
+      "type": "choices",
+      "bind": "lyricsEnFont",
+      "choices": [
+        {
+          "v": "same",
+          "label": "日本語フォントと同じ",
+          "short": "日本語と同じ"
+        },
+        {
+          "v": "freelicense",
+          "label": "Free License"
+        },
+        {
+          "v": "montserratbi",
+          "label": "Montserrat Bold Italic",
+          "short": "Montserrat"
+        },
+        {
+          "v": "default",
+          "label": "システムフォント",
+          "short": "システム"
+        },
+        {
+          "v": "receipt",
+          "label": "レシートフォント",
+          "short": "レシート"
+        },
+        {
+          "v": "denkichip",
+          "label": "でんきチップ"
+        },
+        {
+          "v": "tsukuhou",
+          "label": "築豊明朝"
+        },
+        {
+          "v": "kaibunsho",
+          "label": "怪聞書フォント",
+          "short": "怪聞書"
+        },
+        {
+          "v": "zenkaku",
+          "label": "Zen Kaku Gothic New",
+          "short": "Zen Kaku"
+        },
+        {
+          "v": "custom",
+          "label": "＋カスタムフォント",
+          "short": "カスタム",
+          "effect": "pickEnFont"
+        }
+      ]
+    },
+    "bold": {
+      "label": "歌詞を太字にする",
+      "desc": "デフォルトは細字。築豊明朝は細字が映えます",
+      "glyph": "bold",
+      "type": "toggle",
+      "bind": "lyricsBold"
+    },
+    "parts": {
+      "label": "分解エフェクト",
+      "desc": "リリックビデオで、文字がスライス状のパーツになって集まります",
+      "glyph": "puzzle",
+      "type": "toggle",
+      "bind": "pvPartsEntry"
+    },
+    "dopagaki": {
+      "label": "ドパガキモード",
+      "desc": "リリックビデオにエフェクトを大量に重ねて派手にします",
+      "glyph": "sparkles",
+      "type": "toggle",
+      "bind": "dopagaki"
+    },
+    "dopaBlack": {
+      "label": "ドパガキ中は極太フォント",
+      "desc": "ドパガキモードのとき、歌詞を Zen Kaku Gothic New の極太（Black）で表示します",
+      "glyph": "brush",
+      "type": "toggle",
+      "bind": "dopaBlackFont"
+    },
+    "fxUpdate": {
+      "label": "歌詞エフェクト更新",
+      "desc": "単語アイコンや色の対応表を最新にします",
+      "glyph": "wand-sparkles",
+      "type": "action",
+      "action": "fxUpdate"
+    },
+    "passcodeAuth": {
+      "label": "非表示をパスコードロック",
+      "desc": "有効にすると、非表示リストを開く際にパスコード認証を行います",
+      "glyph": "fingerprint",
+      "type": "toggle",
+      "bind": "usePasscodeForHidden"
+    },
+    "passcodeChange": {
+      "label": "パスコードを変更",
+      "desc": "非表示リスト解除用のパスコード (PIN) を変更します",
+      "glyph": "key-round",
+      "type": "action",
+      "action": "passcodeChange"
+    },
+    "guideReshow": {
+      "label": "チュートリアルを再表示",
+      "desc": "ガイドや使い方をもう一度表示するようにします",
+      "glyph": "circle-help",
+      "type": "action",
+      "action": "guideReshow"
+    },
+    "checkUpdate": {
+      "label": "アップデートを確認",
+      "desc": "GitHubの最新ビルドを確認します",
+      "glyph": "download",
+      "type": "action",
+      "action": "checkUpdate"
+    },
+    "treeUpdate": {
+      "label": "設定データ更新",
+      "desc": "設定の定義データを最新に更新する",
+      "glyph": "database",
+      "type": "action",
+      "action": "treeUpdate"
+    },
+    "lyricsEnabled": {
+      "label": "歌詞を表示",
+      "desc": "オフにするとPV・時計の下・ステータスバーの歌詞が全部消えます",
+      "glyph": "music",
+      "type": "toggle",
+      "bind": "lyricsEnabled"
+    },
+    "translation": {
+      "label": "翻訳を表示",
+      "desc": "英詞の対訳を歌詞の下に表示します",
+      "glyph": "languages",
+      "type": "toggle",
+      "bind": "lyricTranslation"
+    },
+    "pvRuby": {
+      "label": "ルビ表示",
+      "desc": "漢字の読み仮名（括弧書き）をルビとして表示します",
+      "glyph": "case-upper",
+      "type": "toggle",
+      "bind": "pvRuby"
+    },
+    "pvTextColor": {
+      "label": "PVの文字色",
+      "desc": "登録ワードの色が付いていない文字の色です",
+      "glyph": "palette",
+      "type": "choices",
+      "bind": "pvTextColor",
+      "choices": [
+        {
+          "v": "white",
+          "label": "白"
+        },
+        {
+          "v": "accent",
+          "label": "アクセント色"
+        },
+        {
+          "v": "black",
+          "label": "黒"
+        }
+      ]
+    },
+    "pvFontScale": {
+      "label": "PVの文字サイズ",
+      "desc": "文字PVの文字の大きさの倍率です",
+      "glyph": "a-large-small",
+      "type": "slider",
+      "bind": "pvFontScale",
+      "min": 0.7,
+      "max": 1.4,
+      "steps": 14,
+      "format": "x"
+    },
+    "pvTopOffset": {
+      "label": "PVの縦位置",
+      "desc": "文字PVの表示位置を上下にずらします",
+      "glyph": "arrow-up-down",
+      "type": "slider",
+      "bind": "pvTopOffset",
+      "min": -40,
+      "max": 80,
+      "steps": 24,
+      "format": "dp"
+    },
+    "pvInterludeArt": {
+      "label": "間奏アート",
+      "desc": "間奏中の波と粒子の演出です",
+      "glyph": "sparkles",
+      "type": "toggle",
+      "bind": "pvInterludeArt"
+    },
+    "inertia": {
+      "label": "慣性の強さ",
+      "desc": "円盤を弾いたときの惰性の強さです",
+      "glyph": "swap",
+      "type": "slider",
+      "bind": "discInertia",
+      "min": 0.5,
+      "max": 1.5,
+      "steps": 10,
+      "format": "x"
+    },
+    "haptics": {
+      "label": "振動フィードバック",
+      "desc": "円盤が項目に吸着するときなどの振動です",
+      "glyph": "cursor",
+      "type": "toggle",
+      "bind": "haptics"
+    },
+    "pageTransitionSpeed": {
+      "label": "ページ切替の速さ",
+      "desc": "ページ切り替えアニメーションの速さの倍率です",
+      "glyph": "arrow-left-right",
+      "type": "slider",
+      "bind": "pageTransitionSpeed",
+      "min": 0.5,
+      "max": 1.5,
+      "steps": 10,
+      "format": "x"
+    },
+    "dialVisibility": {
+      "label": "下ダイヤルの表示",
+      "desc": "「自動」はラック表示中などに隠れます",
+      "glyph": "panel-top",
+      "type": "choices",
+      "bind": "dialVisibility",
+      "choices": [
+        {
+          "v": "auto",
+          "label": "自動"
+        },
+        {
+          "v": "always",
+          "label": "常時表示"
+        },
+        {
+          "v": "hidden",
+          "label": "非表示"
+        }
+      ]
+    },
+    "clockSeconds": {
+      "label": "秒表示",
+      "desc": "時計に秒を表示します",
+      "glyph": "timer",
+      "type": "toggle",
+      "bind": "clockSeconds"
+    },
+    "clock12h": {
+      "label": "12時間表示",
+      "desc": "時刻を午前/午後の12時間制で表示します",
+      "glyph": "clock",
+      "type": "toggle",
+      "bind": "clock12h"
+    },
+    "clockBattery": {
+      "label": "バッテリー残量を表示",
+      "desc": "時計の近くに電池残量（%）を表示します",
+      "glyph": "sparkle",
+      "type": "toggle",
+      "bind": "clockBattery"
+    },
+    "dateWareki": {
+      "label": "和暦で表示",
+      "desc": "日付を令和などの和暦で表示します",
+      "glyph": "calendar",
+      "type": "toggle",
+      "bind": "dateWareki"
+    },
+    "liquidSpeed": {
+      "label": "液体の速さ",
+      "desc": "液体グラデーションのうねりの速さの倍率です",
+      "glyph": "droplets",
+      "type": "slider",
+      "bind": "liquidSpeed",
+      "min": 0.3,
+      "max": 2.0,
+      "steps": 17,
+      "format": "x"
+    },
+    "liquidAlpha": {
+      "label": "液体の濃さ",
+      "desc": "液体グラデーションの色の濃さの倍率です",
+      "glyph": "droplet",
+      "type": "slider",
+      "bind": "liquidAlpha",
+      "min": 0.3,
+      "max": 1.0,
+      "steps": 14,
+      "format": "pct"
+    },
+    "wallpaperBlur": {
+      "label": "壁紙のぼかし",
+      "desc": "壁紙画像にぼかしをかけます",
+      "glyph": "eye",
+      "type": "slider",
+      "bind": "wallpaperBlur",
+      "min": 0,
+      "max": 24,
+      "steps": 12,
+      "format": "dp"
+    },
+    "wallpaperPickHome": {
+      "label": "ホームの壁紙",
+      "desc": "未設定のときは共通の壁紙になります",
+      "glyph": "wallpaper",
+      "type": "action",
+      "action": "wallpaperPickPage"
+    },
+    "wallpaperPickApps": {
+      "label": "アプリ一覧の壁紙",
+      "desc": "未設定のときは共通の壁紙になります",
+      "glyph": "wallpaper",
+      "type": "action",
+      "action": "wallpaperPickPage"
+    },
+    "wallpaperPickFolder": {
+      "label": "フォルダの壁紙",
+      "desc": "未設定のときは共通の壁紙になります",
+      "glyph": "wallpaper",
+      "type": "action",
+      "action": "wallpaperPickPage"
+    },
+    "wallpaperPickSettings": {
+      "label": "設定の壁紙",
+      "desc": "未設定のときは共通の壁紙になります",
+      "glyph": "wallpaper",
+      "type": "action",
+      "action": "wallpaperPickPage"
+    },
+    "wallpaperClearPages": {
+      "label": "ページ別の壁紙をすべて解除",
+      "desc": "全ページが共通の壁紙に戻ります",
+      "glyph": "trash",
+      "type": "action",
+      "action": "wallpaperClearPages"
+    },
+    "startupPage": {
+      "label": "起動時に開くページ",
+      "desc": "アプリを開いたときに最初に表示するページです",
+      "glyph": "layout-grid",
+      "type": "choices",
+      "bind": "startupPage",
+      "choices": [
+        {
+          "v": "home",
+          "label": "ホーム"
+        },
+        {
+          "v": "last",
+          "label": "前回のページ"
+        }
+      ]
+    },
+    "keepScreenOn": {
+      "label": "再生中は画面を点けたまま",
+      "desc": "音楽の再生中は画面が自動で消えなくなります",
+      "glyph": "eye",
+      "type": "toggle",
+      "bind": "keepScreenOn"
+    },
+    "artworkVisible": {
+      "label": "アートワークを表示",
+      "desc": "左円とラックのアートワーク画像そのものです",
+      "glyph": "image",
+      "type": "toggle",
+      "bind": "artworkEnabled"
+    },
+    "rackReverse": {
+      "label": "ラック表示のスクロール方向",
+      "desc": "オンでラックの送り方向が逆になります（円盤の反転とは別の設定です）",
+      "glyph": "arrow-up-down",
+      "type": "toggle",
+      "bind": "rackReverse"
+    },
+    "settingsExport": {
+      "label": "設定を書き出す",
+      "desc": "読み仮名・お気に入りを含む全設定をJSONファイルに保存します",
+      "glyph": "download",
+      "type": "action",
+      "action": "settingsExport"
+    },
+    "settingsImport": {
+      "label": "設定を読み込む",
+      "desc": "書き出したJSONから設定を復元します（今の設定は置き換わります）",
+      "glyph": "database",
+      "type": "action",
+      "action": "settingsImport"
+    },
+    "layoutEdit": {
+      "label": "レイアウトを編集",
+      "desc": "ホームの時計とPVの位置をドラッグで動かします（時計の長押しでも開けます）",
+      "glyph": "move-diagonal",
+      "type": "action",
+      "action": "layoutEdit"
+    },
+    "updateLibrary": {
+      "label": "曲データを更新",
+      "desc": "追加・削除された曲を反映します",
+      "glyph": "update",
+      "type": "action",
+      "action": "updateLibrary"
+    },
+    "librarySort": {
+      "label": "曲の並び順",
+      "desc": "曲一覧の並べ方です",
+      "glyph": "arrow-up-down",
+      "type": "choices",
+      "bind": "librarySort",
+      "choices": [
+        {
+          "v": "title",
+          "label": "曲名順",
+          "short": "曲名順"
+        },
+        {
+          "v": "artist",
+          "label": "アーティスト順",
+          "short": "アーティスト順"
+        },
+        {
+          "v": "album",
+          "label": "アルバム順",
+          "short": "アルバム順"
+        }
+      ]
+    },
+    "excludedFolders": {
+      "label": "除外フォルダ",
+      "desc": "ライブラリに読み込まないフォルダを選びます",
+      "glyph": "box",
+      "type": "action",
+      "action": "excludedFolders"
+    },
+    "artworkOutline": {
+      "label": "円の輪郭",
+      "desc": "左円の外周の白い輪郭線です",
+      "glyph": "disc",
+      "type": "toggle",
+      "bind": "artworkOutline"
+    },
+    "curvedTitle": {
+      "label": "カーブ曲名",
+      "desc": "円の周りにカーブして表示される曲名です",
+      "glyph": "text",
+      "type": "toggle",
+      "bind": "curvedTitle"
+    },
+    "caseCircleClip": {
+      "label": "ケースを円形に切り抜く",
+      "desc": "オンにするとカセットやMDなどのケースも円形に切り抜いて表示します",
+      "glyph": "disc",
+      "type": "toggle",
+      "bind": "caseCircleClip"
+    },
+    "tonearmStyle": {
+      "label": "針",
+      "desc": "レコード針の見た目です。「ディスクに連動」ではディスクのテーマに合わせて姿が変わります（クリア→アクリル、蓄光→蓄光、CD・MD→レーザー、カセット→再生ヘッド）",
+      "glyph": "wand-sparkles",
+      "type": "choices",
+      "bind": "tonearmStyle",
+      "choices": [
+        {
+          "v": "none",
+          "label": "なし"
+        },
+        {
+          "v": "auto",
+          "label": "ディスクに連動"
+        },
+        {
+          "v": "classic",
+          "label": "クラシック"
+        },
+        {
+          "v": "brass",
+          "label": "真鍮"
+        },
+        {
+          "v": "acrylic",
+          "label": "アクリル"
+        },
+        {
+          "v": "glow",
+          "label": "蓄光"
+        },
+        {
+          "v": "mecha",
+          "label": "メカ"
+        },
+        {
+          "v": "minimal",
+          "label": "ミニマル"
+        },
+        {
+          "v": "laser",
+          "label": "レーザーピックアップ"
+        },
+        {
+          "v": "head",
+          "label": "再生ヘッド"
+        }
+      ]
+    },
+    "widgetTap": {
+      "label": "左円盤のタップ",
+      "desc": "ホーム左のレコード盤をタップしたときの動作です",
+      "glyph": "cursor",
+      "type": "choices",
+      "bind": "widgetTapAction",
+      "choices": [
+        {
+          "v": "app",
+          "label": "再生中のアプリを開く"
+        },
+        {
+          "v": "toggle",
+          "label": "再生／停止"
+        }
+      ]
+    },
+    "widgetDoubleTap": {
+      "label": "左円盤のダブルタップ",
+      "desc": "ホーム左のレコード盤をダブルタップしたときの動作です",
+      "glyph": "cursor",
+      "type": "choices",
+      "bind": "widgetDoubleTapAction",
+      "choices": [
+        {
+          "v": "app",
+          "label": "再生中のアプリを開く"
+        },
+        {
+          "v": "toggle",
+          "label": "再生／停止"
+        },
+        {
+          "v": "next",
+          "label": "次の曲"
+        },
+        {
+          "v": "prev",
+          "label": "前の曲"
+        },
+        {
+          "v": "none",
+          "label": "なし"
+        }
+      ]
+    },
+    "widgetTripleTap": {
+      "label": "左円盤のトリプルタップ",
+      "desc": "ホーム左のレコード盤を3回タップしたときの動作です",
+      "glyph": "cursor",
+      "type": "choices",
+      "bind": "widgetTripleTapAction",
+      "choices": [
+        {
+          "v": "theme",
+          "label": "テーマ設定を開く"
+        },
+        {
+          "v": "app",
+          "label": "再生中のアプリを開く"
+        },
+        {
+          "v": "toggle",
+          "label": "再生／停止"
+        },
+        {
+          "v": "next",
+          "label": "次の曲"
+        },
+        {
+          "v": "prev",
+          "label": "前の曲"
+        },
+        {
+          "v": "none",
+          "label": "なし"
+        }
+      ]
+    },
+    "widgetLongPress": {
+      "label": "左円盤の長押し",
+      "desc": "ホーム左のレコード盤を長押ししたときの動作です",
+      "glyph": "cursor",
+      "type": "choices",
+      "bind": "widgetLongPressAction",
+      "choices": [
+        {
+          "v": "rack",
+          "label": "ラックを開く"
+        },
+        {
+          "v": "grab",
+          "label": "掴んで3D回転"
+        },
+        {
+          "v": "app",
+          "label": "再生中のアプリを開く"
+        },
+        {
+          "v": "toggle",
+          "label": "再生／停止"
+        }
+      ]
+    },
+    "widgetDoubleTapHold": {
+      "label": "左円盤のダブルタップ長押し",
+      "desc": "タップの直後にもう一度押して長押ししたときの動作です",
+      "glyph": "cursor",
+      "type": "choices",
+      "bind": "widgetDoubleTapHoldAction",
+      "choices": [
+        {
+          "v": "rack",
+          "label": "ラックを開く"
+        },
+        {
+          "v": "grab",
+          "label": "掴んで3D回転"
+        },
+        {
+          "v": "app",
+          "label": "再生中のアプリを開く"
+        },
+        {
+          "v": "toggle",
+          "label": "再生／停止"
+        },
+        {
+          "v": "next",
+          "label": "次の曲"
+        },
+        {
+          "v": "prev",
+          "label": "前の曲"
+        },
+        {
+          "v": "none",
+          "label": "なし"
+        }
+      ]
+    },
+    "discStyle": {
+      "label": "ディスク",
+      "desc": "左円盤の見た目です",
+      "glyph": "disc",
+      "type": "choices",
+      "bind": "discStyle",
+      "choices": [
+        {
+          "v": "digital",
+          "label": "デジタル"
+        },
+        {
+          "v": "vinyl",
+          "label": "レコード"
+        },
+        {
+          "v": "clear",
+          "label": "クリアレコード"
+        },
+        {
+          "v": "cd",
+          "label": "CD"
+        },
+        {
+          "v": "glow",
+          "label": "蓄光レコード"
+        },
+        {
+          "v": "md",
+          "label": "MD"
+        },
+        {
+          "v": "cassette_color",
+          "label": "カセット（色付き）"
+        },
+        {
+          "v": "cassette_clear",
+          "label": "カセット（クリア）"
+        },
+        {
+          "v": "cassette_black",
+          "label": "カセット（ブラック）"
+        },
+        {
+          "v": "reel",
+          "label": "オープンリール"
+        },
+        {
+          "v": "floppy",
+          "label": "フロッピー"
+        },
+        {
+          "v": "dat",
+          "label": "DATカセット"
+        },
+        {
+          "v": "eighttrack",
+          "label": "8トラック"
+        }
+      ]
+    },
+    "discOutline": {
+      "label": "左右の円の輪郭",
+      "desc": "設定やアプリ一覧などの左右の円の輪郭線です",
+      "glyph": "disc",
+      "type": "toggle",
+      "bind": "discOutline"
+    },
+    "appIconHidden": {
+      "label": "アイコンなし（名前だけ）",
+      "desc": "アプリのアイコンを出さず、名前だけを表示します",
+      "glyph": "text",
+      "type": "toggle",
+      "bind": "appIconHidden"
+    },
+    "powerSaveMode": {
+      "label": "省電力モード",
+      "desc": "アニメーションや更新間隔を抑えて電池を節約します。「システムに連動」では端末の電池セーバーが入ったときだけ有効になります",
+      "glyph": "timer",
+      "type": "choices",
+      "bind": "powerSaveMode",
+      "choices": [
+        {
+          "v": "auto",
+          "label": "システムに連動"
+        },
+        {
+          "v": "on",
+          "label": "常にオン"
+        },
+        {
+          "v": "off",
+          "label": "オフ"
+        }
+      ]
+    },
+    "powerSaveBattery": {
+      "label": "電池残量で省電力",
+      "desc": "電池残量がこの割合以下になったら自動で省電力にします。0%でオフです",
+      "glyph": "timer",
+      "type": "slider",
+      "bind": "powerSaveBatteryThreshold",
+      "min": 0,
+      "max": 0.5,
+      "steps": 50,
+      "format": "pct"
+    },
+    "powerSaveNight": {
+      "label": "夜間は省電力",
+      "desc": "指定した時間帯は自動で省電力にします",
+      "glyph": "timer",
+      "type": "toggle",
+      "bind": "powerSaveNight"
+    },
+    "powerSaveNightStart": {
+      "label": "省電力の開始時刻",
+      "desc": "夜間省電力を始める時刻です",
+      "glyph": "timer",
+      "type": "slider",
+      "bind": "powerSaveNightStart",
+      "min": 0,
+      "max": 23,
+      "steps": 23,
+      "format": "hour"
+    },
+    "powerSaveNightEnd": {
+      "label": "省電力の終了時刻",
+      "desc": "夜間省電力を終える時刻です",
+      "glyph": "timer",
+      "type": "slider",
+      "bind": "powerSaveNightEnd",
+      "min": 0,
+      "max": 23,
+      "steps": 23,
+      "format": "hour"
+    },
+    "powerSaveCharging": {
+      "label": "充電中は省電力を解除",
+      "desc": "充電している間は省電力モードを一時的に解除します",
+      "glyph": "timer",
+      "type": "toggle",
+      "bind": "powerSaveChargingExempt"
     }
-   ]
   },
-  {
-   "id": "library",
-   "label": "ライブラリ",
-   "cat": true,
-   "children": [
+  "tree": [
     {
-     "item": "updateLibrary"
+      "id": "background",
+      "label": "背景",
+      "cat": true,
+      "children": [
+        {
+          "id": "bg_image",
+          "label": "壁紙",
+          "glyph": "wallpaper",
+          "children": [
+            {
+              "item": "wallpaperPick"
+            },
+            {
+              "item": "wallpaperClear"
+            },
+            {
+              "item": "wallpaperBlur"
+            },
+            {
+              "id": "bg_pages",
+              "label": "ページごとの壁紙",
+              "glyph": "layout-grid",
+              "children": [
+                {
+                  "item": "wallpaperPickHome"
+                },
+                {
+                  "item": "wallpaperPickApps"
+                },
+                {
+                  "item": "wallpaperPickFolder"
+                },
+                {
+                  "item": "wallpaperPickSettings"
+                },
+                {
+                  "item": "wallpaperClearPages"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "item": "brightness"
+        },
+        {
+          "id": "bg_liquid",
+          "label": "液体グラデーション効果",
+          "glyph": "droplets",
+          "children": [
+            {
+              "item": "liquid"
+            },
+            {
+              "item": "liquidAlpha"
+            },
+            {
+              "item": "liquidSpeed"
+            }
+          ]
+        }
+      ]
     },
     {
-     "item": "librarySort"
+      "id": "ui",
+      "label": "UI",
+      "cat": true,
+      "children": [
+        {
+          "id": "ui_color",
+          "label": "カラー",
+          "glyph": "palette",
+          "children": [
+            {
+              "item": "accentColor"
+            },
+            {
+              "item": "matchArtwork"
+            }
+          ]
+        },
+        {
+          "id": "ui_disc",
+          "label": "円盤",
+          "glyph": "disc",
+          "children": [
+            {
+              "item": "reverse"
+            },
+            {
+              "item": "discLayout"
+            },
+            {
+              "item": "iconSize"
+            },
+            {
+              "item": "stepAngle"
+            },
+            {
+              "item": "disc3d"
+            },
+            {
+              "item": "disc3dTilt"
+            },
+            {
+              "item": "pageSwitch"
+            },
+            {
+              "item": "inertia"
+            },
+            {
+              "item": "haptics"
+            },
+            {
+              "item": "pageTransitionSpeed"
+            },
+            {
+              "item": "dialVisibility"
+            },
+            {
+              "item": "discOutline"
+            }
+          ]
+        },
+        {
+          "id": "ui_icons",
+          "label": "アプリアイコン",
+          "glyph": "image",
+          "children": [
+            {
+              "item": "appIconHidden"
+            }
+          ]
+        },
+        {
+          "id": "ui_text",
+          "label": "文字",
+          "glyph": "case-sensitive",
+          "children": [
+            {
+              "item": "uiFont"
+            },
+            {
+              "item": "textSize"
+            },
+            {
+              "item": "letterSpacing"
+            }
+          ]
+        },
+        {
+          "id": "ui_clock",
+          "label": "時計",
+          "glyph": "clock",
+          "children": [
+            {
+              "item": "dateMode"
+            },
+            {
+              "item": "clockSeconds"
+            },
+            {
+              "item": "clock12h"
+            },
+            {
+              "item": "clockBattery"
+            },
+            {
+              "item": "dateWareki"
+            }
+          ]
+        }
+      ]
     },
     {
-     "item": "excludedFolders"
+      "id": "lyrics",
+      "label": "音楽",
+      "cat": true,
+      "children": [
+        {
+          "id": "music_art",
+          "label": "アートワーク",
+          "glyph": "image",
+          "children": [
+            {
+              "item": "artworkVisible"
+            },
+            {
+              "item": "artworkOutline"
+            },
+            {
+              "item": "curvedTitle"
+            },
+            {
+              "item": "caseCircleClip"
+            },
+            {
+              "item": "rackReverse"
+            },
+            {
+              "id": "music_theme",
+              "label": "テーマ",
+              "glyph": "disc",
+              "children": [
+                {
+                  "item": "discStyle"
+                },
+                {
+                  "item": "tonearmStyle"
+                }
+              ]
+            },
+            {
+              "id": "music_actions",
+              "label": "操作",
+              "glyph": "cursor",
+              "children": [
+                {
+                  "item": "widgetTap"
+                },
+                {
+                  "item": "widgetDoubleTap"
+                },
+                {
+                  "item": "widgetTripleTap"
+                },
+                {
+                  "item": "widgetLongPress"
+                },
+                {
+                  "item": "widgetDoubleTapHold"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "lyrics_sub",
+          "label": "歌詞",
+          "glyph": "music",
+          "children": [
+            {
+              "item": "lyricsEnabled"
+            },
+            {
+              "id": "ly_anim",
+              "label": "アニメーション",
+              "glyph": "clapperboard",
+              "children": [
+                {
+                  "item": "parts"
+                },
+                {
+                  "item": "dopagaki"
+                },
+                {
+                  "item": "pvInterludeArt"
+                }
+              ]
+            },
+            {
+              "id": "ly_text",
+              "label": "文字",
+              "glyph": "case-sensitive",
+              "children": [
+                {
+                  "item": "jpFont"
+                },
+                {
+                  "item": "enFont"
+                },
+                {
+                  "item": "bold"
+                },
+                {
+                  "item": "dopaBlack"
+                },
+                {
+                  "item": "translation"
+                },
+                {
+                  "item": "pvRuby"
+                },
+                {
+                  "item": "pvTextColor"
+                },
+                {
+                  "item": "pvFontScale"
+                },
+                {
+                  "item": "pvTopOffset"
+                }
+              ]
+            },
+            {
+              "item": "displayMode"
+            }
+          ]
+        },
+        {
+          "item": "keepScreenOn"
+        }
+      ]
+    },
+    {
+      "id": "library",
+      "label": "ライブラリ",
+      "cat": true,
+      "children": [
+        {
+          "item": "updateLibrary"
+        },
+        {
+          "item": "librarySort"
+        },
+        {
+          "item": "excludedFolders"
+        }
+      ]
+    },
+    {
+      "id": "security",
+      "label": "セキュリティ",
+      "cat": true,
+      "children": [
+        {
+          "item": "passcodeAuth"
+        },
+        {
+          "item": "passcodeChange"
+        }
+      ]
+    },
+    {
+      "id": "tools",
+      "label": "ツール",
+      "cat": true,
+      "children": [
+        {
+          "item": "sleep"
+        },
+        {
+          "item": "startupPage"
+        },
+        {
+          "item": "layoutEdit"
+        },
+        {
+          "id": "tools_power",
+          "label": "省電力",
+          "glyph": "timer",
+          "children": [
+            {
+              "item": "powerSaveMode"
+            },
+            {
+              "item": "powerSaveCharging"
+            },
+            {
+              "item": "powerSaveBattery"
+            },
+            {
+              "item": "powerSaveNight"
+            },
+            {
+              "item": "powerSaveNightStart"
+            },
+            {
+              "item": "powerSaveNightEnd"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "other",
+      "label": "その他",
+      "cat": true,
+      "children": [
+        {
+          "item": "checkUpdate"
+        },
+        {
+          "item": "fxUpdate"
+        },
+        {
+          "item": "treeUpdate"
+        },
+        {
+          "item": "guideReshow"
+        },
+        {
+          "item": "settingsExport"
+        },
+        {
+          "item": "settingsImport"
+        }
+      ]
     }
-   ]
-  },
-  {
-   "id": "security",
-   "label": "セキュリティ",
-   "cat": true,
-   "children": [
-    {
-     "item": "passcodeAuth"
-    },
-    {
-     "item": "passcodeChange"
-    }
-   ]
-  },
-  {
-   "id": "tools",
-   "label": "ツール",
-   "cat": true,
-   "children": [
-    {
-     "item": "sleep"
-    },
-    {
-     "item": "startupPage"
-    },
-    {
-     "item": "layoutEdit"
-    }
-   ]
-  },
-  {
-   "id": "other",
-   "label": "その他",
-   "cat": true,
-   "children": [
-    {
-     "item": "checkUpdate"
-    },
-    {
-     "item": "fxUpdate"
-    },
-    {
-     "item": "treeUpdate"
-    },
-    {
-     "item": "guideReshow"
-    },
-    {
-     "item": "settingsExport"
-    },
-    {
-     "item": "settingsImport"
-    }
-   ]
-  }
- ]
+  ]
 }
