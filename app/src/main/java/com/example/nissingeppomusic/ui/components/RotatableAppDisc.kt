@@ -39,7 +39,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.*
 
 sealed class DiscItem {
-    data class AppEntry(val app: AppInfo) : DiscItem()
+    data class AppEntry(val app: AppInfo, val badge: Int = 0) : DiscItem()
     data class IndexEntry(val char: String) : DiscItem()
 }
 
