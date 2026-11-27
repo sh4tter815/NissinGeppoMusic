@@ -292,6 +292,8 @@ class AppPreferenceManager(private val context: Context) {
     fun setDiscOutlineEnabled(v: Boolean) = prefs.edit().putBoolean("disc_outline", v).apply()
     fun isAppIconHidden(): Boolean = prefs.getBoolean("app_icon_hidden", false)
     fun setAppIconHidden(v: Boolean) = prefs.edit().putBoolean("app_icon_hidden", v).apply()
+    fun getSettingsNavPath(): List<String> = prefs.getString("settings_nav_path", null)?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
+    fun saveSettingsNavPath(path: List<String>) = prefs.edit().putString("settings_nav_path", path.joinToString(",")).apply()
     fun setReverseScroll(reverse: Boolean) = prefs.edit().putBoolean("reverse_scroll", reverse).apply()
 
     // フォント選択 ("default" = デフォルト, "receipt" = レシートフォント, "custom" = カスタムファイル)
