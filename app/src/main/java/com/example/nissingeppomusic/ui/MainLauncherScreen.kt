@@ -2891,6 +2891,22 @@ fun MainLauncherScreen() {
                     val willHide = !targetApp.isHidden
                     repo.setHidden(targetApp.packageName, willHide)
                     refreshApps()
+                },
+                playlists = foldersMap.entries.map { (id, v) -> id to v.first },
+                containingPlaylistIds = foldersMap.filterValues { app.packageName in it.second }.keys,
+                onTogglePlaylist = { targetApp, fid ->
+                    val cur = foldersMap[fid]
+                    if (cur != null) {
+                        val pkgs = cur.second.toMutableList()
+                        if (targetApp.packageName in pkgs) pkgs.remove(targetApp.packageName) else pkgs.add(targetApp.packageName)
+                        repo.prefManager.saveFolder(fid, cur.first, pkgs)
+                        refreshApps()
+                    }
+                },
+                onCreatePlaylist = { targetApp, name ->
+                    val newId = System.currentTimeMillis().toString()
+                    repo.prefManager.saveFolder(newId, name, listOf(targetApp.packageName))
+                    refreshApps()
                 }
             )
         }
