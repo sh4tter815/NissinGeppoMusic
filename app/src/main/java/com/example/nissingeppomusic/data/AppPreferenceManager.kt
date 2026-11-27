@@ -367,6 +367,8 @@ class AppPreferenceManager(private val context: Context) {
     fun getSleepTimerMinutes(): Int = prefs.getInt("sleep_timer_minutes", 0)
     fun setSleepTimerMinutes(value: Int) { prefs.edit().putInt("sleep_timer_minutes", value).apply() }
     fun setLibrarySortMode(mode: String) = prefs.edit().putString("library_sort_mode", mode).apply()
+    fun getLibrarySortDescending(): Boolean = prefs.getBoolean("library_sort_descending", false)
+    fun setLibrarySortDescending(v: Boolean) = prefs.edit().putBoolean("library_sort_descending", v).apply()
 
 
     // ===== ランチャー版から移植した追加設定 =====
