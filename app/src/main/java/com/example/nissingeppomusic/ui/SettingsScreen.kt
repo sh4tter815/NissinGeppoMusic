@@ -605,6 +605,14 @@ fun SettingsScreen(
     var artworkVisible by remember { mutableStateOf(repo.prefManager.isArtworkEnabled()) }
     var rackReverse by remember { mutableStateOf(repo.prefManager.isRackReverseScroll()) }
     var artworkOutline by remember { mutableStateOf(repo.prefManager.isArtworkOutlineEnabled()) }
+    var discOutline by remember { mutableStateOf(repo.prefManager.isDiscOutlineEnabled()) }
+    var appIconHidden by remember { mutableStateOf(repo.prefManager.isAppIconHidden()) }
+    var powerSaveMode by remember { mutableStateOf(repo.prefManager.getPowerSaveMode()) }
+    var powerSaveChargingExempt by remember { mutableStateOf(repo.prefManager.isPowerSaveChargingExempt()) }
+    var powerSaveBatteryThreshold by remember { mutableStateOf(repo.prefManager.getPowerSaveBatteryThreshold() / 100f) }
+    var powerSaveNight by remember { mutableStateOf(repo.prefManager.isPowerSaveNightEnabled()) }
+    var powerSaveNightStart by remember { mutableStateOf(repo.prefManager.getPowerSaveNightStart()) }
+    var powerSaveNightEnd by remember { mutableStateOf(repo.prefManager.getPowerSaveNightEnd()) }
     var curvedTitle by remember { mutableStateOf(repo.prefManager.isCurvedTitleEnabled()) }
     var caseCircleClip by remember { mutableStateOf(repo.prefManager.isCaseCircleClipEnabled()) }
     var discStyle by remember { mutableStateOf(repo.prefManager.getDiscStyle()) }
@@ -671,7 +679,10 @@ fun SettingsScreen(
 
     // システム環境設定風 2段階ナビゲーション ("behavior", "appearance", "security", "tutorial")
     // 円盤ナビの状態（1: カテゴリ/項目, 2: 選択肢/スライダー）
-    var navPath by remember { mutableStateOf<List<String>>(emptyList()) }
+    var navPath by remember { mutableStateOf(repo.prefManager.getSettingsNavPath()) }
+    LaunchedEffect(navPath) {
+        repo.prefManager.saveSettingsNavPath(navPath)
+    }
     var focusId by remember { mutableStateOf<String?>(null) }
     var searchQuery by remember { mutableStateOf("") }
     var leftDiscState by remember { mutableStateOf<DiscCarouselState?>(null) }
@@ -959,6 +970,10 @@ fun SettingsScreen(
         "artworkEnabled" to Pair({ artworkVisible }, { v: Boolean -> artworkVisible = v; repo.prefManager.setArtworkEnabled(v); onChanged() }),
         "rackReverse" to Pair({ rackReverse }, { v: Boolean -> rackReverse = v; repo.prefManager.setRackReverseScroll(v); onChanged() }),
         "artworkOutline" to Pair({ artworkOutline }, { v: Boolean -> artworkOutline = v; repo.prefManager.setArtworkOutlineEnabled(v); onChanged() }),
+        "discOutline" to Pair({ discOutline }, { v: Boolean -> discOutline = v; repo.prefManager.setDiscOutlineEnabled(v); onChanged() }),
+        "appIconHidden" to Pair({ appIconHidden }, { v: Boolean -> appIconHidden = v; repo.prefManager.setAppIconHidden(v); onChanged() }),
+        "powerSaveChargingExempt" to Pair({ powerSaveChargingExempt }, { v: Boolean -> powerSaveChargingExempt = v; repo.prefManager.setPowerSaveChargingExempt(v); onChanged() }),
+        "powerSaveNight" to Pair({ powerSaveNight }, { v: Boolean -> powerSaveNight = v; repo.prefManager.setPowerSaveNightEnabled(v); onChanged() }),
         "curvedTitle" to Pair({ curvedTitle }, { v: Boolean -> curvedTitle = v; repo.prefManager.setCurvedTitleEnabled(v); onChanged() }),
         "caseCircleClip" to Pair({ caseCircleClip }, { v: Boolean -> caseCircleClip = v; repo.prefManager.setCaseCircleClipEnabled(v); onChanged() })
     )
@@ -977,6 +992,7 @@ fun SettingsScreen(
         "dialVisibility" to Pair({ dialVisibility }, { v: String -> dialVisibility = v; repo.prefManager.setDialVisibility(v); onChanged() }),
         "librarySort" to Pair({ librarySort }, { v: String -> librarySort = v; repo.prefManager.setLibrarySortMode(v); onChanged(); onAppsUpdated() }),
         "discStyle" to Pair({ discStyle }, { v: String -> discStyle = v; repo.prefManager.setDiscStyle(v); onChanged() }),
+        "powerSaveMode" to Pair({ powerSaveMode }, { v: String -> powerSaveMode = v; repo.prefManager.setPowerSaveMode(v); onChanged() }),
         "tonearmStyle" to Pair({ tonearmStyle }, { v: String -> tonearmStyle = v; repo.prefManager.setTonearmStyle(v); onChanged() }),
         "widgetTapAction" to Pair({ widgetTapAction }, { v: String -> widgetTapAction = v; repo.prefManager.setWidgetTapAction(v); onChanged() }),
         "widgetDoubleTapAction" to Pair({ widgetDoubleTapAction }, { v: String -> widgetDoubleTapAction = v; repo.prefManager.setWidgetDoubleTapAction(v); onChanged() }),
@@ -997,7 +1013,10 @@ fun SettingsScreen(
         "liquidSpeed" to Pair({ liquidSpeed }, { v: Float -> liquidSpeed = v; repo.prefManager.setLiquidSpeed(v); onChanged() }),
         "liquidAlpha" to Pair({ liquidAlpha }, { v: Float -> liquidAlpha = v; repo.prefManager.setLiquidAlpha(v); onChanged() }),
         "pageTransitionSpeed" to Pair({ pageTransitionSpeed }, { v: Float -> pageTransitionSpeed = v; repo.prefManager.setPageTransitionSpeed(v); onChanged() }),
-        "wallpaperBlur" to Pair({ wallpaperBlur }, { v: Float -> wallpaperBlur = v; repo.prefManager.setWallpaperBlurDp(v); onChanged() })
+        "wallpaperBlur" to Pair({ wallpaperBlur }, { v: Float -> wallpaperBlur = v; repo.prefManager.setWallpaperBlurDp(v); onChanged() }),
+        "powerSaveBatteryThreshold" to Pair({ powerSaveBatteryThreshold }, { v: Float -> powerSaveBatteryThreshold = v; repo.prefManager.setPowerSaveBatteryThreshold(v); onChanged() }),
+        "powerSaveNightStart" to Pair({ powerSaveNightStart }, { v: Float -> powerSaveNightStart = v; repo.prefManager.setPowerSaveNightStart(v); onChanged() }),
+        "powerSaveNightEnd" to Pair({ powerSaveNightEnd }, { v: Float -> powerSaveNightEnd = v; repo.prefManager.setPowerSaveNightEnd(v); onChanged() })
     )
 
     val sliderFormats: Map<String, (Float) -> String> = mapOf(
@@ -1007,7 +1026,9 @@ fun SettingsScreen(
         "sp1" to { v: Float -> String.format(java.util.Locale.ROOT, "%.1f sp", v) },
         "deg" to { v: Float -> String.format(java.util.Locale.ROOT, "%.1f°", v) },
         "x" to { v: Float -> String.format(java.util.Locale.ROOT, "×%.1f", v) },
-        "pct" to { v: Float -> "${(v * 100).toInt()}%" }
+        "pct" to { v: Float -> "${(v * 100).toInt()}%" },
+        "hour" to { v: Float -> "${v.toInt()}時" },
+        "mb" to { v: Float -> if (v <= 0f) "無制限" else "${v.toInt()} MB" }
     )
 
     val fontResolvers: Map<String, Pair<() -> FontFamily?, (String) -> FontFamily?>> = mapOf(
@@ -1302,6 +1323,16 @@ fun SettingsScreen(
         return SettingNode(def.id, def.label, glyph = def.glyph, catIcon = def.cat, children = kids)
     }
     val settingsTree: List<SettingNode> = treeData.tree.mapNotNull { buildNode(it) }
+    LaunchedEffect(treeData.version) {
+        var list = settingsTree
+        val valid = mutableListOf<String>()
+        for (id in navPath) {
+            val node = list.firstOrNull { it.id == id } ?: break
+            valid.add(id)
+            list = node.children ?: emptyList()
+        }
+        if (valid.size != navPath.size) navPath = valid
+    }
 
     val searchResults: List<SettingNode> = if (searchQuery.isBlank()) emptyList() else {
         val all = mutableListOf<SettingNode>()
