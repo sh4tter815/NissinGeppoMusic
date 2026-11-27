@@ -28,6 +28,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.changedToDown
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -85,6 +88,17 @@ class DiscCarouselState internal constructor(
             isScrolling = false
         }
     }
+
+    /** タップされた項目のアイコンを一瞬縮めて離す（押した感の共通フィードバック） */
+    var tapPulseIndex by mutableStateOf(-1)
+    val tapPulseAnim = Animatable(1f)
+    fun pulseTap(index: Int) {
+        tapPulseIndex = index
+        scope.launch {
+            tapPulseAnim.snapTo(0.84f)
+            tapPulseAnim.animateTo(1f, animationSpec = spring(dampingRatio = 0.42f, stiffness = 380f))
+        }
+    }
 }
 
 @Composable
@@ -112,6 +126,7 @@ fun DiscCarousel(
     showOutline: Boolean = true,
     onHoldingChanged: ((Boolean) -> Unit)? = null,
     onEmptyTap: (() -> Unit)? = null,
+    onLongPressEmpty: (() -> Unit)? = null,
     state: DiscCarouselState = rememberDiscCarouselState(0, stepAngle),
     onSelectedIndexChange: (Int) -> Unit = {},
     centerContent: (@Composable BoxScope.() -> Unit)? = null,
@@ -120,12 +135,14 @@ fun DiscCarousel(
     val context = LocalContext.current
     val prefManager = remember { AppPreferenceManager(context) }
     val isReverseScroll = prefManager.isReverseScroll()
+    val outlineEnabled = prefManager.isDiscOutlineEnabled()
     val discInertia = prefManager.getDiscInertia()
     val hapticsEnabled = prefManager.isHapticsEnabled()
 
     val density = LocalDensity.current
     val haptic = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
+    val longPressEmptyCb by rememberUpdatedState(onLongPressEmpty)
 
     state.itemCount = itemCount
     // 項目間隔が変わったら（初期生成時の間隔と違う場合も含む）、
@@ -240,6 +257,21 @@ fun DiscCarousel(
                     var lastDeltaAngle = 0f
                     var lastTime = System.currentTimeMillis()
 
+                    // 空きスペースの長押し検出（項目の輪の上は項目側の長押しを優先して発火しない）
+                    var pressHeld = true
+                    val longPressJob = if (longPressEmptyCb != null) {
+                        coroutineScope.launch {
+                            kotlinx.coroutines.delay(500)
+                            if (pressHeld && !isDragStarted) {
+                                val ringCenterPx = radiusPx - 18f * density.density
+                                val ringHalfWidthPx = 34f * density.density
+                                if (abs(distFromCenter - ringCenterPx) > ringHalfWidthPx) {
+                                    longPressEmptyCb?.invoke()
+                                }
+                            }
+                        }
+                    } else null
+
                     drag(down.id) { change: PointerInputChange ->
                         val prevPos = currentPos
                         currentPos = change.position
@@ -284,6 +316,8 @@ fun DiscCarousel(
                         }
                     }
 
+                    pressHeld = false
+                    longPressJob?.cancel()
                     internalHold = false
                     if (isDragStarted && itemCount > 0) {
                         if (isLoopable) {
@@ -342,7 +376,7 @@ fun DiscCarousel(
                     }
                 }
         ) {
-            if (showOutline) {
+            if (showOutline && outlineEnabled) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 drawCircle(
                     color = Color.White.copy(alpha = 0.85f),
@@ -455,6 +489,7 @@ fun DiscTouchHalf(
                     var accumulatedDy = 0f
                     var stepCount = (-st.rawRotation / st.stepAngle).roundToInt()
                         .coerceIn(0, (st.itemCount - 1).coerceAtLeast(0))
+                    val initialStepCount = stepCount
                     var upChange: PointerInputChange? = null
                     while (true) {
                         val event = awaitPointerEvent()
@@ -511,7 +546,7 @@ fun DiscTouchHalf(
                     }
                     holdCb?.invoke(false)
                     val tapSlopPx = radiusPx * (18f / 165f)
-                    if (tapCb != null && upChange != null && maxDist <= tapSlopPx) {
+                    if (tapCb != null && upChange != null && maxDist <= tapSlopPx && stepCount == initialStepCount) {
                         val dx = down.position.x - discCenterXPx
                         val dyv = down.position.y - discCenterYPx
                         val dist = sqrt(dx * dx + dyv * dyv)
@@ -534,6 +569,7 @@ fun DiscTouchHalf(
                             }
                             if (best >= 0) {
                                 upChange?.consume()
+                                st.pulseTap(best)
                                 tapCb?.invoke(best)
                             }
                         }
@@ -545,4 +581,35 @@ fun DiscTouchHalf(
             }
         }
     )
+}
+
+/**
+ * ボタン共通の押下フィードバック: 押している間だけ少し縮む。
+ * 自前の clickable / pointerInput を持つ要素に足すだけで効く（イベントは消費しない）。
+ */
+fun Modifier.pressScale(scaleDown: Float = 0.9f): Modifier = composed {
+    var pressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) scaleDown else 1f,
+        animationSpec = spring(dampingRatio = 0.5f, stiffness = 520f),
+        label = "pressScale"
+    )
+    this
+        .graphicsLayer { scaleX = scale; scaleY = scale }
+        .pointerInput(Unit) {
+            awaitPointerEventScope {
+                while (true) {
+                    val ev = awaitPointerEvent(PointerEventPass.Initial)
+                    if (ev.changes.any { it.changedToDown() }) {
+                        pressed = true
+                        var released = false
+                        while (!released) {
+                            val ev2 = awaitPointerEvent(PointerEventPass.Initial)
+                            if (ev2.changes.all { !it.pressed }) released = true
+                        }
+                        pressed = false
+                    }
+                }
+            }
+        }
 }
