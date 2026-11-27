@@ -527,6 +527,20 @@ fun MainLauncherScreen() {
     }
     // 曲ごとの歌詞タイミング補正（ミリ秒）と、その調整パネルの表示状態
     var lyricOffsetMs by remember { mutableStateOf(0L) }
+    // 再生履歴の記録（再生数・最終再生日時を独自に保持する）
+    var playHistoryVersion by remember { mutableIntStateOf(0) }
+    var lastRecordedPlayKey by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(musicPlayerManager.currentSongUri, musicPlayerManager.currentQueueIndex) {
+        val uri = musicPlayerManager.currentSongUri?.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
+        val path = musicPlayerManager.queue.getOrNull(musicPlayerManager.currentQueueIndex)?.filePath ?: return@LaunchedEffect
+        val key = path + "|" + uri
+        if (key != lastRecordedPlayKey) {
+            lastRecordedPlayKey = key
+            repo.prefManager.recordPlay(path)
+            playHistoryVersion++
+        }
+    }
+
     LaunchedEffect(musicPlayerManager.currentTitle, musicPlayerManager.currentArtist) {
         lyricOffsetMs = repo.prefManager.getLyricOffsetMs(
             musicPlayerManager.currentTitle, musicPlayerManager.currentArtist
@@ -749,13 +763,73 @@ fun MainLauncherScreen() {
     val disc2CenterX = screenWidthDp + 80f
     val disc2CenterY = screenHeightDp * 0.50f + pvDiscShiftY
 
+    // 再生履歴にもとづく並び替え（再生数順・最近再生順）用の索引
+    val playCounts: Map<String, Int> = remember(playHistoryVersion, allApps) { repo.prefManager.getPlayCounts() }
+    val lastPlayedMap: Map<String, Long> = remember(playHistoryVersion, allApps) { repo.prefManager.getLastPlayedMap() }
+    val usageTierOf: Map<String, Int> = remember(playCounts, allApps) {
+        val used = allApps.filter { (playCounts[it.packageName] ?: 0) > 0 }
+            .sortedByDescending { playCounts[it.packageName] ?: 0 }
+        val n = used.size
+        val map = HashMap<String, Int>()
+        if (n > 0) {
+            used.forEachIndexed { rank, app ->
+                map[app.packageName] = 5 - minOf(4, (rank * 5) / n)
+            }
+        }
+        map
+    }
+    val recentLabelOf: Map<String, String> = remember(lastPlayedMap, allApps) {
+        fun dayStart(t: Long): Long {
+            val c = java.util.Calendar.getInstance()
+            c.timeInMillis = t
+            c.set(java.util.Calendar.HOUR_OF_DAY, 0)
+            c.set(java.util.Calendar.MINUTE, 0)
+            c.set(java.util.Calendar.SECOND, 0)
+            c.set(java.util.Calendar.MILLISECOND, 0)
+            return c.timeInMillis
+        }
+        val todayStart = dayStart(System.currentTimeMillis())
+        val map = HashMap<String, String>()
+        for (app in allApps) {
+            val ts = lastPlayedMap[app.packageName] ?: 0L
+            map[app.packageName] = if (ts <= 0L) {
+                "未再生"
+            } else {
+                val days = Math.round((todayStart - dayStart(ts)).toDouble() / 86400000.0).toInt().coerceAtLeast(0)
+                when {
+                    days <= 0 -> "今日"
+                    days == 1 -> "昨日"
+                    days in 2..6 -> "${days}日前"
+                    days in 7..29 -> "1週間以上前"
+                    else -> "1か月以上前"
+                }
+            }
+        }
+        map
+    }
+    val recentIndexOrder = listOf("今日", "昨日", "2日前", "3日前", "4日前", "5日前", "6日前", "1週間以上前", "1か月以上前", "未再生")
+    val usageIndexActive = librarySortMode == "usage" && searchQuery.isBlank() && !isHideMode && selectedAlbumFilter == null && selectedArtistFilter == null
+    val recentIndexActive = librarySortMode == "recent" && searchQuery.isBlank() && !isHideMode && selectedAlbumFilter == null && selectedArtistFilter == null
+    val indexItems: List<String> = when {
+        usageIndexActive -> listOf("★★★★★", "★★★★", "★★★", "★★", "★")
+        recentIndexActive -> recentIndexOrder.filter { label -> allApps.any { !it.isHidden && (recentLabelOf[it.packageName] ?: "未再生") == label } }
+        else -> INDEX_ITEMS
+    }
+    val indexGroupOf: (AppInfo) -> String = { app ->
+        when {
+            usageIndexActive -> "★".repeat(usageTierOf[app.packageName] ?: 1)
+            recentIndexActive -> recentLabelOf[app.packageName] ?: "未再生"
+            else -> app.initialJapanese.ifBlank { "＃" }
+        }
+    }
+
     // --- 左側（索引ダイヤル）の状態管理 ---
-    val indexDiscState = rememberDiscCarouselState(initialIndex = 0, stepAngle = 360f / INDEX_ITEMS.size)
-    val indexEntries = remember(INDEX_ITEMS) { INDEX_ITEMS.map { DiscEntry(id = it, label = it, icon = {}) } }
+    val indexDiscState = key(indexItems.size) { rememberDiscCarouselState(initialIndex = 0, stepAngle = 360f / indexItems.size) }
+    val indexEntries = remember(indexItems) { indexItems.map { DiscEntry(id = it, label = it, icon = {}) } }
     var indexSelected by remember { mutableIntStateOf(0) }
     var isHoldingLeft by remember { mutableStateOf(false) }
     var isHoldingRight by remember { mutableStateOf(false) }
-    val stepAngle = 360f / INDEX_ITEMS.size
+    val stepAngle = 360f / indexItems.size
 
     val animatedDisc1CenterX by animateFloatAsState(
         targetValue = when {
@@ -777,8 +851,8 @@ fun MainLauncherScreen() {
     )
 
     val selectedIndex = indexSelected
-    val selectedIndexChar = remember(selectedIndex) {
-        if (selectedIndex in INDEX_ITEMS.indices) INDEX_ITEMS[selectedIndex] else null
+    val selectedIndexChar = remember(selectedIndex, indexItems) {
+        if (selectedIndex in indexItems.indices) indexItems[selectedIndex] else null
     }
 
     var lastHapticIndex by remember { mutableIntStateOf(-1) }
@@ -1338,7 +1412,7 @@ fun MainLauncherScreen() {
                         }
                     )
 
-                                        val displayedApps = remember(searchQuery, allApps, isHideMode, librarySortMode, selectedAlbumFilter, selectedArtistFilter, yomiVersion) {
+                                        val displayedApps = remember(searchQuery, allApps, isHideMode, librarySortMode, selectedAlbumFilter, selectedArtistFilter, yomiVersion, playCounts, lastPlayedMap) {
                         when {
                             isHideMode -> allApps.filter { it.isHidden }
                             selectedAlbumFilter != null -> {
@@ -1423,22 +1497,30 @@ fun MainLauncherScreen() {
                                         { it.label.lowercase() }
                                     ))
                             }
+                            librarySortMode == "usage" -> {
+                                allApps.filter { !it.isHidden }
+                                    .sortedWith(compareByDescending<AppInfo> { playCounts[it.packageName] ?: 0 }.thenBy { it.label.lowercase() })
+                            }
+                            librarySortMode == "recent" -> {
+                                allApps.filter { !it.isHidden }
+                                    .sortedWith(compareByDescending<AppInfo> { lastPlayedMap[it.packageName] ?: 0L }.thenBy { it.label.lowercase() })
+                            }
                             else -> allApps.filter { !it.isHidden }
                         }
                     }
 
-                    val trackDiscItems = remember(displayedApps) { buildDiscItems(displayedApps, true, groupOf = { it.initialJapanese.ifBlank { "＃" } }) }
+                    val trackDiscItems = remember(displayedApps, usageIndexActive, recentIndexActive, usageTierOf, recentLabelOf) { buildDiscItems(displayedApps, true, groupOf = indexGroupOf) }
                     LaunchedEffect(selectedIndexChar) {
                         if (!selectedIndexChar.isNullOrEmpty() && trackDiscItems.isNotEmpty()) {
                             val targetIndex = trackDiscItems.indexOfFirst { item ->
                                 when (item) {
                                     is DiscItem.IndexEntry -> item.char.equals(selectedIndexChar, ignoreCase = true)
-                                    is DiscItem.AppEntry -> (item.app.initialJapanese == selectedIndexChar) || (item.app.initialEnglish.equals(selectedIndexChar, ignoreCase = true))
+                                    is DiscItem.AppEntry -> (indexGroupOf(item.app) == selectedIndexChar) || (item.app.initialJapanese == selectedIndexChar) || (item.app.initialEnglish.equals(selectedIndexChar, ignoreCase = true))
                                 }
                             }
                             if (targetIndex != -1) {
                                 val rawTarget = -targetIndex * appDiscStepAngle
-                                val loopable = !isHideMode && searchQuery.isBlank() && librarySortMode == "title"
+                                val loopable = !isHideMode && searchQuery.isBlank() && (librarySortMode == "title" || librarySortMode == "usage" || librarySortMode == "recent")
                                 val targetAngle = if (loopable) rawTarget else rawTarget.coerceIn(-((trackDiscItems.size - 1) * appDiscStepAngle).coerceAtLeast(0f), 0f)
                                 snapDiscTo(trackDiscState, targetAngle)
                             }
@@ -1465,7 +1547,7 @@ fun MainLauncherScreen() {
                         discRadiusDp = disc2RadiusDp,
                         stepAngle = appDiscStepAngle,
                         isRightDisc = true,
-                        isLoopable = (!isHideMode && searchQuery.isBlank() && librarySortMode == "title"),
+                        isLoopable = (!isHideMode && searchQuery.isBlank() && (librarySortMode == "title" || librarySortMode == "usage" || librarySortMode == "recent")),
                         fadeLabelsOnScroll = false,
                         state = trackDiscState,
                         onHoldingChanged = { isHoldingRight = it }
